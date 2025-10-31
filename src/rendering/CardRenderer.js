@@ -4,10 +4,10 @@
 
 export class CardRenderer {
   constructor() {
-    this.cardWidth = 80;
-    this.cardHeight = 120;
+    this.cardWidth = 100;
+    this.cardHeight = 140;
     this.padding = 5;
-    this.fontSize = 10;
+    this.fontSize = 11;
     this.selectedColor = '#4ecdc4';
     this.defaultColor = '#333';
     this.borderColor = '#666';

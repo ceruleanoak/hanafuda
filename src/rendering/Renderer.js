@@ -98,18 +98,41 @@ export class Renderer {
     this.drawBackground();
 
     const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
-    const spacing = 10;
+    const spacing = 15;
+    const margin = 30;
 
-    // Calculate layout
+    // Calculate layout zones
     const centerX = this.displayWidth / 2;
     const centerY = this.displayHeight / 2;
+
+    // Define distinct zones for each area
+    const zones = {
+      opponentHand: margin + 10,
+      opponentCaptured: margin + 10,
+      field: centerY - cardHeight / 2,
+      playerHand: this.displayHeight - cardHeight - margin - 10,
+      playerCaptured: this.displayHeight - cardHeight - margin - 10,
+      deck: centerY - cardHeight / 2
+    };
+
+    // Draw opponent hand (top, face down)
+    if (gameState.opponentHand && gameState.opponentHand.length > 0) {
+      this.drawCardRow(
+        gameState.opponentHand,
+        centerX,
+        zones.opponentHand,
+        [],
+        'opponent',
+        true // face down
+      );
+    }
 
     // Draw field cards (center)
     if (gameState.field && gameState.field.length > 0) {
       this.drawCardRow(
         gameState.field,
         centerX,
-        centerY - cardHeight - spacing,
+        zones.field,
         gameState.selectedCards,
         'field'
       );
@@ -120,28 +143,16 @@ export class Renderer {
       this.drawCardRow(
         gameState.playerHand,
         centerX,
-        this.displayHeight - cardHeight - 20,
+        zones.playerHand,
         gameState.selectedCards,
         'player'
       );
     }
 
-    // Draw opponent hand (top, face down)
-    if (gameState.opponentHand && gameState.opponentHand.length > 0) {
-      this.drawCardRow(
-        gameState.opponentHand,
-        centerX,
-        20,
-        [],
-        'opponent',
-        true // face down
-      );
-    }
-
-    // Draw deck
+    // Draw deck (left side)
     if (gameState.deckCount > 0) {
-      const deckX = 20;
-      const deckY = centerY - cardHeight / 2;
+      const deckX = margin;
+      const deckY = zones.deck;
       this.cardRenderer.drawCard(
         this.ctx,
         { name: `Deck (${gameState.deckCount})` },
@@ -152,7 +163,7 @@ export class Renderer {
       );
     }
 
-    // Draw captured cards count
+    // Draw captured cards (right side)
     this.drawCapturedCards(gameState);
   }
 
@@ -161,7 +172,7 @@ export class Renderer {
    */
   drawCardRow(cards, centerX, y, selectedCards, owner, faceDown = false) {
     const { width: cardWidth } = this.cardRenderer.getCardDimensions();
-    const spacing = 10;
+    const spacing = 15;
     const totalWidth = cards.length * (cardWidth + spacing) - spacing;
     const startX = centerX - totalWidth / 2;
 
@@ -192,26 +203,26 @@ export class Renderer {
    */
   drawCapturedCards(gameState) {
     const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
-    const rightMargin = 20;
-    const topMargin = 20;
+    const rightMargin = 30;
+    const verticalMargin = 40;
 
-    // Player captured
+    // Player captured (bottom right)
     if (gameState.playerCaptured && gameState.playerCaptured.length > 0) {
       this.drawCapturedStack(
         gameState.playerCaptured,
         this.displayWidth - cardWidth - rightMargin,
-        this.displayHeight - cardHeight - topMargin,
-        'Player'
+        this.displayHeight - cardHeight - verticalMargin,
+        'Player Captured'
       );
     }
 
-    // Opponent captured
+    // Opponent captured (top right)
     if (gameState.opponentCaptured && gameState.opponentCaptured.length > 0) {
       this.drawCapturedStack(
         gameState.opponentCaptured,
         this.displayWidth - cardWidth - rightMargin,
-        topMargin,
-        'Opponent'
+        verticalMargin,
+        'Opponent Captured'
       );
     }
   }
@@ -224,10 +235,10 @@ export class Renderer {
 
     // Draw label
     this.ctx.fillStyle = '#fff';
-    this.ctx.font = '12px monospace';
+    this.ctx.font = 'bold 13px monospace';
     this.ctx.textAlign = 'center';
     const { width: cardWidth } = this.cardRenderer.getCardDimensions();
-    this.ctx.fillText(`${label}: ${cards.length}`, x + cardWidth / 2, y - 5);
+    this.ctx.fillText(`${label}: ${cards.length}`, x + cardWidth / 2, y - 10);
 
     // Draw top card of stack
     if (cards.length > 0) {
