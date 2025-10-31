@@ -2,6 +2,8 @@
 
 A JavaScript-based hanafuda koi-koi card game with HTML5 Canvas rendering.
 
+🎮 **[Play Live Demo](https://ceruleanoak.github.io/hanafuda/)** (available after GitHub Pages is enabled)
+
 ## About
 
 Hanafuda (花札) are traditional Japanese playing cards used for various games. This implementation features **Koi-Koi**, one of the most popular hanafuda games, where players compete to form scoring combinations called "yaku."
@@ -64,6 +66,20 @@ npm run preview
 ```
 
 The game will open automatically at `http://localhost:3000`
+
+### Deploying to GitHub Pages
+
+This project includes a GitHub Actions workflow that automatically deploys to GitHub Pages when you push to the `main` branch.
+
+**Setup Steps:**
+
+1. Go to your repository settings on GitHub
+2. Navigate to **Pages** (under "Code and automation")
+3. Under **Source**, select **GitHub Actions**
+4. Push your changes to the `main` branch
+5. The game will be automatically deployed to: `https://ceruleanoak.github.io/hanafuda/`
+
+The deployment workflow is defined in `.github/workflows/deploy.yml`
 
 ## How to Play
 

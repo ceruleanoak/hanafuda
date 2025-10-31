@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  base: '/hanafuda/', // GitHub Pages base path
   root: 'src',
   build: {
     outDir: '../dist',
