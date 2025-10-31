@@ -4,4 +4,3 @@ dist/
 *.log
 .vite
 .env
-package-lock.json
