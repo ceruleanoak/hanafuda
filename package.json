@@ -1,0 +1,25 @@
+{
+  "name": "hanafuda-koikoi",
+  "version": "0.1.0",
+  "description": "JavaScript-based hanafuda koi-koi card game with HTML5 Canvas",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy": "vite build && gh-pages -d dist"
+  },
+  "devDependencies": {
+    "gh-pages": "^6.0.0",
+    "vite": "^5.0.0"
+  },
+  "keywords": [
+    "hanafuda",
+    "koi-koi",
+    "card-game",
+    "japanese",
+    "canvas"
+  ],
+  "author": "",
+  "license": "MIT"
+}
