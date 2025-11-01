@@ -188,4 +188,67 @@ export class Yaku {
   static calculateScore(yaku) {
     return yaku.reduce((sum, y) => sum + y.points, 0);
   }
+
+  /**
+   * Check progress towards incomplete yaku
+   * @param {Array} cards - Array of captured cards
+   * @returns {Array} Array of progress objects { name, current, needed }
+   */
+  static checkYakuProgress(cards) {
+    const progress = [];
+
+    // Brights progress (need 3+ for scoring)
+    const brights = cards.filter(c => c.type === CARD_TYPES.BRIGHT);
+    if (brights.length > 0 && brights.length < 3) {
+      progress.push({ name: 'Brights', current: brights.length, needed: 3 });
+    }
+
+    // Poetry Ribbons progress (need 3)
+    const poetryRibbons = cards.filter(c =>
+      c.type === CARD_TYPES.RIBBON &&
+      c.name.includes('poetry') &&
+      c.ribbonColor === 'red'
+    );
+    if (poetryRibbons.length > 0 && poetryRibbons.length < 3) {
+      progress.push({ name: 'Poetry Ribbons', current: poetryRibbons.length, needed: 3 });
+    }
+
+    // Blue Ribbons progress (need 3)
+    const blueRibbons = cards.filter(c =>
+      c.type === CARD_TYPES.RIBBON &&
+      c.ribbonColor === 'blue'
+    );
+    if (blueRibbons.length > 0 && blueRibbons.length < 3) {
+      progress.push({ name: 'Blue Ribbons', current: blueRibbons.length, needed: 3 });
+    }
+
+    // Ribbons progress (need 5)
+    const ribbons = cards.filter(c => c.type === CARD_TYPES.RIBBON);
+    if (ribbons.length > 0 && ribbons.length < 5) {
+      progress.push({ name: 'Ribbons', current: ribbons.length, needed: 5 });
+    }
+
+    // Animals progress (need 5)
+    const animals = cards.filter(c => c.type === CARD_TYPES.ANIMAL);
+    if (animals.length > 0 && animals.length < 5) {
+      progress.push({ name: 'Animals', current: animals.length, needed: 5 });
+    }
+
+    // Chaff progress (need 10)
+    const chaff = cards.filter(c => c.type === CARD_TYPES.CHAFF);
+    if (chaff.length > 0 && chaff.length < 10) {
+      progress.push({ name: 'Chaff', current: chaff.length, needed: 10 });
+    }
+
+    // Boar-Deer-Butterfly progress
+    const boar = cards.find(c => c.name.includes('boar'));
+    const deer = cards.find(c => c.name.includes('deer'));
+    const butterflies = cards.find(c => c.name.includes('butterflies'));
+    const inoShikaCho = [boar, deer, butterflies].filter(Boolean).length;
+    if (inoShikaCho > 0 && inoShikaCho < 3) {
+      progress.push({ name: 'Boar-Deer-Butterfly', current: inoShikaCho, needed: 3 });
+    }
+
+    return progress;
+  }
 }

@@ -61,6 +61,9 @@ export class KoiKoi {
    * Get current game state
    */
   getState() {
+    const playerProgress = Yaku.checkYakuProgress(this.playerCaptured);
+    const opponentProgress = Yaku.checkYakuProgress(this.opponentCaptured);
+
     return {
       field: this.field,
       playerHand: this.playerHand,
@@ -69,6 +72,8 @@ export class KoiKoi {
       opponentCaptured: this.opponentCaptured,
       playerYaku: this.playerYaku,
       opponentYaku: this.opponentYaku,
+      playerYakuProgress: playerProgress,
+      opponentYakuProgress: opponentProgress,
       playerScore: this.playerScore,
       opponentScore: this.opponentScore,
       deckCount: this.deck.count,
@@ -99,6 +104,44 @@ export class KoiKoi {
   clearAnimations() {
     this.animationQueue = [];
     this.isAnimating = false;
+  }
+
+  /**
+   * Auto-match card on double-click - automatically find and capture match or place card
+   */
+  autoMatchCard(card) {
+    if (this.gameOver || this.currentPlayer !== 'player' || this.phase !== 'select_hand') {
+      return false;
+    }
+
+    const fieldMatches = this.field.filter(fc => this.cardsMatch(card, fc));
+
+    if (fieldMatches.length > 0) {
+      // Auto-match with first (or best) match
+      const bestMatch = fieldMatches.reduce((best, current) =>
+        current.points > best.points ? current : best
+      );
+      this.captureCards(card, bestMatch);
+      return true;
+    } else {
+      // No match - auto-place on field
+      const cardIndex = this.playerHand.findIndex(c => c.id === card.id);
+      if (cardIndex >= 0) {
+        const playedCard = this.playerHand.splice(cardIndex, 1)[0];
+
+        // Check for 4-card same-month capture
+        if (this.checkFourCardCapture(playedCard, 'player')) {
+          this.drawPhase();
+          return true;
+        }
+
+        this.field.push(playedCard);
+        this.drawPhase();
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /**
@@ -161,12 +204,44 @@ export class KoiKoi {
   }
 
   /**
+   * Check for 4-card same-month capture
+   * If 3 cards of same month on field and 4th is played/drawn, capture all 4
+   */
+  checkFourCardCapture(playedCard, player) {
+    const sameMonthOnField = this.field.filter(c => c.month === playedCard.month);
+
+    if (sameMonthOnField.length === 3) {
+      // Capture all 4 cards (3 from field + 1 played)
+      const captured = player === 'player' ? this.playerCaptured : this.opponentCaptured;
+
+      // Remove all matching cards from field
+      this.field = this.field.filter(c => c.month !== playedCard.month);
+
+      // Add all 4 cards to captured
+      captured.push(playedCard, ...sameMonthOnField);
+
+      this.updateYaku(player);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
    * Place card on field without capturing
    */
   placeCardOnField() {
     const cardIndex = this.playerHand.findIndex(c => c.id === this.selectedCards[0].id);
     if (cardIndex >= 0) {
       const card = this.playerHand.splice(cardIndex, 1)[0];
+
+      // Check for 4-card same-month capture
+      if (this.checkFourCardCapture(card, 'player')) {
+        this.selectedCards = [];
+        this.drawPhase();
+        return;
+      }
+
       this.field.push(card);
       this.selectedCards = [];
       this.drawPhase();
@@ -246,17 +321,20 @@ export class KoiKoi {
           this.drawnCard = null;
           this.updateYaku('player');
           this.endTurn();
-        }, 1200);
+        }, 1800);
       } else {
         // No match - show drawn card briefly before placing
         this.phase = 'show_drawn';
         this.message = `Drew ${drawnCard.name} - No match, adding to field...`;
 
         setTimeout(() => {
-          this.field.push(drawnCard);
+          // Check for 4-card same-month capture
+          if (!this.checkFourCardCapture(drawnCard, 'player')) {
+            this.field.push(drawnCard);
+          }
           this.drawnCard = null;
           this.endTurn();
-        }, 1200);
+        }, 1800);
       }
     }, 300);
   }
@@ -354,31 +432,67 @@ export class KoiKoi {
     } else {
       // Place on field
       this.opponentHand.splice(selectedCardIndex, 1);
-      this.field.push(handCard);
-    }
 
-    // Draw phase for opponent
-    if (!this.deck.isEmpty()) {
-      const drawnCard = this.deck.draw();
-      const drawnMatches = this.field.filter(fc => this.cardsMatch(drawnCard, fc));
-
-      if (drawnMatches.length > 0) {
-        // Prioritize high-value matches
-        const bestMatch = drawnMatches.reduce((best, current) =>
-          current.points > best.points ? current : best
-        );
-        const fieldIndex = this.field.findIndex(c => c.id === bestMatch.id);
-        this.field.splice(fieldIndex, 1);
-        this.opponentCaptured.push(drawnCard, bestMatch);
-        this.updateYaku('opponent');
-      } else {
-        // Place on field
-        this.field.push(drawnCard);
+      // Check for 4-card same-month capture
+      if (!this.checkFourCardCapture(handCard, 'opponent')) {
+        this.field.push(handCard);
       }
     }
 
-    // End opponent turn
-    this.endTurn();
+    // Draw phase for opponent with visual feedback
+    this.opponentDrawPhase();
+  }
+
+  /**
+   * Opponent draw phase with visual feedback
+   */
+  opponentDrawPhase() {
+    if (this.deck.isEmpty()) {
+      this.endTurn();
+      return;
+    }
+
+    this.phase = 'opponent_drawing';
+    this.message = 'Opponent drawing card...';
+
+    setTimeout(() => {
+      const drawnCard = this.deck.draw();
+      this.drawnCard = drawnCard;
+
+      const drawnMatches = this.field.filter(fc => this.cardsMatch(drawnCard, fc));
+
+      if (drawnMatches.length > 0) {
+        // Show drawn card before matching
+        this.phase = 'opponent_drawn';
+        this.message = `Opponent drew ${drawnCard.name} - Matching...`;
+
+        setTimeout(() => {
+          // Prioritize high-value matches
+          const bestMatch = drawnMatches.reduce((best, current) =>
+            current.points > best.points ? current : best
+          );
+          const fieldIndex = this.field.findIndex(c => c.id === bestMatch.id);
+          this.field.splice(fieldIndex, 1);
+          this.opponentCaptured.push(drawnCard, bestMatch);
+          this.drawnCard = null;
+          this.updateYaku('opponent');
+          this.endTurn();
+        }, 1800);
+      } else {
+        // Show drawn card before placing
+        this.phase = 'opponent_drawn';
+        this.message = `Opponent drew ${drawnCard.name} - No match`;
+
+        setTimeout(() => {
+          // Check for 4-card same-month capture
+          if (!this.checkFourCardCapture(drawnCard, 'opponent')) {
+            this.field.push(drawnCard);
+          }
+          this.drawnCard = null;
+          this.endTurn();
+        }, 1800);
+      }
+    }, 300);
   }
 
   /**

@@ -154,7 +154,13 @@ export class Renderer {
     }
 
     // Draw drawn card hover area (if waiting for selection OR showing drawn card)
-    if (gameState.drawnCard && (gameState.phase === 'select_drawn_match' || gameState.phase === 'show_drawn' || gameState.phase === 'drawing')) {
+    if (gameState.drawnCard && (
+      gameState.phase === 'select_drawn_match' ||
+      gameState.phase === 'show_drawn' ||
+      gameState.phase === 'drawing' ||
+      gameState.phase === 'opponent_drawing' ||
+      gameState.phase === 'opponent_drawn'
+    )) {
       this.drawDrawnCardHover(gameState.drawnCard, centerX, centerY - cardHeight - 50, gameState.phase);
     }
 
@@ -198,18 +204,23 @@ export class Renderer {
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
     this.ctx.fillRect(centerX - cardWidth / 2 - 20, y - 40, cardWidth + 40, cardHeight + 80);
 
-    this.ctx.strokeStyle = phase === 'select_drawn_match' ? '#4ecdc4' : '#ffeb3b';
+    // Color based on phase - cyan for player choice, yellow for auto-actions, red for opponent
+    const isOpponentPhase = phase === 'opponent_drawing' || phase === 'opponent_drawn';
+    const isPlayerChoice = phase === 'select_drawn_match';
+    this.ctx.strokeStyle = isOpponentPhase ? '#ff6b6b' : (isPlayerChoice ? '#4ecdc4' : '#ffeb3b');
     this.ctx.lineWidth = 3;
     this.ctx.strokeRect(centerX - cardWidth / 2 - 20, y - 40, cardWidth + 40, cardHeight + 80);
 
     // Draw label
-    this.ctx.fillStyle = phase === 'select_drawn_match' ? '#4ecdc4' : '#ffeb3b';
+    this.ctx.fillStyle = this.ctx.strokeStyle;
     this.ctx.font = 'bold 14px monospace';
     this.ctx.textAlign = 'center';
-    this.ctx.fillText(phase === 'drawing' ? 'DRAWING...' : 'DRAWN CARD', centerX, y - 20);
+    const label = (phase === 'drawing' || phase === 'opponent_drawing') ? 'DRAWING...' :
+                  isOpponentPhase ? 'OPPONENT DREW' : 'DRAWN CARD';
+    this.ctx.fillText(label, centerX, y - 20);
 
     // Draw card (only if not in "drawing" phase)
-    if (phase !== 'drawing') {
+    if (phase !== 'drawing' && phase !== 'opponent_drawing') {
       this.cardRenderer.drawCard(this.ctx, card, centerX - cardWidth / 2, y, false, false);
     }
 
@@ -260,6 +271,7 @@ export class Renderer {
       this.drawCapturedStack(
         gameState.playerCaptured,
         gameState.playerYaku || [],
+        gameState.playerYakuProgress || [],
         this.displayWidth - cardWidth - rightMargin,
         this.displayHeight - cardHeight - verticalMargin,
         'Player Captured'
@@ -271,23 +283,27 @@ export class Renderer {
       this.drawCapturedStack(
         gameState.opponentCaptured,
         gameState.opponentYaku || [],
+        gameState.opponentYakuProgress || [],
         this.displayWidth - cardWidth - rightMargin,
         verticalMargin,
-        'Opponent Captured'
+        'Opponent Captured',
+        true // Show fanned cards for opponent
       );
     }
   }
 
   /**
-   * Draw stack of captured cards with yaku
+   * Draw stack of captured cards with yaku and progress
    */
-  drawCapturedStack(cards, yaku, x, y, label) {
+  drawCapturedStack(cards, yaku, yakuProgress, x, y, label, showFanned = false) {
     this.ctx.save();
 
     const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
 
-    // Draw yaku list above captured stack
+    // Draw yaku list and progress above captured stack
     let yakuY = y - 30;
+
+    // Draw completed yaku
     if (yaku && yaku.length > 0) {
       this.ctx.fillStyle = '#4ecdc4';
       this.ctx.font = 'bold 11px monospace';
@@ -303,6 +319,25 @@ export class Renderer {
       if (yaku.length > 5) {
         this.ctx.fillStyle = '#888';
         this.ctx.fillText(`+${yaku.length - 5} more...`, x + cardWidth, yakuY);
+        yakuY -= 14;
+      }
+    }
+
+    // Draw yaku progress (incomplete combinations)
+    if (yakuProgress && yakuProgress.length > 0) {
+      this.ctx.fillStyle = '#ffeb3b';
+      this.ctx.font = '11px monospace';
+      this.ctx.textAlign = 'right';
+
+      for (let i = 0; i < Math.min(yakuProgress.length, 3); i++) {
+        const prog = yakuProgress[i];
+        this.ctx.fillText(`${prog.name} ${prog.current}/${prog.needed}`, x + cardWidth, yakuY);
+        yakuY -= 14;
+      }
+
+      if (yakuProgress.length > 3) {
+        this.ctx.fillStyle = '#888';
+        this.ctx.fillText(`+${yakuProgress.length - 3} more...`, x + cardWidth, yakuY);
       }
     }
 
@@ -312,16 +347,40 @@ export class Renderer {
     this.ctx.textAlign = 'center';
     this.ctx.fillText(`${label}: ${cards.length}`, x + cardWidth / 2, y - 10);
 
-    // Draw top card of stack
+    // Draw cards
     if (cards.length > 0) {
-      this.cardRenderer.drawCard(
-        this.ctx,
-        cards[cards.length - 1],
-        x,
-        y,
-        false,
-        false
-      );
+      if (showFanned && cards.length > 1) {
+        // Show multiple cards fanned out for review
+        const maxCardsToShow = Math.min(5, cards.length);
+        const fanOffset = 8;
+        const startIndex = Math.max(0, cards.length - maxCardsToShow);
+
+        for (let i = 0; i < maxCardsToShow; i++) {
+          const card = cards[startIndex + i];
+          const offsetX = i * fanOffset;
+          const offsetY = i * fanOffset;
+
+          this.cardRenderer.drawCard(
+            this.ctx,
+            card,
+            x + offsetX,
+            y + offsetY,
+            false,
+            false,
+            i < maxCardsToShow - 1 ? 0.7 : 1.0 // Slightly transparent for cards behind
+          );
+        }
+      } else {
+        // Just show top card
+        this.cardRenderer.drawCard(
+          this.ctx,
+          cards[cards.length - 1],
+          x,
+          y,
+          false,
+          false
+        );
+      }
     }
 
     this.ctx.restore();
