@@ -13,11 +13,14 @@ class Game {
     this.playerScoreElement = document.getElementById('player-score');
     this.opponentScoreElement = document.getElementById('opponent-score');
     this.newGameButton = document.getElementById('new-game-btn');
+    this.roundModal = document.getElementById('round-modal');
 
     this.game = new KoiKoi();
     this.renderer = new Renderer(this.canvas);
+    this.animatingCards = [];
 
     this.setupEventListeners();
+    this.showRoundModal(); // Show modal on startup
     this.gameLoop();
   }
 
@@ -26,14 +29,37 @@ class Game {
     this.canvas.addEventListener('click', (e) => this.handleClick(e));
 
     // New game button
-    this.newGameButton.addEventListener('click', () => this.newGame());
+    this.newGameButton.addEventListener('click', () => this.showRoundModal());
+
+    // Round selection buttons
+    document.querySelectorAll('.round-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const rounds = parseInt(e.target.dataset.rounds);
+        this.startNewGame(rounds);
+      });
+    });
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
       if (e.key === 'n' || e.key === 'N') {
-        this.newGame();
+        this.showRoundModal();
       }
     });
+  }
+
+  showRoundModal() {
+    this.roundModal.classList.add('show');
+  }
+
+  hideRoundModal() {
+    this.roundModal.classList.remove('show');
+  }
+
+  startNewGame(rounds) {
+    this.hideRoundModal();
+    this.game.startNewGame(rounds);
+    this.updateUI();
+    this.statusElement.classList.remove('show');
   }
 
   handleClick(event) {
@@ -54,17 +80,12 @@ class Game {
     }
   }
 
-  newGame() {
-    this.game.newRound();
-    this.updateUI();
-    this.statusElement.classList.remove('show');
-  }
-
   updateUI() {
     const state = this.game.getState();
 
-    // Update scores
-    this.playerScoreElement.textContent = state.playerScore;
+    // Update scores - show round progress
+    const roundText = state.totalRounds > 1 ? ` (Round ${state.currentRound}/${state.totalRounds})` : '';
+    this.playerScoreElement.textContent = state.playerScore + roundText;
     this.opponentScoreElement.textContent = state.opponentScore;
 
     // Update instructions
@@ -77,11 +98,41 @@ class Game {
     }
   }
 
+  updateAnimations(deltaTime) {
+    // Update all animating cards
+    for (let i = this.animatingCards.length - 1; i >= 0; i--) {
+      const anim = this.animatingCards[i];
+      anim.progress += deltaTime / anim.duration;
+
+      if (anim.progress >= 1) {
+        // Animation complete
+        this.animatingCards.splice(i, 1);
+        if (anim.onComplete) anim.onComplete();
+      } else {
+        // Update position with easing
+        const t = this.easeInOutQuad(anim.progress);
+        anim.card._animX = anim.startX + (anim.endX - anim.startX) * t;
+        anim.card._animY = anim.startY + (anim.endY - anim.startY) * t;
+      }
+    }
+  }
+
+  easeInOutQuad(t) {
+    return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  }
+
   gameLoop() {
+    const now = performance.now();
+    const deltaTime = this.lastTime ? now - this.lastTime : 0;
+    this.lastTime = now;
+
     const state = this.game.getState();
 
+    // Update animations
+    this.updateAnimations(deltaTime);
+
     // Render
-    this.renderer.render(state);
+    this.renderer.render(state, this.animatingCards);
 
     // Update UI
     this.updateUI();

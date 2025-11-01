@@ -8,6 +8,18 @@ import { Yaku } from './Yaku.js';
 export class KoiKoi {
   constructor() {
     this.deck = new Deck();
+    this.totalRounds = 1;
+    this.currentRound = 0;
+    this.animationQueue = [];
+    this.isAnimating = false;
+    this.reset();
+  }
+
+  startNewGame(rounds) {
+    this.totalRounds = rounds;
+    this.currentRound = 1;
+    this.playerScore = 0;
+    this.opponentScore = 0;
     this.reset();
   }
 
@@ -20,8 +32,6 @@ export class KoiKoi {
     this.opponentCaptured = [];
     this.playerYaku = [];
     this.opponentYaku = [];
-    this.playerScore = 0;
-    this.opponentScore = 0;
     this.currentPlayer = 'player'; // 'player' or 'opponent'
     this.selectedCards = [];
     this.phase = 'select_hand'; // 'select_hand', 'select_field', 'draw_phase', 'select_drawn_match'
@@ -68,8 +78,27 @@ export class KoiKoi {
       drawnCard: this.drawnCard,
       drawnCardMatches: this.drawnCardMatches,
       message: this.message,
-      gameOver: this.gameOver
+      gameOver: this.gameOver,
+      currentRound: this.currentRound,
+      totalRounds: this.totalRounds,
+      animationQueue: this.animationQueue,
+      isAnimating: this.isAnimating
     };
+  }
+
+  /**
+   * Queue an animation
+   */
+  queueAnimation(animation) {
+    this.animationQueue.push(animation);
+  }
+
+  /**
+   * Clear animation queue
+   */
+  clearAnimations() {
+    this.animationQueue = [];
+    this.isAnimating = false;
   }
 
   /**
@@ -281,7 +310,7 @@ export class KoiKoi {
   }
 
   /**
-   * Opponent AI turn
+   * Opponent AI turn - prioritizes matches
    */
   opponentTurn() {
     if (this.opponentHand.length === 0 || this.deck.isEmpty()) {
@@ -289,25 +318,42 @@ export class KoiKoi {
       return;
     }
 
-    // Simple AI: pick random card from hand
-    const randomHandIndex = Math.floor(Math.random() * this.opponentHand.length);
-    const handCard = this.opponentHand[randomHandIndex];
+    // Smart AI: Look for cards that have matches first
+    let selectedCardIndex = -1;
+    let selectedMatch = null;
 
-    // Check for matches in field
-    const fieldMatches = this.field.filter(fc => this.cardsMatch(handCard, fc));
+    // First, try to find a card with a match
+    for (let i = 0; i < this.opponentHand.length; i++) {
+      const handCard = this.opponentHand[i];
+      const fieldMatches = this.field.filter(fc => this.cardsMatch(handCard, fc));
 
-    if (fieldMatches.length > 0) {
-      // Capture with random match
-      const randomMatch = fieldMatches[Math.floor(Math.random() * fieldMatches.length)];
-      const fieldIndex = this.field.findIndex(c => c.id === randomMatch.id);
+      if (fieldMatches.length > 0) {
+        selectedCardIndex = i;
+        // Prioritize high-value cards in matches
+        selectedMatch = fieldMatches.reduce((best, current) =>
+          current.points > best.points ? current : best
+        );
+        break;
+      }
+    }
 
-      this.opponentHand.splice(randomHandIndex, 1);
+    // If no matches found, pick a random card
+    if (selectedCardIndex === -1) {
+      selectedCardIndex = Math.floor(Math.random() * this.opponentHand.length);
+    }
+
+    const handCard = this.opponentHand[selectedCardIndex];
+
+    if (selectedMatch) {
+      // Capture with the selected match
+      const fieldIndex = this.field.findIndex(c => c.id === selectedMatch.id);
+      this.opponentHand.splice(selectedCardIndex, 1);
       this.field.splice(fieldIndex, 1);
-      this.opponentCaptured.push(handCard, randomMatch);
+      this.opponentCaptured.push(handCard, selectedMatch);
       this.updateYaku('opponent');
     } else {
       // Place on field
-      this.opponentHand.splice(randomHandIndex, 1);
+      this.opponentHand.splice(selectedCardIndex, 1);
       this.field.push(handCard);
     }
 
@@ -317,11 +363,13 @@ export class KoiKoi {
       const drawnMatches = this.field.filter(fc => this.cardsMatch(drawnCard, fc));
 
       if (drawnMatches.length > 0) {
-        // Capture with random match
-        const randomMatch = drawnMatches[Math.floor(Math.random() * drawnMatches.length)];
-        const fieldIndex = this.field.findIndex(c => c.id === randomMatch.id);
+        // Prioritize high-value matches
+        const bestMatch = drawnMatches.reduce((best, current) =>
+          current.points > best.points ? current : best
+        );
+        const fieldIndex = this.field.findIndex(c => c.id === bestMatch.id);
         this.field.splice(fieldIndex, 1);
-        this.opponentCaptured.push(drawnCard, randomMatch);
+        this.opponentCaptured.push(drawnCard, bestMatch);
         this.updateYaku('opponent');
       } else {
         // Place on field
@@ -346,14 +394,26 @@ export class KoiKoi {
     this.playerScore += playerRoundScore;
     this.opponentScore += opponentRoundScore;
 
-    this.gameOver = true;
-    this.message = `Round over! Player: ${playerRoundScore}pts, Opponent: ${opponentRoundScore}pts`;
+    // Check if game is over or continue to next round
+    if (this.currentRound >= this.totalRounds) {
+      this.gameOver = true;
+      const winner = this.playerScore > this.opponentScore ? 'Player' :
+                     this.opponentScore > this.playerScore ? 'Opponent' : 'Tie';
+      this.message = `Game Over! ${winner} wins! Final: Player ${this.playerScore} - Opponent ${this.opponentScore}`;
+    } else {
+      this.currentRound++;
+      this.message = `Round ${this.currentRound - 1} complete! Player: ${playerRoundScore}pts, Opponent: ${opponentRoundScore}pts - Starting round ${this.currentRound}...`;
+      setTimeout(() => this.reset(), 3000);
+    }
   }
 
   /**
    * Start new round
    */
   newRound() {
-    this.reset();
+    if (this.currentRound < this.totalRounds) {
+      this.currentRound++;
+      this.reset();
+    }
   }
 }
