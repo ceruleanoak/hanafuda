@@ -102,8 +102,9 @@ export class Renderer {
   /**
    * Main render function
    * @param {Object} gameState - Current game state
+   * @param {Array} animatingCards - Array of cards currently animating
    */
-  render(gameState) {
+  render(gameState, animatingCards = []) {
     this.clear();
     this.drawBackground();
 
@@ -191,6 +192,30 @@ export class Renderer {
 
     // Draw captured cards (right side)
     this.drawCapturedCards(gameState);
+
+    // Draw animating cards on top
+    this.drawAnimatingCards(animatingCards);
+  }
+
+  /**
+   * Draw animating cards
+   */
+  drawAnimatingCards(animatingCards) {
+    if (!animatingCards || animatingCards.length === 0) return;
+
+    for (const anim of animatingCards) {
+      if (anim.card._animX !== undefined && anim.card._animY !== undefined) {
+        this.cardRenderer.drawCard(
+          this.ctx,
+          anim.card,
+          anim.card._animX,
+          anim.card._animY,
+          false,
+          false,
+          anim.opacity !== undefined ? anim.opacity : 1.0
+        );
+      }
+    }
   }
 
   /**

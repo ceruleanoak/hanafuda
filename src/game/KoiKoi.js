@@ -162,8 +162,18 @@ export class KoiKoi {
 
     // Select field card to match with hand card
     if (this.phase === 'select_field') {
-      // If clicking same card again, just place it on field
+      // If clicking same card again, check if matches exist
       if (owner === 'player' && this.selectedCards[0].id === card.id) {
+        const handCard = this.playerHand.find(c => c.id === this.selectedCards[0].id);
+        const matches = this.field.filter(fc => this.cardsMatch(handCard, fc));
+
+        if (matches.length > 0) {
+          // Matches exist - cannot place on field, must match
+          this.message = 'You must match with a card on the field (matches available)';
+          return false;
+        }
+
+        // No matches - allow placing on field
         this.placeCardOnField();
         return true;
       }
