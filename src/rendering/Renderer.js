@@ -129,13 +129,23 @@ export class Renderer {
 
     // Draw field cards (center)
     if (gameState.field && gameState.field.length > 0) {
+      // Highlight matching cards if in drawn card selection phase
+      const highlightedCards = gameState.phase === 'select_drawn_match'
+        ? gameState.drawnCardMatches.map(c => ({ id: c.id, owner: 'field' }))
+        : gameState.selectedCards;
+
       this.drawCardRow(
         gameState.field,
         centerX,
         zones.field,
-        gameState.selectedCards,
+        highlightedCards,
         'field'
       );
+    }
+
+    // Draw drawn card hover area (if waiting for selection)
+    if (gameState.drawnCard && gameState.phase === 'select_drawn_match') {
+      this.drawDrawnCardHover(gameState.drawnCard, centerX, centerY - cardHeight - 50);
     }
 
     // Draw player hand (bottom)
@@ -165,6 +175,33 @@ export class Renderer {
 
     // Draw captured cards (right side)
     this.drawCapturedCards(gameState);
+  }
+
+  /**
+   * Draw drawn card in hover area
+   */
+  drawDrawnCardHover(card, centerX, y) {
+    const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
+
+    // Draw background panel
+    this.ctx.save();
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    this.ctx.fillRect(centerX - cardWidth / 2 - 20, y - 40, cardWidth + 40, cardHeight + 80);
+
+    this.ctx.strokeStyle = '#4ecdc4';
+    this.ctx.lineWidth = 3;
+    this.ctx.strokeRect(centerX - cardWidth / 2 - 20, y - 40, cardWidth + 40, cardHeight + 80);
+
+    // Draw label
+    this.ctx.fillStyle = '#4ecdc4';
+    this.ctx.font = 'bold 14px monospace';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText('DRAWN CARD', centerX, y - 20);
+
+    // Draw card
+    this.cardRenderer.drawCard(this.ctx, card, centerX - cardWidth / 2, y, false, false);
+
+    this.ctx.restore();
   }
 
   /**
@@ -210,6 +247,7 @@ export class Renderer {
     if (gameState.playerCaptured && gameState.playerCaptured.length > 0) {
       this.drawCapturedStack(
         gameState.playerCaptured,
+        gameState.playerYaku || [],
         this.displayWidth - cardWidth - rightMargin,
         this.displayHeight - cardHeight - verticalMargin,
         'Player Captured'
@@ -220,6 +258,7 @@ export class Renderer {
     if (gameState.opponentCaptured && gameState.opponentCaptured.length > 0) {
       this.drawCapturedStack(
         gameState.opponentCaptured,
+        gameState.opponentYaku || [],
         this.displayWidth - cardWidth - rightMargin,
         verticalMargin,
         'Opponent Captured'
@@ -228,16 +267,37 @@ export class Renderer {
   }
 
   /**
-   * Draw stack of captured cards
+   * Draw stack of captured cards with yaku
    */
-  drawCapturedStack(cards, x, y, label) {
+  drawCapturedStack(cards, yaku, x, y, label) {
     this.ctx.save();
+
+    const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
+
+    // Draw yaku list above captured stack
+    let yakuY = y - 30;
+    if (yaku && yaku.length > 0) {
+      this.ctx.fillStyle = '#4ecdc4';
+      this.ctx.font = 'bold 11px monospace';
+      this.ctx.textAlign = 'right';
+
+      // Draw yaku in reverse order (most recent at bottom)
+      for (let i = Math.min(yaku.length - 1, 4); i >= 0; i--) {
+        const yakuItem = yaku[i];
+        this.ctx.fillText(`${yakuItem.name} (${yakuItem.points})`, x + cardWidth, yakuY);
+        yakuY -= 14;
+      }
+
+      if (yaku.length > 5) {
+        this.ctx.fillStyle = '#888';
+        this.ctx.fillText(`+${yaku.length - 5} more...`, x + cardWidth, yakuY);
+      }
+    }
 
     // Draw label
     this.ctx.fillStyle = '#fff';
     this.ctx.font = 'bold 13px monospace';
     this.ctx.textAlign = 'center';
-    const { width: cardWidth } = this.cardRenderer.getCardDimensions();
     this.ctx.fillText(`${label}: ${cards.length}`, x + cardWidth / 2, y - 10);
 
     // Draw top card of stack
