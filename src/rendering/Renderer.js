@@ -19,25 +19,35 @@ export class Renderer {
     // Set canvas to full size
     this.resize();
     window.addEventListener('resize', () => this.resize());
+
+    // Force resize after a short delay to ensure layout is settled
+    setTimeout(() => this.resize(), 100);
   }
 
   resize() {
     const dpr = window.devicePixelRatio || 1;
-    const rect = this.canvas.getBoundingClientRect();
+
+    // Get the parent container size (main element)
+    const parent = this.canvas.parentElement;
+    const rect = parent ? parent.getBoundingClientRect() : this.canvas.getBoundingClientRect();
+
+    // Use parent dimensions or fallback to window size
+    const width = rect.width || window.innerWidth;
+    const height = rect.height || window.innerHeight - 200; // Account for header/footer
 
     // Set actual size in memory (scaled for retina displays)
-    this.canvas.width = rect.width * dpr;
-    this.canvas.height = rect.height * dpr;
+    this.canvas.width = width * dpr;
+    this.canvas.height = height * dpr;
 
     // Set display size
-    this.canvas.style.width = rect.width + 'px';
-    this.canvas.style.height = rect.height + 'px';
+    this.canvas.style.width = width + 'px';
+    this.canvas.style.height = height + 'px';
 
     // Scale context to match device pixel ratio
     this.ctx.scale(dpr, dpr);
 
-    this.displayWidth = rect.width;
-    this.displayHeight = rect.height;
+    this.displayWidth = width;
+    this.displayHeight = height;
   }
 
   /**
