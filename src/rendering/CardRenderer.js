@@ -1,5 +1,5 @@
 /**
- * CardRenderer - Handles rendering individual cards as placeholder boxes
+ * CardRenderer - Handles rendering individual cards with PNG images or placeholder boxes
  */
 
 export class CardRenderer {
@@ -12,34 +12,107 @@ export class CardRenderer {
     this.defaultColor = '#333';
     this.borderColor = '#666';
     this.textColor = '#fff';
+
+    // Image cache: { imagePath: Image }
+    this.imageCache = new Map();
+    this.loadingImages = new Set();
   }
 
   /**
-   * Draw a card as a placeholder box with text
+   * Preload an image
+   * @param {string} imagePath - Path to image
+   * @returns {Promise<Image>}
+   */
+  loadImage(imagePath) {
+    if (this.imageCache.has(imagePath)) {
+      return Promise.resolve(this.imageCache.get(imagePath));
+    }
+
+    if (this.loadingImages.has(imagePath)) {
+      // Already loading, return a promise that waits
+      return new Promise((resolve, reject) => {
+        const checkInterval = setInterval(() => {
+          if (this.imageCache.has(imagePath)) {
+            clearInterval(checkInterval);
+            resolve(this.imageCache.get(imagePath));
+          }
+        }, 50);
+      });
+    }
+
+    this.loadingImages.add(imagePath);
+
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        this.imageCache.set(imagePath, img);
+        this.loadingImages.delete(imagePath);
+        resolve(img);
+      };
+      img.onerror = () => {
+        this.loadingImages.delete(imagePath);
+        reject(new Error(`Failed to load image: ${imagePath}`));
+      };
+      img.src = imagePath;
+    });
+  }
+
+  /**
+   * Draw a card with PNG image or fallback to placeholder
    * @param {CanvasRenderingContext2D} ctx
    * @param {Object} card - Card object from deck
    * @param {number} x - X position
    * @param {number} y - Y position
    * @param {boolean} isSelected - Whether card is selected
    * @param {boolean} isFaceDown - Whether card is face down
+   * @param {number} opacity - Opacity (0-1), default 1
    */
-  drawCard(ctx, card, x, y, isSelected = false, isFaceDown = false) {
+  drawCard(ctx, card, x, y, isSelected = false, isFaceDown = false, opacity = 1.0) {
     ctx.save();
 
-    // Card background
-    ctx.fillStyle = isSelected ? this.selectedColor : this.defaultColor;
-    ctx.fillRect(x, y, this.cardWidth, this.cardHeight);
+    // Apply opacity
+    ctx.globalAlpha = opacity;
 
-    // Card border
-    ctx.strokeStyle = isSelected ? this.selectedColor : this.borderColor;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x, y, this.cardWidth, this.cardHeight);
+    // Try to load image if available and not already loaded
+    if (card.image && !this.imageCache.has(card.image) && !this.loadingImages.has(card.image)) {
+      this.loadImage(card.image).catch(() => {
+        // Image failed to load, will use fallback
+      });
+    }
+
+    // Check if we have a loaded image
+    const hasImage = card.image && this.imageCache.has(card.image);
+    const cardImage = hasImage ? this.imageCache.get(card.image) : null;
 
     if (isFaceDown) {
       // Draw card back pattern
       this.drawCardBack(ctx, x, y);
+
+      // Selection border for face-down cards
+      if (isSelected) {
+        ctx.strokeStyle = this.selectedColor;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x, y, this.cardWidth, this.cardHeight);
+      }
+    } else if (hasImage && cardImage) {
+      // Draw the card image
+      ctx.drawImage(cardImage, x, y, this.cardWidth, this.cardHeight);
+
+      // Selection border overlay
+      if (isSelected) {
+        ctx.strokeStyle = this.selectedColor;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x, y, this.cardWidth, this.cardHeight);
+      }
     } else {
-      // Draw card information
+      // Fallback to text placeholder
+      ctx.fillStyle = isSelected ? this.selectedColor : this.defaultColor;
+      ctx.fillRect(x, y, this.cardWidth, this.cardHeight);
+
+      ctx.strokeStyle = isSelected ? this.selectedColor : this.borderColor;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, y, this.cardWidth, this.cardHeight);
+
       this.drawCardInfo(ctx, card, x, y);
     }
 

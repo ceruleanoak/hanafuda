@@ -27,10 +27,10 @@ export const MONTHS = {
 
 export const HANAFUDA_DECK = [
   // January - Pine (松)
-  { id: 1, month: MONTHS.JANUARY, type: CARD_TYPES.BRIGHT, name: 'January - bright - crane', points: 20, isSpecial: true },
-  { id: 2, month: MONTHS.JANUARY, type: CARD_TYPES.RIBBON, name: 'January - ribbon - poetry', points: 5, ribbonColor: 'red' },
-  { id: 3, month: MONTHS.JANUARY, type: CARD_TYPES.CHAFF, name: 'January - chaff', points: 1 },
-  { id: 4, month: MONTHS.JANUARY, type: CARD_TYPES.CHAFF, name: 'January - chaff', points: 1 },
+  { id: 1, month: MONTHS.JANUARY, type: CARD_TYPES.BRIGHT, name: 'January - bright - crane', points: 20, isSpecial: true, image: '/assets/cards/Jan-bright.png' },
+  { id: 2, month: MONTHS.JANUARY, type: CARD_TYPES.RIBBON, name: 'January - ribbon - poetry', points: 5, ribbonColor: 'red', image: '/assets/cards/Jan-poetry.png' },
+  { id: 3, month: MONTHS.JANUARY, type: CARD_TYPES.CHAFF, name: 'January - chaff', points: 1, image: '/assets/cards/Jan-chaff-1.png' },
+  { id: 4, month: MONTHS.JANUARY, type: CARD_TYPES.CHAFF, name: 'January - chaff', points: 1, image: '/assets/cards/Jan-chaff-2.png' },
 
   // February - Plum (梅)
   { id: 5, month: MONTHS.FEBRUARY, type: CARD_TYPES.ANIMAL, name: 'February - animal - bush warbler', points: 10 },
