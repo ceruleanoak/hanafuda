@@ -65,6 +65,9 @@ class Game {
   }
 
   handleClick(event) {
+    // Don't allow clicks while animating
+    if (this.animatingCards.length > 0) return;
+
     const rect = this.canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
@@ -74,15 +77,25 @@ class Game {
 
     if (result) {
       const { card, owner } = result;
+
+      // Capture state before action
+      const beforeState = this.game.getState();
+
       const success = this.game.selectCard(card, owner);
 
       if (success) {
+        // Check if we should animate
+        const afterState = this.game.getState();
+        this.handleGameStateChange(beforeState, afterState, card);
         this.updateUI();
       }
     }
   }
 
   handleDoubleClick(event) {
+    // Don't allow clicks while animating
+    if (this.animatingCards.length > 0) return;
+
     const rect = this.canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
@@ -92,12 +105,71 @@ class Game {
 
     if (result && result.owner === 'player' && gameState.phase === 'select_hand') {
       const { card } = result;
+
+      // Capture state before action
+      const beforeState = this.game.getState();
+
       // Auto-match if match exists
       const success = this.game.autoMatchCard(card);
 
       if (success) {
+        const afterState = this.game.getState();
+        this.handleGameStateChange(beforeState, afterState, card);
         this.updateUI();
       }
+    }
+  }
+
+  /**
+   * Handle state changes and trigger animations
+   */
+  handleGameStateChange(beforeState, afterState, triggeredCard) {
+    // Check if cards were captured
+    if (afterState.playerCaptured.length > beforeState.playerCaptured.length) {
+      // Player captured cards - animate them
+      const capturedCount = afterState.playerCaptured.length - beforeState.playerCaptured.length;
+      const newlyCaptured = afterState.playerCaptured.slice(-capturedCount);
+
+      newlyCaptured.forEach((card, index) => {
+        const startPos = card._renderX !== undefined ?
+          { x: card._renderX, y: card._renderY } :
+          this.getZonePosition('field', afterState);
+
+        const endPos = this.getZonePosition('player_captured', afterState);
+
+        setTimeout(() => {
+          this.animateCard(card, startPos.x, startPos.y, endPos.x, endPos.y, 500);
+        }, index * 100);
+      });
+    }
+
+    // Check if cards were added to opponent's captured
+    if (afterState.opponentCaptured.length > beforeState.opponentCaptured.length) {
+      const capturedCount = afterState.opponentCaptured.length - beforeState.opponentCaptured.length;
+      const newlyCaptured = afterState.opponentCaptured.slice(-capturedCount);
+
+      newlyCaptured.forEach((card, index) => {
+        const startPos = card._renderX !== undefined ?
+          { x: card._renderX, y: card._renderY } :
+          this.getZonePosition('field', afterState);
+
+        const endPos = this.getZonePosition('opponent_captured', afterState);
+
+        setTimeout(() => {
+          this.animateCard(card, startPos.x, startPos.y, endPos.x, endPos.y, 500);
+        }, index * 100);
+      });
+    }
+
+    // Check if card was added to field
+    if (afterState.field.length > beforeState.field.length && triggeredCard) {
+      const startPos = triggeredCard._renderX !== undefined ?
+        { x: triggeredCard._renderX, y: triggeredCard._renderY } :
+        this.getZonePosition('player_hand', afterState);
+
+      const endPos = this.getZonePosition('field', afterState);
+
+      this.animateCard(triggeredCard, startPos.x, startPos.y, endPos.x, endPos.y, 400);
     }
   }
 
@@ -140,6 +212,56 @@ class Game {
 
   easeInOutQuad(t) {
     return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  }
+
+  /**
+   * Create an animation for a card
+   */
+  animateCard(card, startX, startY, endX, endY, duration = 400, onComplete = null) {
+    // Set initial animation position
+    card._animX = startX;
+    card._animY = startY;
+
+    const animation = {
+      card,
+      startX,
+      startY,
+      endX,
+      endY,
+      duration,
+      progress: 0,
+      onComplete
+    };
+
+    this.animatingCards.push(animation);
+    return animation;
+  }
+
+  /**
+   * Get position for a zone (hand, field, captured, etc.)
+   */
+  getZonePosition(zone, gameState) {
+    const { width: cardWidth, height: cardHeight } = this.renderer.cardRenderer.getCardDimensions();
+    const margin = 30;
+    const centerX = this.renderer.displayWidth / 2;
+    const centerY = this.renderer.displayHeight / 2;
+
+    switch (zone) {
+      case 'player_hand':
+        return { x: centerX, y: this.renderer.displayHeight - cardHeight - margin - 10 };
+      case 'opponent_hand':
+        return { x: centerX, y: margin + 10 };
+      case 'field':
+        return { x: centerX, y: centerY - cardHeight / 2 };
+      case 'player_captured':
+        return { x: this.renderer.displayWidth - cardWidth - margin, y: this.renderer.displayHeight - cardHeight - margin };
+      case 'opponent_captured':
+        return { x: this.renderer.displayWidth - cardWidth - margin, y: margin };
+      case 'deck':
+        return { x: margin, y: centerY - cardHeight / 2 };
+      default:
+        return { x: centerX, y: centerY };
+    }
   }
 
   gameLoop() {
