@@ -162,6 +162,13 @@ export class KoiKoi {
 
     // Select field card to match with hand card
     if (this.phase === 'select_field') {
+      // If clicking a different card from hand, switch selection
+      if (owner === 'player' && this.selectedCards[0].id !== card.id) {
+        this.selectedCards = [{ id: card.id, owner }];
+        this.message = 'Select a matching card from the field (or click again to place)';
+        return true;
+      }
+
       // If clicking same card again, check if matches exist
       if (owner === 'player' && this.selectedCards[0].id === card.id) {
         const handCard = this.playerHand.find(c => c.id === this.selectedCards[0].id);
