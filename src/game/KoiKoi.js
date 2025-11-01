@@ -188,32 +188,48 @@ export class KoiKoi {
       return;
     }
 
-    const drawnCard = this.deck.draw();
-    this.drawnCard = drawnCard;
+    this.phase = 'drawing';
+    this.message = 'Drawing card from deck...';
 
-    // Check if drawn card matches anything on field
-    const matches = this.field.filter(fc => this.cardsMatch(drawnCard, fc));
+    // Brief delay to show the drawing action
+    setTimeout(() => {
+      const drawnCard = this.deck.draw();
+      this.drawnCard = drawnCard;
 
-    if (matches.length > 1) {
-      // Multiple matches - player must choose
-      this.drawnCardMatches = matches;
-      this.phase = 'select_drawn_match';
-      this.message = 'Drawn card matches multiple cards - select which one to capture';
-    } else if (matches.length === 1) {
-      // Single match - auto-capture
-      const fieldCard = matches[0];
-      const fieldIndex = this.field.findIndex(c => c.id === fieldCard.id);
-      this.field.splice(fieldIndex, 1);
-      this.playerCaptured.push(drawnCard, fieldCard);
-      this.drawnCard = null;
-      this.updateYaku('player');
-      this.endTurn();
-    } else {
-      // No match - place on field
-      this.field.push(drawnCard);
-      this.drawnCard = null;
-      this.endTurn();
-    }
+      // Check if drawn card matches anything on field
+      const matches = this.field.filter(fc => this.cardsMatch(drawnCard, fc));
+
+      if (matches.length > 1) {
+        // Multiple matches - player must choose
+        this.drawnCardMatches = matches;
+        this.phase = 'select_drawn_match';
+        this.message = `Drew ${drawnCard.name} - Select which card to match`;
+      } else if (matches.length === 1) {
+        // Single match - show drawn card briefly before auto-capturing
+        this.phase = 'show_drawn';
+        this.message = `Drew ${drawnCard.name} - Matching automatically...`;
+
+        setTimeout(() => {
+          const fieldCard = matches[0];
+          const fieldIndex = this.field.findIndex(c => c.id === fieldCard.id);
+          this.field.splice(fieldIndex, 1);
+          this.playerCaptured.push(drawnCard, fieldCard);
+          this.drawnCard = null;
+          this.updateYaku('player');
+          this.endTurn();
+        }, 1200);
+      } else {
+        // No match - show drawn card briefly before placing
+        this.phase = 'show_drawn';
+        this.message = `Drew ${drawnCard.name} - No match, adding to field...`;
+
+        setTimeout(() => {
+          this.field.push(drawnCard);
+          this.drawnCard = null;
+          this.endTurn();
+        }, 1200);
+      }
+    }, 300);
   }
 
   /**

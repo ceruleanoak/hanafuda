@@ -153,9 +153,9 @@ export class Renderer {
       );
     }
 
-    // Draw drawn card hover area (if waiting for selection)
-    if (gameState.drawnCard && gameState.phase === 'select_drawn_match') {
-      this.drawDrawnCardHover(gameState.drawnCard, centerX, centerY - cardHeight - 50);
+    // Draw drawn card hover area (if waiting for selection OR showing drawn card)
+    if (gameState.drawnCard && (gameState.phase === 'select_drawn_match' || gameState.phase === 'show_drawn' || gameState.phase === 'drawing')) {
+      this.drawDrawnCardHover(gameState.drawnCard, centerX, centerY - cardHeight - 50, gameState.phase);
     }
 
     // Draw player hand (bottom)
@@ -190,26 +190,28 @@ export class Renderer {
   /**
    * Draw drawn card in hover area
    */
-  drawDrawnCardHover(card, centerX, y) {
+  drawDrawnCardHover(card, centerX, y, phase) {
     const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
 
     // Draw background panel
     this.ctx.save();
-    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
     this.ctx.fillRect(centerX - cardWidth / 2 - 20, y - 40, cardWidth + 40, cardHeight + 80);
 
-    this.ctx.strokeStyle = '#4ecdc4';
+    this.ctx.strokeStyle = phase === 'select_drawn_match' ? '#4ecdc4' : '#ffeb3b';
     this.ctx.lineWidth = 3;
     this.ctx.strokeRect(centerX - cardWidth / 2 - 20, y - 40, cardWidth + 40, cardHeight + 80);
 
     // Draw label
-    this.ctx.fillStyle = '#4ecdc4';
+    this.ctx.fillStyle = phase === 'select_drawn_match' ? '#4ecdc4' : '#ffeb3b';
     this.ctx.font = 'bold 14px monospace';
     this.ctx.textAlign = 'center';
-    this.ctx.fillText('DRAWN CARD', centerX, y - 20);
+    this.ctx.fillText(phase === 'drawing' ? 'DRAWING...' : 'DRAWN CARD', centerX, y - 20);
 
-    // Draw card
-    this.cardRenderer.drawCard(this.ctx, card, centerX - cardWidth / 2, y, false, false);
+    // Draw card (only if not in "drawing" phase)
+    if (phase !== 'drawing') {
+      this.cardRenderer.drawCard(this.ctx, card, centerX - cardWidth / 2, y, false, false);
+    }
 
     this.ctx.restore();
   }
