@@ -155,6 +155,7 @@ export class Renderer {
     }
 
     // Draw drawn card hover area (if waiting for selection OR showing drawn card)
+    // Position it high on screen to avoid covering field cards
     if (gameState.drawnCard && (
       gameState.phase === 'select_drawn_match' ||
       gameState.phase === 'show_drawn' ||
@@ -162,7 +163,9 @@ export class Renderer {
       gameState.phase === 'opponent_drawing' ||
       gameState.phase === 'opponent_drawn'
     )) {
-      this.drawDrawnCardHover(gameState.drawnCard, centerX, centerY - cardHeight - 50, gameState.phase);
+      // Draw above opponent hand to avoid covering field
+      const drawnCardY = zones.opponentHand + cardHeight + 30;
+      this.drawDrawnCardHover(gameState.drawnCard, centerX, drawnCardY, gameState.phase);
     }
 
     // Draw player hand (bottom)

@@ -65,9 +65,6 @@ class Game {
   }
 
   handleClick(event) {
-    // Don't allow clicks while animating
-    if (this.animatingCards.length > 0) return;
-
     const rect = this.canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
@@ -77,6 +74,12 @@ class Game {
 
     if (result) {
       const { card, owner } = result;
+
+      // Store card position before state changes
+      if (card._renderX !== undefined && card._renderY !== undefined) {
+        card._lastRenderX = card._renderX;
+        card._lastRenderY = card._renderY;
+      }
 
       // Capture state before action
       const beforeState = this.game.getState();
@@ -93,9 +96,6 @@ class Game {
   }
 
   handleDoubleClick(event) {
-    // Don't allow clicks while animating
-    if (this.animatingCards.length > 0) return;
-
     const rect = this.canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
@@ -105,6 +105,12 @@ class Game {
 
     if (result && result.owner === 'player' && gameState.phase === 'select_hand') {
       const { card } = result;
+
+      // Store card position before state changes
+      if (card._renderX !== undefined && card._renderY !== undefined) {
+        card._lastRenderX = card._renderX;
+        card._lastRenderY = card._renderY;
+      }
 
       // Capture state before action
       const beforeState = this.game.getState();
@@ -131,8 +137,8 @@ class Game {
       const newlyCaptured = afterState.playerCaptured.slice(-capturedCount);
 
       newlyCaptured.forEach((card, index) => {
-        const startPos = card._renderX !== undefined ?
-          { x: card._renderX, y: card._renderY } :
+        const startPos = (card._lastRenderX !== undefined) ?
+          { x: card._lastRenderX, y: card._lastRenderY } :
           this.getZonePosition('field', afterState);
 
         const endPos = this.getZonePosition('player_captured', afterState);
@@ -149,8 +155,8 @@ class Game {
       const newlyCaptured = afterState.opponentCaptured.slice(-capturedCount);
 
       newlyCaptured.forEach((card, index) => {
-        const startPos = card._renderX !== undefined ?
-          { x: card._renderX, y: card._renderY } :
+        const startPos = (card._lastRenderX !== undefined) ?
+          { x: card._lastRenderX, y: card._lastRenderY } :
           this.getZonePosition('field', afterState);
 
         const endPos = this.getZonePosition('opponent_captured', afterState);
@@ -161,10 +167,10 @@ class Game {
       });
     }
 
-    // Check if card was added to field
+    // Check if card was added to field (placed without capture)
     if (afterState.field.length > beforeState.field.length && triggeredCard) {
-      const startPos = triggeredCard._renderX !== undefined ?
-        { x: triggeredCard._renderX, y: triggeredCard._renderY } :
+      const startPos = (triggeredCard._lastRenderX !== undefined) ?
+        { x: triggeredCard._lastRenderX, y: triggeredCard._lastRenderY } :
         this.getZonePosition('player_hand', afterState);
 
       const endPos = this.getZonePosition('field', afterState);
