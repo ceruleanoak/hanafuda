@@ -27,6 +27,8 @@ class Game {
   setupEventListeners() {
     // Canvas click
     this.canvas.addEventListener('click', (e) => this.handleClick(e));
+    // Canvas double-click for auto-match
+    this.canvas.addEventListener('dblclick', (e) => this.handleDoubleClick(e));
 
     // New game button
     this.newGameButton.addEventListener('click', () => this.showRoundModal());
@@ -73,6 +75,25 @@ class Game {
     if (result) {
       const { card, owner } = result;
       const success = this.game.selectCard(card, owner);
+
+      if (success) {
+        this.updateUI();
+      }
+    }
+  }
+
+  handleDoubleClick(event) {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    const gameState = this.game.getState();
+    const result = this.renderer.getCardAtPosition(x, y, gameState);
+
+    if (result && result.owner === 'player' && gameState.phase === 'select_hand') {
+      const { card } = result;
+      // Auto-match if match exists
+      const success = this.game.autoMatchCard(card);
 
       if (success) {
         this.updateUI();
