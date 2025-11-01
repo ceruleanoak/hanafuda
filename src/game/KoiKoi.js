@@ -8,6 +8,18 @@ import { Yaku } from './Yaku.js';
 export class KoiKoi {
   constructor() {
     this.deck = new Deck();
+    this.totalRounds = 1;
+    this.currentRound = 0;
+    this.animationQueue = [];
+    this.isAnimating = false;
+    this.reset();
+  }
+
+  startNewGame(rounds) {
+    this.totalRounds = rounds;
+    this.currentRound = 1;
+    this.playerScore = 0;
+    this.opponentScore = 0;
     this.reset();
   }
 
@@ -18,11 +30,13 @@ export class KoiKoi {
     this.opponentHand = [];
     this.playerCaptured = [];
     this.opponentCaptured = [];
-    this.playerScore = 0;
-    this.opponentScore = 0;
+    this.playerYaku = [];
+    this.opponentYaku = [];
     this.currentPlayer = 'player'; // 'player' or 'opponent'
     this.selectedCards = [];
-    this.phase = 'select_hand'; // 'select_hand', 'select_field', 'waiting'
+    this.phase = 'select_hand'; // 'select_hand', 'select_field', 'draw_phase', 'select_drawn_match'
+    this.drawnCard = null;
+    this.drawnCardMatches = [];
     this.gameOver = false;
     this.message = '';
 
@@ -53,15 +67,38 @@ export class KoiKoi {
       opponentHand: this.opponentHand,
       playerCaptured: this.playerCaptured,
       opponentCaptured: this.opponentCaptured,
+      playerYaku: this.playerYaku,
+      opponentYaku: this.opponentYaku,
       playerScore: this.playerScore,
       opponentScore: this.opponentScore,
       deckCount: this.deck.count,
       currentPlayer: this.currentPlayer,
       selectedCards: this.selectedCards,
       phase: this.phase,
+      drawnCard: this.drawnCard,
+      drawnCardMatches: this.drawnCardMatches,
       message: this.message,
-      gameOver: this.gameOver
+      gameOver: this.gameOver,
+      currentRound: this.currentRound,
+      totalRounds: this.totalRounds,
+      animationQueue: this.animationQueue,
+      isAnimating: this.isAnimating
     };
+  }
+
+  /**
+   * Queue an animation
+   */
+  queueAnimation(animation) {
+    this.animationQueue.push(animation);
+  }
+
+  /**
+   * Clear animation queue
+   */
+  clearAnimations() {
+    this.animationQueue = [];
+    this.isAnimating = false;
   }
 
   /**
@@ -72,7 +109,7 @@ export class KoiKoi {
       return false;
     }
 
-    // Player can only select from their hand or field
+    // Select card from hand
     if (this.phase === 'select_hand' && owner === 'player') {
       this.selectedCards = [{ id: card.id, owner }];
       this.phase = 'select_field';
@@ -80,6 +117,7 @@ export class KoiKoi {
       return true;
     }
 
+    // Select field card to match with hand card
     if (this.phase === 'select_field') {
       // If clicking same card again, just place it on field
       if (owner === 'player' && this.selectedCards[0].id === card.id) {
@@ -97,6 +135,18 @@ export class KoiKoi {
           this.message = 'Cards must be from the same month';
           return false;
         }
+      }
+    }
+
+    // Select field card to match with drawn card
+    if (this.phase === 'select_drawn_match' && owner === 'field') {
+      const isMatch = this.drawnCardMatches.some(m => m.id === card.id);
+      if (isMatch) {
+        this.captureDrawnCard(card);
+        return true;
+      } else {
+        this.message = 'Select one of the matching cards';
+        return false;
       }
     }
 
@@ -124,7 +174,7 @@ export class KoiKoi {
   }
 
   /**
-   * Capture matching cards
+   * Capture matching cards from hand
    */
   captureCards(handCard, fieldCard) {
     // Remove from hand and field
@@ -138,8 +188,24 @@ export class KoiKoi {
     this.playerCaptured.push(handCard, fieldCard);
 
     this.selectedCards = [];
-    this.checkYaku('player');
+    this.updateYaku('player');
     this.drawPhase();
+  }
+
+  /**
+   * Capture drawn card with selected field card
+   */
+  captureDrawnCard(fieldCard) {
+    const fieldIndex = this.field.findIndex(c => c.id === fieldCard.id);
+    if (fieldIndex >= 0) this.field.splice(fieldIndex, 1);
+
+    // Add to captured
+    this.playerCaptured.push(this.drawnCard, fieldCard);
+
+    this.drawnCard = null;
+    this.drawnCardMatches = [];
+    this.updateYaku('player');
+    this.endTurn();
   }
 
   /**
@@ -151,61 +217,168 @@ export class KoiKoi {
       return;
     }
 
-    const drawnCard = this.deck.draw();
+    this.phase = 'drawing';
+    this.message = 'Drawing card from deck...';
 
-    // Check if drawn card matches anything on field
-    const matches = this.field.filter(fc => this.cardsMatch(drawnCard, fc));
+    // Brief delay to show the drawing action
+    setTimeout(() => {
+      const drawnCard = this.deck.draw();
+      this.drawnCard = drawnCard;
 
-    if (matches.length > 0) {
-      // Auto-capture first match
-      const fieldCard = matches[0];
-      const fieldIndex = this.field.findIndex(c => c.id === fieldCard.id);
-      this.field.splice(fieldIndex, 1);
-      this.playerCaptured.push(drawnCard, fieldCard);
-      this.checkYaku('player');
-    } else {
-      // Place drawn card on field
-      this.field.push(drawnCard);
-    }
+      // Check if drawn card matches anything on field
+      const matches = this.field.filter(fc => this.cardsMatch(drawnCard, fc));
 
-    // Switch to opponent turn (for now, just switch back to player)
-    this.endTurn();
+      if (matches.length > 1) {
+        // Multiple matches - player must choose
+        this.drawnCardMatches = matches;
+        this.phase = 'select_drawn_match';
+        this.message = `Drew ${drawnCard.name} - Select which card to match`;
+      } else if (matches.length === 1) {
+        // Single match - show drawn card briefly before auto-capturing
+        this.phase = 'show_drawn';
+        this.message = `Drew ${drawnCard.name} - Matching automatically...`;
+
+        setTimeout(() => {
+          const fieldCard = matches[0];
+          const fieldIndex = this.field.findIndex(c => c.id === fieldCard.id);
+          this.field.splice(fieldIndex, 1);
+          this.playerCaptured.push(drawnCard, fieldCard);
+          this.drawnCard = null;
+          this.updateYaku('player');
+          this.endTurn();
+        }, 1200);
+      } else {
+        // No match - show drawn card briefly before placing
+        this.phase = 'show_drawn';
+        this.message = `Drew ${drawnCard.name} - No match, adding to field...`;
+
+        setTimeout(() => {
+          this.field.push(drawnCard);
+          this.drawnCard = null;
+          this.endTurn();
+        }, 1200);
+      }
+    }, 300);
   }
 
   /**
-   * Check for yaku and update score
+   * Update yaku for a player
    */
-  checkYaku(player) {
+  updateYaku(player) {
     const captured = player === 'player' ? this.playerCaptured : this.opponentCaptured;
     const yaku = Yaku.checkYaku(captured);
+
+    if (player === 'player') {
+      this.playerYaku = yaku;
+    } else {
+      this.opponentYaku = yaku;
+    }
 
     if (yaku.length > 0) {
       const score = Yaku.calculateScore(yaku);
       const yakuNames = yaku.map(y => y.name).join(', ');
 
-      if (player === 'player') {
+      if (player === 'player' && this.currentPlayer === 'player') {
         this.message = `Yaku! ${yakuNames} (${score} points)`;
       }
-
-      // In real koi-koi, player chooses to continue or end
-      // For now, we'll just note it
     }
   }
 
   /**
-   * End current turn
+   * End current turn and switch players
    */
   endTurn() {
-    // Simple AI: just switch back to player
-    // In full implementation, opponent would play here
-    this.currentPlayer = 'player';
-    this.phase = 'select_hand';
-    this.message = 'Your turn - select a card from your hand';
-
     // Check if hands are empty
-    if (this.playerHand.length === 0) {
+    if (this.playerHand.length === 0 && this.opponentHand.length === 0) {
       this.endRound();
+      return;
     }
+
+    // Switch players
+    if (this.currentPlayer === 'player') {
+      this.currentPlayer = 'opponent';
+      this.phase = 'opponent_turn';
+      this.message = 'Opponent is thinking...';
+
+      // Trigger opponent AI after short delay
+      setTimeout(() => this.opponentTurn(), 800);
+    } else {
+      this.currentPlayer = 'player';
+      this.phase = 'select_hand';
+      this.message = 'Your turn - select a card from your hand';
+    }
+  }
+
+  /**
+   * Opponent AI turn - prioritizes matches
+   */
+  opponentTurn() {
+    if (this.opponentHand.length === 0 || this.deck.isEmpty()) {
+      this.endRound();
+      return;
+    }
+
+    // Smart AI: Look for cards that have matches first
+    let selectedCardIndex = -1;
+    let selectedMatch = null;
+
+    // First, try to find a card with a match
+    for (let i = 0; i < this.opponentHand.length; i++) {
+      const handCard = this.opponentHand[i];
+      const fieldMatches = this.field.filter(fc => this.cardsMatch(handCard, fc));
+
+      if (fieldMatches.length > 0) {
+        selectedCardIndex = i;
+        // Prioritize high-value cards in matches
+        selectedMatch = fieldMatches.reduce((best, current) =>
+          current.points > best.points ? current : best
+        );
+        break;
+      }
+    }
+
+    // If no matches found, pick a random card
+    if (selectedCardIndex === -1) {
+      selectedCardIndex = Math.floor(Math.random() * this.opponentHand.length);
+    }
+
+    const handCard = this.opponentHand[selectedCardIndex];
+
+    if (selectedMatch) {
+      // Capture with the selected match
+      const fieldIndex = this.field.findIndex(c => c.id === selectedMatch.id);
+      this.opponentHand.splice(selectedCardIndex, 1);
+      this.field.splice(fieldIndex, 1);
+      this.opponentCaptured.push(handCard, selectedMatch);
+      this.updateYaku('opponent');
+    } else {
+      // Place on field
+      this.opponentHand.splice(selectedCardIndex, 1);
+      this.field.push(handCard);
+    }
+
+    // Draw phase for opponent
+    if (!this.deck.isEmpty()) {
+      const drawnCard = this.deck.draw();
+      const drawnMatches = this.field.filter(fc => this.cardsMatch(drawnCard, fc));
+
+      if (drawnMatches.length > 0) {
+        // Prioritize high-value matches
+        const bestMatch = drawnMatches.reduce((best, current) =>
+          current.points > best.points ? current : best
+        );
+        const fieldIndex = this.field.findIndex(c => c.id === bestMatch.id);
+        this.field.splice(fieldIndex, 1);
+        this.opponentCaptured.push(drawnCard, bestMatch);
+        this.updateYaku('opponent');
+      } else {
+        // Place on field
+        this.field.push(drawnCard);
+      }
+    }
+
+    // End opponent turn
+    this.endTurn();
   }
 
   /**
@@ -221,14 +394,26 @@ export class KoiKoi {
     this.playerScore += playerRoundScore;
     this.opponentScore += opponentRoundScore;
 
-    this.gameOver = true;
-    this.message = `Round over! Player: ${playerRoundScore}pts, Opponent: ${opponentRoundScore}pts`;
+    // Check if game is over or continue to next round
+    if (this.currentRound >= this.totalRounds) {
+      this.gameOver = true;
+      const winner = this.playerScore > this.opponentScore ? 'Player' :
+                     this.opponentScore > this.playerScore ? 'Opponent' : 'Tie';
+      this.message = `Game Over! ${winner} wins! Final: Player ${this.playerScore} - Opponent ${this.opponentScore}`;
+    } else {
+      this.currentRound++;
+      this.message = `Round ${this.currentRound - 1} complete! Player: ${playerRoundScore}pts, Opponent: ${opponentRoundScore}pts - Starting round ${this.currentRound}...`;
+      setTimeout(() => this.reset(), 3000);
+    }
   }
 
   /**
    * Start new round
    */
   newRound() {
-    this.reset();
+    if (this.currentRound < this.totalRounds) {
+      this.currentRound++;
+      this.reset();
+    }
   }
 }

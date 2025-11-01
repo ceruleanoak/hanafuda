@@ -19,25 +19,35 @@ export class Renderer {
     // Set canvas to full size
     this.resize();
     window.addEventListener('resize', () => this.resize());
+
+    // Force resize after a short delay to ensure layout is settled
+    setTimeout(() => this.resize(), 100);
   }
 
   resize() {
     const dpr = window.devicePixelRatio || 1;
-    const rect = this.canvas.getBoundingClientRect();
+
+    // Get the parent container size (main element)
+    const parent = this.canvas.parentElement;
+    const rect = parent ? parent.getBoundingClientRect() : this.canvas.getBoundingClientRect();
+
+    // Use parent dimensions or fallback to window size
+    const width = rect.width || window.innerWidth;
+    const height = rect.height || window.innerHeight - 200; // Account for header/footer
 
     // Set actual size in memory (scaled for retina displays)
-    this.canvas.width = rect.width * dpr;
-    this.canvas.height = rect.height * dpr;
+    this.canvas.width = width * dpr;
+    this.canvas.height = height * dpr;
 
     // Set display size
-    this.canvas.style.width = rect.width + 'px';
-    this.canvas.style.height = rect.height + 'px';
+    this.canvas.style.width = width + 'px';
+    this.canvas.style.height = height + 'px';
 
     // Scale context to match device pixel ratio
     this.ctx.scale(dpr, dpr);
 
-    this.displayWidth = rect.width;
-    this.displayHeight = rect.height;
+    this.displayWidth = width;
+    this.displayHeight = height;
   }
 
   /**
@@ -98,21 +108,54 @@ export class Renderer {
     this.drawBackground();
 
     const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
-    const spacing = 10;
+    const spacing = 15;
+    const margin = 30;
 
-    // Calculate layout
+    // Calculate layout zones
     const centerX = this.displayWidth / 2;
     const centerY = this.displayHeight / 2;
 
+    // Define distinct zones for each area
+    const zones = {
+      opponentHand: margin + 10,
+      opponentCaptured: margin + 10,
+      field: centerY - cardHeight / 2,
+      playerHand: this.displayHeight - cardHeight - margin - 10,
+      playerCaptured: this.displayHeight - cardHeight - margin - 10,
+      deck: centerY - cardHeight / 2
+    };
+
+    // Draw opponent hand (top, face down)
+    if (gameState.opponentHand && gameState.opponentHand.length > 0) {
+      this.drawCardRow(
+        gameState.opponentHand,
+        centerX,
+        zones.opponentHand,
+        [],
+        'opponent',
+        true // face down
+      );
+    }
+
     // Draw field cards (center)
     if (gameState.field && gameState.field.length > 0) {
+      // Highlight matching cards if in drawn card selection phase
+      const highlightedCards = gameState.phase === 'select_drawn_match'
+        ? gameState.drawnCardMatches.map(c => ({ id: c.id, owner: 'field' }))
+        : gameState.selectedCards;
+
       this.drawCardRow(
         gameState.field,
         centerX,
-        centerY - cardHeight - spacing,
-        gameState.selectedCards,
+        zones.field,
+        highlightedCards,
         'field'
       );
+    }
+
+    // Draw drawn card hover area (if waiting for selection OR showing drawn card)
+    if (gameState.drawnCard && (gameState.phase === 'select_drawn_match' || gameState.phase === 'show_drawn' || gameState.phase === 'drawing')) {
+      this.drawDrawnCardHover(gameState.drawnCard, centerX, centerY - cardHeight - 50, gameState.phase);
     }
 
     // Draw player hand (bottom)
@@ -120,28 +163,16 @@ export class Renderer {
       this.drawCardRow(
         gameState.playerHand,
         centerX,
-        this.displayHeight - cardHeight - 20,
+        zones.playerHand,
         gameState.selectedCards,
         'player'
       );
     }
 
-    // Draw opponent hand (top, face down)
-    if (gameState.opponentHand && gameState.opponentHand.length > 0) {
-      this.drawCardRow(
-        gameState.opponentHand,
-        centerX,
-        20,
-        [],
-        'opponent',
-        true // face down
-      );
-    }
-
-    // Draw deck
+    // Draw deck (left side)
     if (gameState.deckCount > 0) {
-      const deckX = 20;
-      const deckY = centerY - cardHeight / 2;
+      const deckX = margin;
+      const deckY = zones.deck;
       this.cardRenderer.drawCard(
         this.ctx,
         { name: `Deck (${gameState.deckCount})` },
@@ -152,8 +183,37 @@ export class Renderer {
       );
     }
 
-    // Draw captured cards count
+    // Draw captured cards (right side)
     this.drawCapturedCards(gameState);
+  }
+
+  /**
+   * Draw drawn card in hover area
+   */
+  drawDrawnCardHover(card, centerX, y, phase) {
+    const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
+
+    // Draw background panel
+    this.ctx.save();
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+    this.ctx.fillRect(centerX - cardWidth / 2 - 20, y - 40, cardWidth + 40, cardHeight + 80);
+
+    this.ctx.strokeStyle = phase === 'select_drawn_match' ? '#4ecdc4' : '#ffeb3b';
+    this.ctx.lineWidth = 3;
+    this.ctx.strokeRect(centerX - cardWidth / 2 - 20, y - 40, cardWidth + 40, cardHeight + 80);
+
+    // Draw label
+    this.ctx.fillStyle = phase === 'select_drawn_match' ? '#4ecdc4' : '#ffeb3b';
+    this.ctx.font = 'bold 14px monospace';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(phase === 'drawing' ? 'DRAWING...' : 'DRAWN CARD', centerX, y - 20);
+
+    // Draw card (only if not in "drawing" phase)
+    if (phase !== 'drawing') {
+      this.cardRenderer.drawCard(this.ctx, card, centerX - cardWidth / 2, y, false, false);
+    }
+
+    this.ctx.restore();
   }
 
   /**
@@ -161,7 +221,7 @@ export class Renderer {
    */
   drawCardRow(cards, centerX, y, selectedCards, owner, faceDown = false) {
     const { width: cardWidth } = this.cardRenderer.getCardDimensions();
-    const spacing = 10;
+    const spacing = 15;
     const totalWidth = cards.length * (cardWidth + spacing) - spacing;
     const startX = centerX - totalWidth / 2;
 
@@ -192,42 +252,65 @@ export class Renderer {
    */
   drawCapturedCards(gameState) {
     const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
-    const rightMargin = 20;
-    const topMargin = 20;
+    const rightMargin = 30;
+    const verticalMargin = 40;
 
-    // Player captured
+    // Player captured (bottom right)
     if (gameState.playerCaptured && gameState.playerCaptured.length > 0) {
       this.drawCapturedStack(
         gameState.playerCaptured,
+        gameState.playerYaku || [],
         this.displayWidth - cardWidth - rightMargin,
-        this.displayHeight - cardHeight - topMargin,
-        'Player'
+        this.displayHeight - cardHeight - verticalMargin,
+        'Player Captured'
       );
     }
 
-    // Opponent captured
+    // Opponent captured (top right)
     if (gameState.opponentCaptured && gameState.opponentCaptured.length > 0) {
       this.drawCapturedStack(
         gameState.opponentCaptured,
+        gameState.opponentYaku || [],
         this.displayWidth - cardWidth - rightMargin,
-        topMargin,
-        'Opponent'
+        verticalMargin,
+        'Opponent Captured'
       );
     }
   }
 
   /**
-   * Draw stack of captured cards
+   * Draw stack of captured cards with yaku
    */
-  drawCapturedStack(cards, x, y, label) {
+  drawCapturedStack(cards, yaku, x, y, label) {
     this.ctx.save();
+
+    const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
+
+    // Draw yaku list above captured stack
+    let yakuY = y - 30;
+    if (yaku && yaku.length > 0) {
+      this.ctx.fillStyle = '#4ecdc4';
+      this.ctx.font = 'bold 11px monospace';
+      this.ctx.textAlign = 'right';
+
+      // Draw yaku in reverse order (most recent at bottom)
+      for (let i = Math.min(yaku.length - 1, 4); i >= 0; i--) {
+        const yakuItem = yaku[i];
+        this.ctx.fillText(`${yakuItem.name} (${yakuItem.points})`, x + cardWidth, yakuY);
+        yakuY -= 14;
+      }
+
+      if (yaku.length > 5) {
+        this.ctx.fillStyle = '#888';
+        this.ctx.fillText(`+${yaku.length - 5} more...`, x + cardWidth, yakuY);
+      }
+    }
 
     // Draw label
     this.ctx.fillStyle = '#fff';
-    this.ctx.font = '12px monospace';
+    this.ctx.font = 'bold 13px monospace';
     this.ctx.textAlign = 'center';
-    const { width: cardWidth } = this.cardRenderer.getCardDimensions();
-    this.ctx.fillText(`${label}: ${cards.length}`, x + cardWidth / 2, y - 5);
+    this.ctx.fillText(`${label}: ${cards.length}`, x + cardWidth / 2, y - 10);
 
     // Draw top card of stack
     if (cards.length > 0) {
