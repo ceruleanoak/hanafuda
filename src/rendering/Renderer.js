@@ -220,6 +220,17 @@ export class Renderer {
   drawAnimatingCards(animatingCards) {
     if (!animatingCards || animatingCards.length === 0) return;
 
+    // Check if cards are in celebration area (top of screen, y < 150)
+    const celebrationCards = animatingCards.filter(
+      anim => anim.card._animY !== undefined && anim.card._animY < 150
+    );
+
+    // Draw celebration box if cards are celebrating
+    if (celebrationCards.length >= 4) {
+      this.drawCelebrationBox(celebrationCards);
+    }
+
+    // Draw all animating cards
     for (const anim of animatingCards) {
       try {
         if (anim.card._animX !== undefined && anim.card._animY !== undefined) {
@@ -243,6 +254,48 @@ export class Renderer {
         debugLogger.logError('Error drawing animating card', err);
       }
     }
+  }
+
+  /**
+   * Draw celebration box for four-of-a-kind
+   */
+  drawCelebrationBox(cards) {
+    const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
+
+    // Calculate box dimensions to fit all cards
+    const padding = 20;
+    const spacing = 15;
+    const boxWidth = (4 * cardWidth) + (3 * spacing) + (2 * padding);
+    const boxHeight = cardHeight + (2 * padding) + 60; // Extra space for label
+
+    const centerX = this.displayWidth / 2;
+    const boxX = centerX - boxWidth / 2;
+    const boxY = 30;
+
+    this.ctx.save();
+
+    // Draw semi-transparent background
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    this.ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+
+    // Draw golden border
+    this.ctx.strokeStyle = '#FFD700';
+    this.ctx.lineWidth = 4;
+    this.ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+
+    // Draw inner glow
+    this.ctx.strokeStyle = 'rgba(255, 215, 0, 0.5)';
+    this.ctx.lineWidth = 8;
+    this.ctx.strokeRect(boxX - 4, boxY - 4, boxWidth + 8, boxHeight + 8);
+
+    // Draw label
+    const month = cards.length > 0 ? cards[0].card.month : 'Unknown';
+    this.ctx.fillStyle = '#FFD700';
+    this.ctx.font = 'bold 20px monospace';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(`🎉 FOUR OF ${month.toUpperCase()} 🎉`, centerX, boxY + 25);
+
+    this.ctx.restore();
   }
 
   /**
