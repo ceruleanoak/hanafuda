@@ -89,8 +89,8 @@ export const HANAFUDA_DECK = [
   // November - Willow (柳)
   { id: 41, month: MONTHS.NOVEMBER, type: CARD_TYPES.BRIGHT, name: 'November - bright - rain man', points: 20, isSpecial: true, image: 'assets/cards/Nov-bright.png' },
   { id: 42, month: MONTHS.NOVEMBER, type: CARD_TYPES.ANIMAL, name: 'November - animal - swallow', points: 10, image: 'assets/cards/Nov-animal.png' },
-  { id: 43, month: MONTHS.NOVEMBER, type: CARD_TYPES.RIBBON, name: 'November - ribbon - red', points: 5, ribbonColor: 'red', image: 'assets/cards/Nov-chaff-1.png' },
-  { id: 44, month: MONTHS.NOVEMBER, type: CARD_TYPES.CHAFF, name: 'November - chaff - lightning', points: 1, image: 'assets/cards/Nov-chaff-2.png' },
+  { id: 43, month: MONTHS.NOVEMBER, type: CARD_TYPES.RIBBON, name: 'November - ribbon - red', points: 5, ribbonColor: 'red', image: 'assets/cards/Nov-ribbon.png' },
+  { id: 44, month: MONTHS.NOVEMBER, type: CARD_TYPES.CHAFF, name: 'November - chaff - lightning', points: 1, image: 'assets/cards/Nov-chaff.png' },
 
   // December - Paulownia (桐)
   { id: 45, month: MONTHS.DECEMBER, type: CARD_TYPES.BRIGHT, name: 'December - bright - phoenix', points: 20, isSpecial: true, image: 'assets/cards/Dec-bright.png' },
