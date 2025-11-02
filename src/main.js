@@ -109,15 +109,21 @@ class Game {
         });
       }
 
-      // Capture state before action
-      const beforeState = this.game.getState();
+      // Capture state LENGTHS before action (getState() returns references, not copies!)
+      const state = this.game.getState();
+      const beforeLengths = {
+        playerCaptured: state.playerCaptured.length,
+        opponentCaptured: state.opponentCaptured.length,
+        field: state.field.length,
+        playerHand: state.playerHand.length
+      };
 
       const success = this.game.selectCard(card, owner);
 
       if (success) {
-        // Check if we should animate
+        // Check if we should animate by comparing actual changes
         const afterState = this.game.getState();
-        this.handleGameStateChange(beforeState, afterState, card);
+        this.handleGameStateChange(beforeLengths, afterState, card);
         this.updateUI();
       }
     }
@@ -149,15 +155,21 @@ class Game {
         });
       }
 
-      // Capture state before action
-      const beforeState = this.game.getState();
+      // Capture state LENGTHS before action (getState() returns references, not copies!)
+      const state = this.game.getState();
+      const beforeLengths = {
+        playerCaptured: state.playerCaptured.length,
+        opponentCaptured: state.opponentCaptured.length,
+        field: state.field.length,
+        playerHand: state.playerHand.length
+      };
 
       // Auto-match if match exists
       const success = this.game.autoMatchCard(card);
 
       if (success) {
         const afterState = this.game.getState();
-        this.handleGameStateChange(beforeState, afterState, card);
+        this.handleGameStateChange(beforeLengths, afterState, card);
         this.updateUI();
       }
     }
@@ -166,16 +178,23 @@ class Game {
   /**
    * Handle state changes and trigger animations
    */
-  handleGameStateChange(beforeState, afterState, triggeredCard) {
-    debugLogger.logGameStateChange(beforeState, afterState, 'Player action');
+  handleGameStateChange(beforeLengths, afterState, triggeredCard) {
+    // Log state change with actual values
+    debugLogger.log('gameState', 'State Change: Player action', {
+      phase: afterState.phase,
+      playerCaptured: `${beforeLengths.playerCaptured} → ${afterState.playerCaptured.length}`,
+      opponentCaptured: `${beforeLengths.opponentCaptured} → ${afterState.opponentCaptured.length}`,
+      field: `${beforeLengths.field} → ${afterState.field.length}`,
+      deckCount: afterState.deckCount
+    });
 
-    // Check if cards were captured
-    if (afterState.playerCaptured.length > beforeState.playerCaptured.length) {
+    // Check if cards were captured by player
+    if (afterState.playerCaptured.length > beforeLengths.playerCaptured) {
       // Player captured cards - animate them
-      const capturedCount = afterState.playerCaptured.length - beforeState.playerCaptured.length;
+      const capturedCount = afterState.playerCaptured.length - beforeLengths.playerCaptured;
       const newlyCaptured = afterState.playerCaptured.slice(-capturedCount);
 
-      debugLogger.log('animation', `Player captured ${capturedCount} card(s)`, {
+      debugLogger.log('animation', `🎴 Player captured ${capturedCount} card(s) - CREATING ANIMATIONS`, {
         cards: newlyCaptured.map(c => c.name)
       });
 
@@ -201,11 +220,11 @@ class Game {
     }
 
     // Check if cards were added to opponent's captured
-    if (afterState.opponentCaptured.length > beforeState.opponentCaptured.length) {
-      const capturedCount = afterState.opponentCaptured.length - beforeState.opponentCaptured.length;
+    if (afterState.opponentCaptured.length > beforeLengths.opponentCaptured) {
+      const capturedCount = afterState.opponentCaptured.length - beforeLengths.opponentCaptured;
       const newlyCaptured = afterState.opponentCaptured.slice(-capturedCount);
 
-      debugLogger.log('animation', `Opponent captured ${capturedCount} card(s)`, {
+      debugLogger.log('animation', `🎴 Opponent captured ${capturedCount} card(s) - CREATING ANIMATIONS`, {
         cards: newlyCaptured.map(c => c.name)
       });
 
@@ -231,8 +250,8 @@ class Game {
     }
 
     // Check if card was added to field (placed without capture)
-    if (afterState.field.length > beforeState.field.length && triggeredCard) {
-      debugLogger.log('animation', 'Card placed on field', {
+    if (afterState.field.length > beforeLengths.field && triggeredCard) {
+      debugLogger.log('animation', '🎴 Card placed on field - CREATING ANIMATION', {
         card: triggeredCard.name
       });
 
