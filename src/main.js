@@ -26,6 +26,17 @@ class Game {
     this.lastGameOverMessage = '';
     this.frameCount = 0;
 
+    // Track state for change detection
+    this.lastStateLengths = {
+      playerCaptured: 0,
+      opponentCaptured: 0,
+      field: 8
+    };
+    this.lastCapturedCards = {
+      player: [],
+      opponent: []
+    };
+
     debugLogger.log('gameState', 'Game initializing...', {
       canvasSize: `${this.canvas.width}x${this.canvas.height}`,
       displaySize: `${this.renderer.displayWidth}x${this.renderer.displayHeight}`
@@ -127,11 +138,24 @@ class Game {
         playerHand: state.playerHand.length
       };
 
+      debugLogger.log('gameState', `BEFORE selectCard - lengths captured`, {
+        playerCaptured: beforeLengths.playerCaptured,
+        opponentCaptured: beforeLengths.opponentCaptured,
+        field: beforeLengths.field
+      });
+
       const success = this.game.selectCard(card, owner);
 
       if (success) {
         // Check if we should animate by comparing actual changes
         const afterState = this.game.getState();
+
+        debugLogger.log('gameState', `AFTER selectCard - checking lengths`, {
+          playerCapturedBefore: beforeLengths.playerCaptured,
+          playerCapturedAfter: afterState.playerCaptured.length,
+          willTriggerAnimation: afterState.playerCaptured.length > beforeLengths.playerCaptured
+        });
+
         this.handleGameStateChange(beforeLengths, afterState, card);
         this.updateUI();
       }
@@ -733,6 +757,11 @@ class Game {
 
       const state = this.game.getState();
 
+      // Check for state changes and trigger animations (only when not already animating)
+      if (!this.isAnimating) {
+        this.checkForStateChanges(state);
+      }
+
       // Update animations
       try {
         this.updateAnimations(deltaTime);
@@ -771,6 +800,65 @@ class Game {
 
     // Continue loop (always, even if there was an error)
     requestAnimationFrame(() => this.gameLoop());
+  }
+
+  /**
+   * Check for state changes and trigger animations
+   */
+  checkForStateChanges(state) {
+    // Check if player captured cards
+    if (state.playerCaptured.length > this.lastStateLengths.playerCaptured) {
+      const capturedCount = state.playerCaptured.length - this.lastStateLengths.playerCaptured;
+      const newlyCaptured = state.playerCaptured.slice(-capturedCount);
+
+      debugLogger.log('animation', `📊 DETECTED player capture via polling`, {
+        before: this.lastStateLengths.playerCaptured,
+        after: state.playerCaptured.length,
+        newCards: newlyCaptured.map(c => c.name)
+      });
+
+      this.triggerCaptureAnimation(newlyCaptured, 'player_captured', 'Player');
+      this.lastStateLengths.playerCaptured = state.playerCaptured.length;
+    }
+
+    // Check if opponent captured cards
+    if (state.opponentCaptured.length > this.lastStateLengths.opponentCaptured) {
+      const capturedCount = state.opponentCaptured.length - this.lastStateLengths.opponentCaptured;
+      const newlyCaptured = state.opponentCaptured.slice(-capturedCount);
+
+      debugLogger.log('animation', `📊 DETECTED opponent capture via polling`, {
+        before: this.lastStateLengths.opponentCaptured,
+        after: state.opponentCaptured.length,
+        newCards: newlyCaptured.map(c => c.name)
+      });
+
+      this.triggerCaptureAnimation(newlyCaptured, 'opponent_captured', 'Opponent');
+      this.lastStateLengths.opponentCaptured = state.opponentCaptured.length;
+    }
+
+    // Update field count (for future use)
+    this.lastStateLengths.field = state.field.length;
+  }
+
+  /**
+   * Trigger appropriate animation sequence for captured cards
+   */
+  triggerCaptureAnimation(cards, capturedZone, player) {
+    if (cards.length === 4) {
+      // Four of a kind!
+      const month = cards[0].month;
+      const sequence = this.createFourOfAKindSequence(cards, month, capturedZone, player);
+      this.playSequence(sequence);
+    } else if (cards.length === 2) {
+      // Normal match
+      const card1 = cards[0];
+      const card2 = cards[1];
+      const sequence = this.createMatchSequence(card1, card2, capturedZone, player);
+      this.playSequence(sequence);
+    } else {
+      // Unexpected count, use fallback
+      this.fallbackSimpleAnimation(cards, capturedZone);
+    }
   }
 
   /**
