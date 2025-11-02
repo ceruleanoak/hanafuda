@@ -597,17 +597,26 @@ class Game {
   createMatchSequence(movingCard, targetCard, capturedZone, player) {
     const sequence = new AnimationSequence(`${player} Match`);
 
+    // Use _renderX/Y which is set during last render (before cards moved to captured)
     const movingStartPos = {
-      x: movingCard._lastRenderX || movingCard._renderX,
-      y: movingCard._lastRenderY || movingCard._renderY
+      x: movingCard._renderX !== undefined ? movingCard._renderX : 0,
+      y: movingCard._renderY !== undefined ? movingCard._renderY : 0
     };
 
     const targetPos = {
-      x: targetCard._lastRenderX || targetCard._renderX,
-      y: targetCard._lastRenderY || targetCard._renderY
+      x: targetCard._renderX !== undefined ? targetCard._renderX : 0,
+      y: targetCard._renderY !== undefined ? targetCard._renderY : 0
     };
 
     const pilePos = this.getZonePosition(capturedZone, this.game.getState());
+
+    debugLogger.log('animation', `Creating match sequence`, {
+      movingCard: movingCard.name,
+      movingStart: `(${Math.round(movingStartPos.x)}, ${Math.round(movingStartPos.y)})`,
+      targetCard: targetCard.name,
+      targetPos: `(${Math.round(targetPos.x)}, ${Math.round(targetPos.y)})`,
+      pilePos: `(${Math.round(pilePos.x)}, ${Math.round(pilePos.y)})`
+    });
 
     // Stage 1: Moving card animates to target card
     sequence.addParallelStage([{
@@ -676,14 +685,25 @@ class Game {
     const pilePos = this.getZonePosition(capturedZone, this.game.getState());
 
     // Stage 1: All cards fly to celebration positions simultaneously
-    sequence.addParallelStage(cards.map((card, index) => ({
-      card: card,
-      startX: card._lastRenderX || card._renderX,
-      startY: card._lastRenderY || card._renderY,
-      endX: celebrationPositions[index].x,
-      endY: celebrationPositions[index].y,
-      duration: 600
-    })), 'Cards to celebration area');
+    sequence.addParallelStage(cards.map((card, index) => {
+      const startX = card._renderX !== undefined ? card._renderX : celebrationPositions[index].x;
+      const startY = card._renderY !== undefined ? card._renderY : celebrationPositions[index].y;
+
+      debugLogger.log('animation', `Card ${index + 1}/4 for celebration`, {
+        card: card.name,
+        start: `(${Math.round(startX)}, ${Math.round(startY)})`,
+        end: `(${Math.round(celebrationPositions[index].x)}, ${Math.round(celebrationPositions[index].y)})`
+      });
+
+      return {
+        card: card,
+        startX: startX,
+        startY: startY,
+        endX: celebrationPositions[index].x,
+        endY: celebrationPositions[index].y,
+        duration: 600
+      };
+    }), 'Cards to celebration area');
 
     // Stage 2: Fire celebration event
     sequence.addEvent('four_of_a_kind', {
