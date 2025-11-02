@@ -5,6 +5,7 @@
 import { KoiKoi } from './game/KoiKoi.js';
 import { Renderer } from './rendering/Renderer.js';
 import { debugLogger } from './utils/DebugLogger.js';
+import { AnimationSequence } from './utils/AnimationSequence.js';
 
 class Game {
   constructor() {
@@ -19,6 +20,8 @@ class Game {
     this.game = new KoiKoi();
     this.renderer = new Renderer(this.canvas);
     this.animatingCards = [];
+    this.currentSequence = null;  // Current animation sequence playing
+    this.isAnimating = false;     // Block input during animations
     this.lastMessage = '';
     this.lastGameOverMessage = '';
     this.frameCount = 0;
@@ -76,6 +79,12 @@ class Game {
   }
 
   handleClick(event) {
+    // Block input during animations
+    if (this.isAnimating) {
+      debugLogger.log('gameState', '🚫 Click blocked - animation playing', null);
+      return;
+    }
+
     const rect = this.canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
@@ -130,6 +139,12 @@ class Game {
   }
 
   handleDoubleClick(event) {
+    // Block input during animations
+    if (this.isAnimating) {
+      debugLogger.log('gameState', '🚫 Double-click blocked - animation playing', null);
+      return;
+    }
+
     const rect = this.canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
@@ -366,6 +381,69 @@ class Game {
     );
 
     return animation;
+  }
+
+  /**
+   * Create animation sequence for hand/drawn card matching with field card
+   * Scenario 1 & 2: Card A→ Card B position, then both→ trick pile
+   */
+  createMatchSequence(movingCard, targetCard, capturedZone, player) {
+    const sequence = new AnimationSequence(`${player} Match`);
+
+    const movingStartPos = {
+      x: movingCard._lastRenderX || movingCard._renderX,
+      y: movingCard._lastRenderY || movingCard._renderY
+    };
+
+    const targetPos = {
+      x: targetCard._lastRenderX || targetCard._renderX,
+      y: targetCard._lastRenderY || targetCard._renderY
+    };
+
+    const pilePos = this.getZonePosition(capturedZone, this.game.getState());
+
+    // Stage 1: Moving card animates to target card position
+    const stage1Anim = this.animateCard(
+      movingCard,
+      movingStartPos.x,
+      movingStartPos.y,
+      targetPos.x,
+      targetPos.y,
+      400  // Faster initial movement
+    );
+    sequence.addParallelStage([stage1Anim], 'Card arrives at match');
+
+    // Stage 2: Fire match event (for sound)
+    sequence.addEvent('card_match', {
+      movingCard: movingCard.name,
+      targetCard: targetCard.name,
+      player: player
+    });
+
+    // Stage 3: Brief delay to show the match
+    sequence.addDelay(200);
+
+    // Stage 4: Both cards animate together to pile
+    const bothToPileDuration = 500;
+    const card1ToPile = this.animateCard(
+      movingCard,
+      targetPos.x,
+      targetPos.y,
+      pilePos.x,
+      pilePos.y,
+      bothToPileDuration
+    );
+    const card2ToPile = this.animateCard(
+      targetCard,
+      targetPos.x,
+      targetPos.y,
+      pilePos.x,
+      pilePos.y,
+      bothToPileDuration
+    );
+    sequence.addParallelStage([card1ToPile, card2ToPile], 'Both cards to pile');
+
+    return sequence;
   }
 
   /**
