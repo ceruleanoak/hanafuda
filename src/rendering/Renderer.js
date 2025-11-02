@@ -108,6 +108,9 @@ export class Renderer {
     this.clear();
     this.drawBackground();
 
+    // Create set of animating card IDs for quick lookup
+    const animatingCardIds = new Set(animatingCards.map(anim => anim.card.id));
+
     const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
     const spacing = 15;
     const margin = 30;
@@ -128,34 +131,41 @@ export class Renderer {
 
     // Draw opponent hand (top, face down)
     if (gameState.opponentHand && gameState.opponentHand.length > 0) {
-      this.drawCardRow(
-        gameState.opponentHand,
-        centerX,
-        zones.opponentHand,
-        [],
-        'opponent',
-        true // face down
-      );
+      const visibleCards = gameState.opponentHand.filter(c => !animatingCardIds.has(c.id));
+      if (visibleCards.length > 0) {
+        this.drawCardRow(
+          visibleCards,
+          centerX,
+          zones.opponentHand,
+          [],
+          'opponent',
+          true // face down
+        );
+      }
     }
 
-    // Draw field cards (center)
+    // Draw field cards (center) - exclude animating cards
     if (gameState.field && gameState.field.length > 0) {
+      const visibleCards = gameState.field.filter(c => !animatingCardIds.has(c.id));
+
       // Highlight matching cards if in drawn card selection phase
       const highlightedCards = gameState.phase === 'select_drawn_match'
         ? gameState.drawnCardMatches.map(c => ({ id: c.id, owner: 'field' }))
         : gameState.selectedCards;
 
-      this.drawCardRow(
-        gameState.field,
-        centerX,
-        zones.field,
-        highlightedCards,
-        'field'
-      );
+      if (visibleCards.length > 0) {
+        this.drawCardRow(
+          visibleCards,
+          centerX,
+          zones.field,
+          highlightedCards,
+          'field'
+        );
+      }
     }
 
     // Draw drawn card hover area (if waiting for selection OR showing drawn card)
-    // Position it high on screen to avoid covering field cards
+    // Position it at TOP of screen to avoid covering field cards
     if (gameState.drawnCard && (
       gameState.phase === 'select_drawn_match' ||
       gameState.phase === 'show_drawn' ||
@@ -163,20 +173,23 @@ export class Renderer {
       gameState.phase === 'opponent_drawing' ||
       gameState.phase === 'opponent_drawn'
     )) {
-      // Draw above opponent hand to avoid covering field
-      const drawnCardY = zones.opponentHand + cardHeight + 30;
+      // Draw at very top of screen (just below margin)
+      const drawnCardY = margin + 60;
       this.drawDrawnCardHover(gameState.drawnCard, centerX, drawnCardY, gameState.phase);
     }
 
-    // Draw player hand (bottom)
+    // Draw player hand (bottom) - exclude animating cards
     if (gameState.playerHand && gameState.playerHand.length > 0) {
-      this.drawCardRow(
-        gameState.playerHand,
-        centerX,
-        zones.playerHand,
-        gameState.selectedCards,
-        'player'
-      );
+      const visibleCards = gameState.playerHand.filter(c => !animatingCardIds.has(c.id));
+      if (visibleCards.length > 0) {
+        this.drawCardRow(
+          visibleCards,
+          centerX,
+          zones.playerHand,
+          gameState.selectedCards,
+          'player'
+        );
+      }
     }
 
     // Draw deck (left side)

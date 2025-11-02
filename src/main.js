@@ -175,7 +175,7 @@ class Game {
 
       const endPos = this.getZonePosition('field', afterState);
 
-      this.animateCard(triggeredCard, startPos.x, startPos.y, endPos.x, endPos.y, 400);
+      this.animateCard(triggeredCard, startPos.x, startPos.y, endPos.x, endPos.y, 500);
     }
   }
 
@@ -223,7 +223,7 @@ class Game {
   /**
    * Create an animation for a card
    */
-  animateCard(card, startX, startY, endX, endY, duration = 400, onComplete = null) {
+  animateCard(card, startX, startY, endX, endY, duration = 500, onComplete = null) {
     // Set initial animation position
     card._animX = startX;
     card._animY = startY;
