@@ -3,6 +3,7 @@
  */
 
 import { CardRenderer } from './CardRenderer.js';
+import { debugLogger } from '../utils/DebugLogger.js';
 
 export class Renderer {
   constructor(canvas) {
@@ -220,16 +221,26 @@ export class Renderer {
     if (!animatingCards || animatingCards.length === 0) return;
 
     for (const anim of animatingCards) {
-      if (anim.card._animX !== undefined && anim.card._animY !== undefined) {
-        this.cardRenderer.drawCard(
-          this.ctx,
-          anim.card,
-          anim.card._animX,
-          anim.card._animY,
-          false,
-          false,
-          anim.opacity !== undefined ? anim.opacity : 1.0
-        );
+      try {
+        if (anim.card._animX !== undefined && anim.card._animY !== undefined) {
+          this.cardRenderer.drawCard(
+            this.ctx,
+            anim.card,
+            anim.card._animX,
+            anim.card._animY,
+            false,
+            false,
+            anim.opacity !== undefined ? anim.opacity : 1.0
+          );
+        } else {
+          debugLogger.logAnimationWarning('Animating card missing position', {
+            card: anim.card.name,
+            hasAnimX: anim.card._animX !== undefined,
+            hasAnimY: anim.card._animY !== undefined
+          });
+        }
+      } catch (err) {
+        debugLogger.logError('Error drawing animating card', err);
       }
     }
   }
