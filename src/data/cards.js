@@ -33,10 +33,10 @@ export const HANAFUDA_DECK = [
   { id: 4, month: MONTHS.JANUARY, type: CARD_TYPES.CHAFF, name: 'January - chaff', points: 1, image: 'assets/cards/Jan-chaff-2.png' },
 
   // February - Plum (梅)
-  { id: 5, month: MONTHS.FEBRUARY, type: CARD_TYPES.ANIMAL, name: 'February - animal - bush warbler', points: 10 },
-  { id: 6, month: MONTHS.FEBRUARY, type: CARD_TYPES.RIBBON, name: 'February - ribbon - poetry', points: 5, ribbonColor: 'red' },
-  { id: 7, month: MONTHS.FEBRUARY, type: CARD_TYPES.CHAFF, name: 'February - chaff', points: 1 },
-  { id: 8, month: MONTHS.FEBRUARY, type: CARD_TYPES.CHAFF, name: 'February - chaff', points: 1 },
+  { id: 5, month: MONTHS.FEBRUARY, type: CARD_TYPES.ANIMAL, name: 'February - animal - bush warbler', points: 10, image: 'assets/cards/Feb-animal.png' },
+  { id: 6, month: MONTHS.FEBRUARY, type: CARD_TYPES.RIBBON, name: 'February - ribbon - poetry', points: 5, ribbonColor: 'red', image: 'assets/cards/Feb-poetry.png' },
+  { id: 7, month: MONTHS.FEBRUARY, type: CARD_TYPES.CHAFF, name: 'February - chaff', points: 1, image: 'assets/cards/Feb-chaff-1.png' },
+  { id: 8, month: MONTHS.FEBRUARY, type: CARD_TYPES.CHAFF, name: 'February - chaff', points: 1, image: 'assets/cards/Feb-chaff-2.png' },
 
   // March - Cherry Blossom (桜)
   { id: 9, month: MONTHS.MARCH, type: CARD_TYPES.BRIGHT, name: 'March - bright - curtain', points: 20, isSpecial: true },

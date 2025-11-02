@@ -21,5 +21,10 @@
     "canvas"
   ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "crc-32": "^1.2.2",
+    "image-q": "^4.0.0",
+    "pngjs": "^7.0.0"
+  }
 }
