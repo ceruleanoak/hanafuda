@@ -304,12 +304,6 @@ class Game {
           const t = this.easeInOutQuad(anim.progress);
           anim.card._animX = anim.startX + (anim.endX - anim.startX) * t;
           anim.card._animY = anim.startY + (anim.endY - anim.startY) * t;
-
-          // Log animation progress at intervals
-          debugLogger.logAnimationProgress(anim.card, anim.progress, {
-            x: anim.card._animX,
-            y: anim.card._animY
-          });
         }
       } catch (err) {
         debugLogger.logError('Error updating animation', err);
