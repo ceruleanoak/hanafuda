@@ -127,9 +127,12 @@ class Game {
     // Tutorial bubble button
     document.getElementById('tutorial-got-it').addEventListener('click', () => this.hideTutorial());
 
-    // Hue shift slider
+    // Hue shift slider - live preview as you drag
     document.getElementById('card-hue-shift').addEventListener('input', (e) => {
-      document.getElementById('hue-shift-value').textContent = e.target.value;
+      const hueValue = parseInt(e.target.value);
+      document.getElementById('hue-shift-value').textContent = hueValue;
+      // Apply immediately for live preview
+      this.renderer.setCardHueShift(hueValue);
     });
 
     // Keyboard shortcuts
@@ -332,13 +335,20 @@ class Game {
     document.getElementById('card-hue-shift').value = options.cardHueShift;
     document.getElementById('hue-shift-value').textContent = options.cardHueShift;
 
+    // Store original hue shift for cancel functionality
+    this.originalHueShift = options.cardHueShift;
+
     this.optionsModal.classList.add('show');
   }
 
   /**
-   * Hide options modal
+   * Hide options modal (cancel)
    */
   hideOptionsModal() {
+    // Restore original hue shift if user cancelled
+    if (this.originalHueShift !== undefined) {
+      this.renderer.setCardHueShift(this.originalHueShift);
+    }
     this.optionsModal.classList.remove('show');
   }
 
@@ -374,6 +384,12 @@ class Game {
   resetOptions() {
     if (confirm('Reset all options to defaults?')) {
       this.gameOptions.reset();
+      // Update renderer with default values
+      this.renderer.setCardHueShift(0);
+      // Update game options
+      this.game.updateOptions(this.gameOptions);
+      // Update help mode
+      this.helpMode = this.gameOptions.get('helpMode');
       // Reload the form
       this.showOptionsModal();
     }
