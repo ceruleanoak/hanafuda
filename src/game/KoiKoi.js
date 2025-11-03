@@ -692,8 +692,8 @@ export class KoiKoi {
     const yakuImproved = this.hasNewYaku(turnStartYaku, currentYaku);
 
     // Log yaku detection
-    const yakuNames = currentYaku.map(y => y.name).join(', ');
-    const score = Yaku.calculateScore(currentYaku);
+    let yakuNames = currentYaku.map(y => y.name).join(', ');
+    let score = Yaku.calculateScore(currentYaku);
     const turnStartScore = Yaku.calculateScore(turnStartYaku);
     const turnStartNames = turnStartYaku.map(y => y.name).join(', ');
 
@@ -725,13 +725,13 @@ export class KoiKoi {
     }
 
     // Calculate score for display
-    let score = Yaku.calculateScore(currentYaku);
+    score = Yaku.calculateScore(currentYaku);
     let displayScore = score;
     if (this.gameOptions.get('autoDouble7Plus') && score >= 7) {
       displayScore = score * 2;
     }
 
-    const yakuNames = currentYaku.map(y => y.name).join(', ');
+    yakuNames = currentYaku.map(y => y.name).join(', ');
 
     // Update message
     if (player === 'player' && this.currentPlayer === 'player') {
