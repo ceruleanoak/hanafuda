@@ -27,7 +27,9 @@ export class KoiKoi {
       waitingForDecision: false,
       decisionPlayer: null, // Who needs to make a decision
       roundWinner: null,   // Who won this round (for winner-take-all scoring)
-      resumeAction: null   // What action to resume after decision ('drawPhase', 'endTurn', 'opponentDrawPhase')
+      resumeAction: null,  // What action to resume after decision ('drawPhase', 'endTurn', 'opponentDrawPhase')
+      playerScoreAtKoikoi: 0,    // Player's score when they called koi-koi
+      opponentScoreAtKoikoi: 0   // Opponent's score when they called koi-koi
     };
 
     // Track previous yaku to detect new yaku
@@ -109,7 +111,9 @@ export class KoiKoi {
       waitingForDecision: false,
       decisionPlayer: null,
       roundWinner: null,
-      resumeAction: null
+      resumeAction: null,
+      playerScoreAtKoikoi: 0,
+      opponentScoreAtKoikoi: 0
     };
 
     // Reset turn start yaku tracking
@@ -634,7 +638,9 @@ export class KoiKoi {
           this.message = player === 'player' ?
             `Yaku! ${yakuNames} (${displayScore} points) - Round ends!` :
             `Opponent scored ${yakuNames} (${displayScore} points) - Round ends!`;
-          setTimeout(() => this.endRound(), 1500);
+          console.log(`[KOIKOI] Round ending immediately - ${player} scored after opponent koi-koi`);
+          this.endRound();
+          return; // Stop execution here
         } else {
           // Trigger koi-koi decision
           if (player === 'player' && this.currentPlayer === 'player') {
@@ -748,7 +754,9 @@ export class KoiKoi {
       this.message = player === 'player' ?
         `Yaku! ${yakuNames} (${displayScore} points) - Round ends!` :
         `Opponent scored ${yakuNames} (${displayScore} points) - Round ends!`;
-      setTimeout(() => this.endRound(), 1500);
+      console.log(`[KOIKOI] Round ending immediately - ${player} scored after opponent koi-koi`);
+      this.endRound();
+      return; // Stop execution here
     } else {
       // Trigger koi-koi decision
       if (player === 'player' && this.currentPlayer === 'player') {
@@ -818,10 +826,18 @@ export class KoiKoi {
       if (player === 'player') {
         this.koikoiState.playerCalled = true;
         this.koikoiState.playerCount++;
+        // Store current score for penalty check later
+        const playerYaku = Yaku.checkYaku(this.playerCaptured, this.gameOptions);
+        this.koikoiState.playerScoreAtKoikoi = Yaku.calculateScore(playerYaku);
+        console.log(`[KOIKOI] Player called koi-koi with score: ${this.koikoiState.playerScoreAtKoikoi}`);
         this.message = 'Koi-Koi! Playing continues...';
       } else {
         this.koikoiState.opponentCalled = true;
         this.koikoiState.opponentCount++;
+        // Store current score for penalty check later
+        const opponentYaku = Yaku.checkYaku(this.opponentCaptured, this.gameOptions);
+        this.koikoiState.opponentScoreAtKoikoi = Yaku.calculateScore(opponentYaku);
+        console.log(`[KOIKOI] Opponent called koi-koi with score: ${this.koikoiState.opponentScoreAtKoikoi}`);
         this.message = 'Opponent called Koi-Koi! Playing continues...';
 
         // Show opponent koi-koi notification
@@ -1103,6 +1119,18 @@ export class KoiKoi {
 
     console.log(`[SCORING] Round end - Player: ${playerYaku.map(y => y.name).join(', ')} (${playerRoundScore} pts)`);
     console.log(`[SCORING] Round end - Opponent: ${opponentYaku.map(y => y.name).join(', ')} (${opponentRoundScore} pts)`);
+
+    // Check for koi-koi penalty: if someone called koi-koi but didn't improve, they get 0 points
+    if (this.gameOptions && this.gameOptions.get('koikoiEnabled')) {
+      if (this.koikoiState.playerCalled && playerRoundScore <= this.koikoiState.playerScoreAtKoikoi) {
+        console.log(`[SCORING] Player called koi-koi but didn't improve (${this.koikoiState.playerScoreAtKoikoi} → ${playerRoundScore}) - penalty applied`);
+        playerRoundScore = 0;
+      }
+      if (this.koikoiState.opponentCalled && opponentRoundScore <= this.koikoiState.opponentScoreAtKoikoi) {
+        console.log(`[SCORING] Opponent called koi-koi but didn't improve (${this.koikoiState.opponentScoreAtKoikoi} → ${opponentRoundScore}) - penalty applied`);
+        opponentRoundScore = 0;
+      }
+    }
 
     // Apply koi-koi multipliers if enabled
     if (this.gameOptions && this.gameOptions.get('koikoiEnabled')) {
