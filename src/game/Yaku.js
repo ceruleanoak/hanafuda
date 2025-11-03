@@ -192,15 +192,20 @@ export class Yaku {
   /**
    * Check progress towards incomplete yaku
    * @param {Array} cards - Array of captured cards
-   * @returns {Array} Array of progress objects { name, current, needed }
+   * @param {Array} opponentCards - Array of opponent's captured cards (optional)
+   * @returns {Array} Array of progress objects { name, current, needed, isPossible }
    */
-  static checkYakuProgress(cards) {
+  static checkYakuProgress(cards, opponentCards = []) {
     const progress = [];
 
     // Brights progress (need 3+ for scoring)
     const brights = cards.filter(c => c.type === CARD_TYPES.BRIGHT);
     if (brights.length > 0 && brights.length < 3) {
-      progress.push({ name: 'Brights', current: brights.length, needed: 3 });
+      const opponentBrights = opponentCards.filter(c => c.type === CARD_TYPES.BRIGHT).length;
+      const totalBrights = 5; // There are 5 brights total in the deck
+      const remainingBrights = totalBrights - brights.length - opponentBrights;
+      const isPossible = brights.length + remainingBrights >= 3;
+      progress.push({ name: 'Brights', current: brights.length, needed: 3, isPossible });
     }
 
     // Poetry Ribbons progress (need 3)
@@ -210,7 +215,15 @@ export class Yaku {
       c.ribbonColor === 'red'
     );
     if (poetryRibbons.length > 0 && poetryRibbons.length < 3) {
-      progress.push({ name: 'Poetry Ribbons', current: poetryRibbons.length, needed: 3 });
+      const opponentPoetryRibbons = opponentCards.filter(c =>
+        c.type === CARD_TYPES.RIBBON &&
+        c.name.includes('poetry') &&
+        c.ribbonColor === 'red'
+      ).length;
+      const totalPoetryRibbons = 3;
+      const remainingPoetryRibbons = totalPoetryRibbons - poetryRibbons.length - opponentPoetryRibbons;
+      const isPossible = poetryRibbons.length + remainingPoetryRibbons >= 3;
+      progress.push({ name: 'Poetry Ribbons', current: poetryRibbons.length, needed: 3, isPossible });
     }
 
     // Blue Ribbons progress (need 3)
@@ -219,25 +232,44 @@ export class Yaku {
       c.ribbonColor === 'blue'
     );
     if (blueRibbons.length > 0 && blueRibbons.length < 3) {
-      progress.push({ name: 'Blue Ribbons', current: blueRibbons.length, needed: 3 });
+      const opponentBlueRibbons = opponentCards.filter(c =>
+        c.type === CARD_TYPES.RIBBON &&
+        c.ribbonColor === 'blue'
+      ).length;
+      const totalBlueRibbons = 3;
+      const remainingBlueRibbons = totalBlueRibbons - blueRibbons.length - opponentBlueRibbons;
+      const isPossible = blueRibbons.length + remainingBlueRibbons >= 3;
+      progress.push({ name: 'Blue Ribbons', current: blueRibbons.length, needed: 3, isPossible });
     }
 
     // Ribbons progress (need 5)
     const ribbons = cards.filter(c => c.type === CARD_TYPES.RIBBON);
     if (ribbons.length > 0 && ribbons.length < 5) {
-      progress.push({ name: 'Ribbons', current: ribbons.length, needed: 5 });
+      const opponentRibbons = opponentCards.filter(c => c.type === CARD_TYPES.RIBBON).length;
+      const totalRibbons = 10; // There are 10 ribbons total
+      const remainingRibbons = totalRibbons - ribbons.length - opponentRibbons;
+      const isPossible = ribbons.length + remainingRibbons >= 5;
+      progress.push({ name: 'Ribbons', current: ribbons.length, needed: 5, isPossible });
     }
 
     // Animals progress (need 5)
     const animals = cards.filter(c => c.type === CARD_TYPES.ANIMAL);
     if (animals.length > 0 && animals.length < 5) {
-      progress.push({ name: 'Animals', current: animals.length, needed: 5 });
+      const opponentAnimals = opponentCards.filter(c => c.type === CARD_TYPES.ANIMAL).length;
+      const totalAnimals = 9; // There are 9 animals total
+      const remainingAnimals = totalAnimals - animals.length - opponentAnimals;
+      const isPossible = animals.length + remainingAnimals >= 5;
+      progress.push({ name: 'Animals', current: animals.length, needed: 5, isPossible });
     }
 
     // Chaff progress (need 10)
     const chaff = cards.filter(c => c.type === CARD_TYPES.CHAFF);
     if (chaff.length > 0 && chaff.length < 10) {
-      progress.push({ name: 'Chaff', current: chaff.length, needed: 10 });
+      const opponentChaff = opponentCards.filter(c => c.type === CARD_TYPES.CHAFF).length;
+      const totalChaff = 24; // There are 24 chaff cards total
+      const remainingChaff = totalChaff - chaff.length - opponentChaff;
+      const isPossible = chaff.length + remainingChaff >= 10;
+      progress.push({ name: 'Chaff', current: chaff.length, needed: 10, isPossible });
     }
 
     // Boar-Deer-Butterfly progress
@@ -246,7 +278,13 @@ export class Yaku {
     const butterflies = cards.find(c => c.name.includes('butterflies'));
     const inoShikaCho = [boar, deer, butterflies].filter(Boolean).length;
     if (inoShikaCho > 0 && inoShikaCho < 3) {
-      progress.push({ name: 'Boar-Deer-Butterfly', current: inoShikaCho, needed: 3 });
+      const opponentBoar = opponentCards.find(c => c.name.includes('boar'));
+      const opponentDeer = opponentCards.find(c => c.name.includes('deer'));
+      const opponentButterflies = opponentCards.find(c => c.name.includes('butterflies'));
+      const opponentInoShikaCho = [opponentBoar, opponentDeer, opponentButterflies].filter(Boolean).length;
+      // Can only complete if opponent doesn't have any of the missing cards
+      const isPossible = inoShikaCho + (3 - inoShikaCho - opponentInoShikaCho) >= 3;
+      progress.push({ name: 'Boar-Deer-Butterfly', current: inoShikaCho, needed: 3, isPossible });
     }
 
     return progress;

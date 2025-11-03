@@ -67,8 +67,8 @@ export class KoiKoi {
    * Get current game state
    */
   getState() {
-    const playerProgress = Yaku.checkYakuProgress(this.playerCaptured);
-    const opponentProgress = Yaku.checkYakuProgress(this.opponentCaptured);
+    const playerProgress = Yaku.checkYakuProgress(this.playerCaptured, this.opponentCaptured);
+    const opponentProgress = Yaku.checkYakuProgress(this.opponentCaptured, this.playerCaptured);
 
     return {
       field: this.field,

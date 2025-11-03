@@ -15,6 +15,7 @@ class Game {
     this.playerScoreElement = document.getElementById('player-score');
     this.opponentScoreElement = document.getElementById('opponent-score');
     this.newGameButton = document.getElementById('new-game-btn');
+    this.helpButton = document.getElementById('help-btn');
     this.roundModal = document.getElementById('round-modal');
 
     this.game = new KoiKoi();
@@ -25,6 +26,11 @@ class Game {
     this.lastMessage = '';
     this.lastGameOverMessage = '';
     this.frameCount = 0;
+
+    // New features state
+    this.helpMode = false;        // Help mode shows matchable cards
+    this.hoverX = -1;             // Mouse hover X position
+    this.hoverY = -1;             // Mouse hover Y position
 
     // Track state for change detection
     this.lastStateLengths = {
@@ -54,9 +60,19 @@ class Game {
     this.canvas.addEventListener('click', (e) => this.handleClick(e));
     // Canvas double-click for auto-match
     this.canvas.addEventListener('dblclick', (e) => this.handleDoubleClick(e));
+    // Canvas mouse move for hover detection
+    this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+    // Canvas mouse leave to clear hover
+    this.canvas.addEventListener('mouseleave', () => {
+      this.hoverX = -1;
+      this.hoverY = -1;
+    });
 
     // New game button
     this.newGameButton.addEventListener('click', () => this.showRoundModal());
+
+    // Help button
+    this.helpButton.addEventListener('click', () => this.toggleHelpMode());
 
     // Round selection buttons
     document.querySelectorAll('.round-btn').forEach(btn => {
@@ -70,6 +86,8 @@ class Game {
     document.addEventListener('keydown', (e) => {
       if (e.key === 'n' || e.key === 'N') {
         this.showRoundModal();
+      } else if (e.key === 'h' || e.key === 'H') {
+        this.toggleHelpMode();
       }
     });
   }
@@ -211,6 +229,21 @@ class Game {
         this.handleGameStateChange(beforeLengths, afterState, card);
         this.updateUI();
       }
+    }
+  }
+
+  handleMouseMove(event) {
+    const rect = this.canvas.getBoundingClientRect();
+    this.hoverX = event.clientX - rect.left;
+    this.hoverY = event.clientY - rect.top;
+  }
+
+  toggleHelpMode() {
+    this.helpMode = !this.helpMode;
+    if (this.helpMode) {
+      this.helpButton.classList.add('active');
+    } else {
+      this.helpButton.classList.remove('active');
     }
   }
 
@@ -791,7 +824,11 @@ class Game {
 
       // Render
       try {
-        this.renderer.render(state, this.animatingCards);
+        this.renderer.render(state, this.animatingCards, {
+          helpMode: this.helpMode,
+          hoverX: this.hoverX,
+          hoverY: this.hoverY
+        });
       } catch (err) {
         debugLogger.logError('Error in render', err);
       }
