@@ -638,11 +638,12 @@ class Game {
     // Stage 3: Brief delay to show the match
     sequence.addDelay(200);
 
-    // Stage 4: Both cards to pile
+    // Stage 4: Both cards to pile (with slight offset to avoid perfect overlap)
+    const cardOffset = 8; // Small offset to see both cards
     sequence.addParallelStage([
       {
         card: movingCard,
-        startX: targetPos.x,
+        startX: targetPos.x + cardOffset,
         startY: targetPos.y,
         endX: pilePos.x,
         endY: pilePos.y,
@@ -870,10 +871,35 @@ class Game {
       const sequence = this.createFourOfAKindSequence(cards, month, capturedZone, player);
       this.playSequence(sequence);
     } else if (cards.length === 2) {
-      // Normal match
-      const card1 = cards[0];
-      const card2 = cards[1];
-      const sequence = this.createMatchSequence(card1, card2, capturedZone, player);
+      // Normal match - determine which card came from hand and which from field
+      // The card from hand/opponent hand should move TO the field card
+      const fieldCard = cards.find(c => c._owner === 'field');
+      const handCard = cards.find(c => c._owner === 'player' || c._owner === 'opponent');
+
+      // If we can't determine by owner, use Y position (hand cards are higher/lower than field)
+      let movingCard, targetCard;
+      if (fieldCard && handCard) {
+        movingCard = handCard;  // Hand card moves to field card
+        targetCard = fieldCard;
+      } else {
+        // Fallback: use the card with higher/lower Y as hand card
+        // Field is in center, player hand is at bottom, opponent hand is at top
+        const centerY = this.renderer.displayHeight / 2;
+        if (Math.abs((cards[0]._renderY || 0) - centerY) > Math.abs((cards[1]._renderY || 0) - centerY)) {
+          movingCard = cards[0];  // Card farther from center (hand)
+          targetCard = cards[1];  // Card closer to center (field)
+        } else {
+          movingCard = cards[1];
+          targetCard = cards[0];
+        }
+      }
+
+      debugLogger.log('animation', `Determined animation direction`, {
+        movingCard: `${movingCard.name} (owner: ${movingCard._owner})`,
+        targetCard: `${targetCard.name} (owner: ${targetCard._owner})`
+      });
+
+      const sequence = this.createMatchSequence(movingCard, targetCard, capturedZone, player);
       this.playSequence(sequence);
     } else {
       // Unexpected count, use fallback
