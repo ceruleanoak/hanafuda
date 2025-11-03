@@ -1,0 +1,154 @@
+==========================================
+KOI-KOI DECISION BUG - FLOW DIAGRAM
+==========================================
+
+SCENARIO: Player captures cards and gets a new yaku
+===============================================
+
+Timeline (should wait for decision):
+┌─────────────────────────────────────────────────────────────────┐
+│  Player Click (selectCard → captureCards)                       │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  captureCards() [KoiKoi.js:343]                                 │
+│  ├─ playerCaptured.push(handCard, fieldCard)  [L:377]           │
+│  └─ updateYaku('player')  [L:380]                               │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  updateYaku('player') [KoiKoi.js:510]                           │
+│  ├─ Yaku.checkYaku(captured)  [L:512]                           │
+│  ├─ hasNewYaku() returns TRUE  [L:531]                          │
+│  └─ IF new yaku AND koi-koi enabled:  [L:533]                  │
+│     ├─ koikoiState.waitingForDecision = true  [L:544]           │
+│     ├─ koikoiState.decisionPlayer = 'player'  [L:545]           │
+│     └─ uiCallback(yaku, score)  [L:548]                         │
+│        → Shows MODAL in main.js                                 │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+         ┌──────────────────────────────────┐
+         │  Modal appears to player         │
+         │  Waiting for Shobu/Koi-Koi click │
+         │  [waitingForDecision = TRUE]     │
+         └──────────────────────────────────┘
+                            ↓
+        ❌ BUG HERE ❌
+        Line 381 IMMEDIATELY executes:
+┌─────────────────────────────────────────────────────────────────┐
+│  drawPhase()  [KoiKoi.js:381]                                   │
+│  WITHOUT checking if waitingForDecision is true!               │
+│                                                                 │
+│  This phase will:                                               │
+│  ├─ Set phase = 'drawing'                                       │
+│  ├─ Draw a card from deck                                       │
+│  ├─ Check for matches                                           │
+│  └─ Potentially auto-capture or show selection                 │
+└─────────────────────────────────────────────────────────────────┘
+
+RESULT: Two things happen simultaneously:
+  1. Koi-Koi modal waits for player decision
+  2. Game is already executing draw phase!
+  
+Player sees modal but game isn't really paused.
+
+
+OPPONENT SCENARIO:
+================================
+
+Opponent captures and gets new yaku:
+
+Timeline (should wait for decision):
+┌─────────────────────────────────────────────────────────────────┐
+│  opponentTurn() [KoiKoi.js:672]                                 │
+│  ├─ Opponent selects a card  [L:703-711]                        │
+│  └─ Opponent captures card  [L:734-735]                         │
+│     └─ opponentCaptured.push(handCard, selectedMatch)           │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  updateYaku('opponent')  [KoiKoi.js:736]                        │
+│  ├─ Yaku.checkYaku(captured)  [L:512]                           │
+│  ├─ hasNewYaku() returns TRUE  [L:531]                          │
+│  └─ IF new yaku AND koi-koi enabled AND opponent's turn:        │
+│     └─ opponentKoikoiDecision(yaku, score)  [L:552]             │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  opponentKoikoiDecision() [KoiKoi.js:577]                       │
+│  ├─ Calculate probability based on score  [L:584-593]           │
+│  ├─ Randomly choose koikoi or shobu  [L:595]                    │
+│  └─ setTimeout(1500ms):  [L:598-600]                            │
+│     └─ resolveKoikoiDecision(decision, 'opponent')              │
+│        (This will execute LATER in 1.5 seconds)                 │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+           (setTimeout scheduled for 1500ms later)
+                            ↓
+        ❌ BUG HERE ❌
+        Line 762 IMMEDIATELY executes WITHOUT waiting:
+┌─────────────────────────────────────────────────────────────────┐
+│  opponentDrawPhase()  [KoiKoi.js:762]                           │
+│  WITHOUT checking if decision has been made!                   │
+│                                                                 │
+│  This phase will:                                               │
+│  ├─ Set phase = 'opponent_drawing'                              │
+│  ├─ Draw a card from deck                                       │
+│  ├─ Process matches/placement                                   │
+│  └─ Call updateYaku() again potentially                         │
+└─────────────────────────────────────────────────────────────────┘
+
+                            (Time passes: 1500ms)
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  resolveKoikoiDecision() [KoiKoi.js:606]  (NOW executes!)       │
+│  ├─ koikoiState.waitingForDecision = false  [L:607]             │
+│  ├─ IF 'shobu': endRound()  [L:620]                             │
+│  └─ ELSE IF 'koikoi': sets flags [L:624-630]                   │
+│     ❌ Does NOT resume the turn properly!                       │
+└─────────────────────────────────────────────────────────────────┘
+
+RESULT: Race condition!
+  - Drawing phase already started (1500ms+ before decision)
+  - Decision resolves AFTER draw phase already running
+  - If "shobu" chosen: endRound() called while draw phase in progress
+  - Game state is corrupted
+
+
+==========================================
+KEY PROBLEM LOCATIONS IN CODE
+==========================================
+
+1. captureCards() - Line 381
+   this.updateYaku('player');
+   this.drawPhase();  ← NO CHECK FOR waitingForDecision
+
+2. captureDrawnCard() - Line 415  
+   this.updateYaku('player');
+   this.endTurn();    ← NO CHECK FOR waitingForDecision
+
+3. opponentTurn() - Line 736 & 762
+   this.updateYaku('opponent');
+   ...
+   this.opponentDrawPhase();  ← NO CHECK FOR waitingForDecision
+
+4. opponentDrawPhase() - Line 814 & 831
+   this.updateYaku('opponent');
+   this.endTurn();    ← NO CHECK FOR waitingForDecision
+
+5. resolveKoikoiDecision() - Line 632-634
+   No explicit resumption of turn
+   Just sets message and returns
+
+
+==========================================
+MISSING SAFETY CHECKS
+==========================================
+
+❌ No check for waitingForDecision in drawPhase()
+❌ No check for waitingForDecision in opponentDrawPhase()  
+❌ No check for waitingForDecision in endTurn()
+❌ No check for waitingForDecision after updateYaku() calls
+❌ No turn resumption mechanism when decision is made
+❌ No dedicated phase like "waiting_for_koi_koi_decision"
+

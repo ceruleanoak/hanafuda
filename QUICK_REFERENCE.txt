@@ -1,0 +1,211 @@
+================================================================================
+KOIN-KOI DECISION BUG - QUICK REFERENCE GUIDE
+================================================================================
+
+YOUR QUESTIONS ANSWERED:
+================================================================================
+
+Q1: Where does the game check for yaku formation?
+A:  Yaku.js lines 14-72 (checkYaku method)
+    Called from: KoiKoi.js line 512 (inside updateYaku method)
+
+Q2: Where does the game trigger the koi-koi decision modal?
+A:  KoiKoi.js lines 533-554 (updateYaku method)
+    Player:   Lines 542-549 - Shows modal via uiCallback
+    Opponent: Lines 550-553 - Calls opponentKoikoiDecision()
+    
+    Modal shown at: main.js lines 362-381 (showKoikoiDecision)
+
+Q3: How does opponent AI make koi-koi decisions?
+A:  KoiKoi.js lines 577-601 (opponentKoikoiDecision method)
+    
+    Strategy:
+    - High score (10+): 90% safe (Shobu)
+    - Medium score (7-9): 70% safe
+    - Lower score (4-6): 50/50
+    - Low score (3-): 70% risky (Koi-Koi)
+    
+    Decision made at line 595, resolved at line 599 (1500ms delay)
+
+Q4: What phases involved in koi-koi decisions?
+A:  KoiKoi.js lines 19-28 (koikoiState object)
+    
+    Key state flags:
+    - waitingForDecision (boolean) - SHOULD PAUSE GAME
+    - decisionPlayer (string) - Who must decide
+    - playerCalled/opponentCalled - Tracking calls
+
+Q5: Logic that prevents continuing when waiting?
+A:  EXISTS: koikoiState.waitingForDecision flag set
+    MISSING: NO CHECKS for this flag before continuing!
+    
+    This is THE BUG!
+
+================================================================================
+THE BUG IN ONE PICTURE
+================================================================================
+
+CORRECT FLOW (What should happen):
+  1. Player/Opponent gets yaku
+  2. Decision triggered
+  3. waitingForDecision = true
+  4. GAME PAUSES (nothing else executes)
+  5. Player/opponent chooses
+  6. resolveKoikoiDecision() called
+  7. GAME RESUMES
+
+ACTUAL BUGGY FLOW (What actually happens):
+  1. Player/Opponent gets yaku
+  2. Decision triggered
+  3. waitingForDecision = true
+  4. >>> NO PAUSE <<<
+  5. drawPhase/opponentDrawPhase STARTS IMMEDIATELY
+  6. Player/opponent chooses (if player)
+  7. resolveKoikoiDecision() called
+  8. Game already executing next phase - COLLISION!
+
+================================================================================
+WHERE THE BUGS ARE (4 LOCATIONS)
+================================================================================
+
+BUG #1 - Player Capture (KoiKoi.js:380-381)
+---------
+captureCards() {
+  ...
+  this.playerCaptured.push(handCard, fieldCard);
+  this.updateYaku('player');           ← Triggers modal
+  this.drawPhase();                    ❌ Continues immediately!
+}
+
+BUG #2 - Player Draw (KoiKoi.js:415-416)
+---------
+captureDrawnCard() {
+  ...
+  this.playerCaptured.push(drawnCard, fieldCard);
+  this.updateYaku('player');           ← May trigger modal
+  this.endTurn();                      ❌ Switches turn immediately!
+}
+
+BUG #3 - Opponent Capture (KoiKoi.js:736, 762)
+---------
+opponentTurn() {
+  ...
+  this.opponentCaptured.push(handCard, selectedMatch);
+  this.updateYaku('opponent');         ← Triggers AI decision (1500ms)
+  ...
+  this.opponentDrawPhase();            ❌ Starts BEFORE decision resolved!
+}
+
+BUG #4 - Opponent Draw (KoiKoi.js:814, 831)
+---------
+opponentDrawPhase() {
+  ...
+  this.opponentCaptured.push(drawnCard, bestMatch);
+  this.updateYaku('opponent');         ← May trigger decision
+  this.endTurn();                      ❌ Switches turn immediately!
+}
+
+================================================================================
+THE KEY FLAG (Already exists, just not used!)
+================================================================================
+
+Location: KoiKoi.js lines 19-28 and 80-89
+
+koikoiState = {
+  playerCalled: false,
+  opponentCalled: false,
+  playerCount: 0,
+  opponentCount: 0,
+  roundActive: true,
+  waitingForDecision: FALSE,  ← Set to TRUE when decision needed (line 544)
+  decisionPlayer: null,       ← Set to 'player'/'opponent' (line 545)
+  roundWinner: null
+}
+
+The flag IS set correctly!
+The flag IS reset correctly!
+The flag is just NOT CHECKED before continuing!
+
+================================================================================
+EXACT LINES WHERE CHECKS ARE MISSING
+================================================================================
+
+After Line 380:  Should check if waitingForDecision before line 381
+After Line 415:  Should check if waitingForDecision before line 416
+After Line 736:  Should check if waitingForDecision before line 762
+After Line 814:  Should check if waitingForDecision before line 815
+After Line 831:  Should check if waitingForDecision before line 832
+
+Simple fix (example for BUG #1):
+  this.updateYaku('player');
+  if (this.koikoiState.waitingForDecision) {
+    return;  // DON'T continue, wait for decision
+  }
+  this.drawPhase();
+
+================================================================================
+TIME SEQUENCE SHOWING THE RACE CONDITION
+================================================================================
+
+OPPONENT SCENARIO:
+
+T=0ms:    Opponent makes capture
+          updateYaku('opponent') called
+
+T=0ms:    opponentKoikoiDecision() runs
+          setTimeout(resolveKoikoiDecision, 1500) scheduled
+
+T=1ms:    opponentDrawPhase() starts immediately
+          phase = 'opponent_drawing'
+
+T=300ms:  Opponent draws card
+          Checks for matches
+
+T=1500ms: resolveKoikoiDecision() finally executes
+          (1500ms AFTER draw phase already started!)
+
+Result:
+  - Draw phase has been running for 1500ms
+  - If shobu was chosen, endRound() called while draw in progress
+  - If koikoi chosen, try to resume but draw already happening
+  - GAME STATE CORRUPTED
+
+================================================================================
+FILES THAT NEED CHANGES
+================================================================================
+
+Primary file: /home/user/hanafuda/src/game/KoiKoi.js
+
+Methods needing checks:
+- captureCards() - Add check after line 380
+- captureDrawnCard() - Add check after line 415
+- opponentTurn() - Add check after line 736
+- opponentDrawPhase() - Add checks after lines 814, 831
+
+OR
+
+Add a dedicated phase like:
+- this.phase = 'waiting_for_koi_koi_decision'
+- Check this phase in drawPhase, opponentDrawPhase, endTurn
+
+OR
+
+Create a method to resume turn properly when decision made
+
+================================================================================
+SUPPORTING FILES
+================================================================================
+
+Yaku.js - Yaku detection (working correctly)
+  - checkYaku() at lines 14-72
+  
+main.js - UI and modal display (working correctly)
+  - showKoikoiDecision() at lines 362-381
+  - handleKoikoiDecision() at lines 386-389
+
+KoiKoi.js - MAIN BUG LOCATION
+  - updateYaku() at lines 510-556
+  - opponentKoikoiDecision() at lines 577-601
+  - resolveKoikoiDecision() at lines 606-635
+  
+================================================================================

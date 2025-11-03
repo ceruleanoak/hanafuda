@@ -16,9 +16,6 @@ export class GameOptions {
       viewingSakeMode: 'always',         // 'always', 'never', 'requireOther'
       moonViewingSakeMode: 'always',     // 'always', 'never', 'requireOther'
 
-      // Game Settings
-      defaultRounds: 6,                   // 1, 3, 6, or 12
-
       // UI Settings
       helpMode: false,                    // Help highlighting
       tutorialShown: false                // Has user seen tutorial bubble?

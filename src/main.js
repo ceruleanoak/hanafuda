@@ -277,6 +277,8 @@ class Game {
     this.helpMode = !this.helpMode;
     if (this.helpMode) {
       this.helpButton.classList.add('active');
+      // Dismiss tutorial bubble when help is activated
+      this.hideTutorial();
     } else {
       this.helpButton.classList.remove('active');
     }
@@ -311,7 +313,6 @@ class Game {
     document.getElementById('both-players-score').checked = options.bothPlayersScore;
     document.getElementById('viewing-sake').value = options.viewingSakeMode;
     document.getElementById('moon-viewing-sake').value = options.moonViewingSakeMode;
-    document.getElementById('default-rounds').value = options.defaultRounds;
 
     this.optionsModal.classList.add('show');
   }
@@ -333,8 +334,7 @@ class Game {
       autoDouble7Plus: document.getElementById('auto-double').checked,
       bothPlayersScore: document.getElementById('both-players-score').checked,
       viewingSakeMode: document.getElementById('viewing-sake').value,
-      moonViewingSakeMode: document.getElementById('moon-viewing-sake').value,
-      defaultRounds: parseInt(document.getElementById('default-rounds').value)
+      moonViewingSakeMode: document.getElementById('moon-viewing-sake').value
     };
 
     this.gameOptions.update(newOptions);
