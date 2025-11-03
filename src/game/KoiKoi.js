@@ -34,6 +34,12 @@ export class KoiKoi {
     this.previousPlayerYaku = [];
     this.previousOpponentYaku = [];
 
+    // Track yaku at start of turn for end-of-turn comparison
+    this.turnStartYaku = {
+      player: [],
+      opponent: []
+    };
+
     this.reset();
   }
 
@@ -309,7 +315,9 @@ export class KoiKoi {
       // Add all 4 cards to captured
       captured.push(playedCard, ...sameMonthOnField);
 
-      this.updateYaku(player);
+      // Defer decision for player during hand phase
+      const deferDecision = player === 'player' && this.phase === 'select_field';
+      this.updateYaku(player, deferDecision);
       return true;
     }
 
@@ -377,7 +385,7 @@ export class KoiKoi {
         this.playerCaptured.push(handCard, ...sameMonthOnField);
 
         this.selectedCards = [];
-        this.updateYaku('player');
+        this.updateYaku('player', true); // Defer decision during hand phase
         this.drawPhase();
       }, 3600); // Twice as long as regular draw (1800ms * 2)
       return;
@@ -394,13 +402,7 @@ export class KoiKoi {
     this.playerCaptured.push(handCard, fieldCard);
 
     this.selectedCards = [];
-    this.updateYaku('player');
-
-    // Don't continue if waiting for koi-koi decision
-    if (this.koikoiState.waitingForDecision) {
-      this.koikoiState.resumeAction = 'drawPhase';
-      return;
-    }
+    this.updateYaku('player', true); // Defer decision during hand phase
 
     this.drawPhase();
   }
@@ -422,7 +424,9 @@ export class KoiKoi {
 
       this.drawnCard = null;
       this.drawnCardMatches = [];
-      this.updateYaku('player');
+
+      // Check for koi-koi decision after drawn card capture
+      this.checkForKoikoiDecision('player');
 
       // Don't continue if waiting for koi-koi decision
       if (this.koikoiState.waitingForDecision) {
@@ -443,7 +447,9 @@ export class KoiKoi {
 
     this.drawnCard = null;
     this.drawnCardMatches = [];
-    this.updateYaku('player');
+
+    // Check for koi-koi decision after drawn card capture
+    this.checkForKoikoiDecision('player');
 
     // Don't continue if waiting for koi-koi decision
     if (this.koikoiState.waitingForDecision) {
@@ -493,7 +499,16 @@ export class KoiKoi {
             this.field = this.field.filter(c => c.month !== drawnCard.month);
             this.playerCaptured.push(drawnCard, ...sameMonthOnField);
             this.drawnCard = null;
-            this.updateYaku('player');
+
+            // Check for koi-koi decision after drawn card capture
+            this.checkForKoikoiDecision('player');
+
+            // Don't continue if waiting for koi-koi decision
+            if (this.koikoiState.waitingForDecision) {
+              this.koikoiState.resumeAction = 'endTurn';
+              return;
+            }
+
             this.endTurn();
           }, 3600); // Twice as long as regular draw
         } else {
@@ -507,7 +522,16 @@ export class KoiKoi {
             this.field.splice(fieldIndex, 1);
             this.playerCaptured.push(drawnCard, fieldCard);
             this.drawnCard = null;
-            this.updateYaku('player');
+
+            // Check for koi-koi decision after drawn card capture
+            this.checkForKoikoiDecision('player');
+
+            // Don't continue if waiting for koi-koi decision
+            if (this.koikoiState.waitingForDecision) {
+              this.koikoiState.resumeAction = 'endTurn';
+              return;
+            }
+
             this.endTurn();
           }, 1800);
         }
@@ -524,7 +548,16 @@ export class KoiKoi {
             this.field = this.field.filter(c => c.month !== drawnCard.month);
             this.playerCaptured.push(drawnCard, ...sameMonthOnField);
             this.drawnCard = null;
-            this.updateYaku('player');
+
+            // Check for koi-koi decision after drawn card capture
+            this.checkForKoikoiDecision('player');
+
+            // Don't continue if waiting for koi-koi decision
+            if (this.koikoiState.waitingForDecision) {
+              this.koikoiState.resumeAction = 'endTurn';
+              return;
+            }
+
             this.endTurn();
           }, 3600);
         } else {
@@ -544,8 +577,10 @@ export class KoiKoi {
 
   /**
    * Update yaku for a player
+   * @param {string} player - 'player' or 'opponent'
+   * @param {boolean} deferDecision - If true, don't trigger koi-koi modal (for mid-turn updates)
    */
-  updateYaku(player) {
+  updateYaku(player, deferDecision = false) {
     const captured = player === 'player' ? this.playerCaptured : this.opponentCaptured;
     const yaku = Yaku.checkYaku(captured, this.gameOptions);
 
@@ -574,7 +609,7 @@ export class KoiKoi {
       // Check if this is a new yaku (koi-koi decision point)
       const isNewYaku = this.hasNewYaku(previousYaku, yaku);
 
-      if (isNewYaku && this.gameOptions && this.gameOptions.get('koikoiEnabled')) {
+      if (isNewYaku && this.gameOptions && this.gameOptions.get('koikoiEnabled') && !deferDecision) {
         // Update previous yaku
         if (player === 'player') {
           this.previousPlayerYaku = [...yaku];
@@ -626,6 +661,80 @@ export class KoiKoi {
     const currScore = Yaku.calculateScore(currentYaku);
 
     return currScore > prevScore;
+  }
+
+  /**
+   * Check for koi-koi decision at end of turn
+   * Compares current yaku to turn start yaku
+   */
+  checkForKoikoiDecision(player) {
+    // Update current yaku first
+    const captured = player === 'player' ? this.playerCaptured : this.opponentCaptured;
+    const currentYaku = Yaku.checkYaku(captured, this.gameOptions);
+
+    if (player === 'player') {
+      this.playerYaku = currentYaku;
+    } else {
+      this.opponentYaku = currentYaku;
+    }
+
+    // Get turn start yaku
+    const turnStartYaku = this.turnStartYaku[player];
+
+    // Check if yaku improved during this turn
+    const yakuImproved = this.hasNewYaku(turnStartYaku, currentYaku);
+
+    if (!yakuImproved || !this.gameOptions || !this.gameOptions.get('koikoiEnabled')) {
+      return; // No new yaku or koi-koi disabled
+    }
+
+    // Update previous yaku for future comparisons
+    if (player === 'player') {
+      this.previousPlayerYaku = [...currentYaku];
+    } else {
+      this.previousOpponentYaku = [...currentYaku];
+    }
+
+    // Calculate score for display
+    let score = Yaku.calculateScore(currentYaku);
+    let displayScore = score;
+    if (this.gameOptions.get('autoDouble7Plus') && score >= 7) {
+      displayScore = score * 2;
+    }
+
+    const yakuNames = currentYaku.map(y => y.name).join(', ');
+
+    // Update message
+    if (player === 'player' && this.currentPlayer === 'player') {
+      this.message = `Yaku! ${yakuNames} (${displayScore} points)`;
+    }
+
+    // Check if someone already called koi-koi and we're in 2x mode
+    const multiplierMode = this.gameOptions.get('multiplierMode');
+    const alreadyCalledKoikoi = this.koikoiState.playerCalled || this.koikoiState.opponentCalled;
+
+    if (alreadyCalledKoikoi && multiplierMode === '2x') {
+      // In 2x mode, round ends automatically after the next score
+      this.koikoiState.roundWinner = player;
+      this.message = player === 'player' ?
+        `Yaku! ${yakuNames} (${displayScore} points) - Round ends!` :
+        `Opponent scored ${yakuNames} (${displayScore} points) - Round ends!`;
+      setTimeout(() => this.endRound(), 1500);
+    } else {
+      // Trigger koi-koi decision
+      if (player === 'player' && this.currentPlayer === 'player') {
+        // Show koi-koi decision modal for human player
+        this.koikoiState.waitingForDecision = true;
+        this.koikoiState.decisionPlayer = 'player';
+
+        if (this.uiCallback) {
+          this.uiCallback(currentYaku, displayScore);
+        }
+      } else if (player === 'opponent' && this.currentPlayer === 'opponent') {
+        // Opponent AI makes decision
+        this.opponentKoikoiDecision(currentYaku, displayScore);
+      }
+    }
   }
 
   /**
@@ -722,11 +831,17 @@ export class KoiKoi {
       this.phase = 'opponent_turn';
       this.message = 'Opponent is thinking...';
 
+      // Capture yaku state at start of opponent's turn
+      this.turnStartYaku.opponent = [...this.opponentYaku];
+
       // Trigger opponent AI after short delay
       setTimeout(() => this.opponentTurn(), 800);
     } else {
       this.currentPlayer = 'player';
       this.phase = 'select_hand';
+
+      // Capture yaku state at start of player's turn
+      this.turnStartYaku.player = [...this.playerYaku];
 
       // Check if player has a card that would complete a 4-card capture
       const celebrateMonth = this.checkHandForFourCardCapture('player');
@@ -794,14 +909,8 @@ export class KoiKoi {
           setTimeout(() => {
             this.field = this.field.filter(c => c.month !== handCard.month);
             this.opponentCaptured.push(handCard, ...sameMonthOnField);
-            this.updateYaku('opponent');
+            this.updateYaku('opponent', true); // Defer decision during hand phase
             this.opponentPlayedCard = null;
-
-            // Don't continue if waiting for koi-koi decision
-            if (this.koikoiState.waitingForDecision) {
-              this.koikoiState.resumeAction = 'opponentDrawPhase';
-              return;
-            }
 
             this.opponentDrawPhase();
           }, 3600);
@@ -812,13 +921,7 @@ export class KoiKoi {
           this.field.splice(fieldIndex, 1);
           this.opponentCaptured.push(handCard, selectedMatch);
         }
-        this.updateYaku('opponent');
-
-        // Don't continue if waiting for koi-koi decision
-        if (this.koikoiState.waitingForDecision) {
-          this.koikoiState.resumeAction = 'opponentDrawPhase';
-          return;
-        }
+        this.updateYaku('opponent', true); // Defer decision during hand phase
       } else {
         // Check for 4-card same-month capture when placing
         const sameMonthOnField = this.field.filter(c => c.month === handCard.month);
@@ -831,14 +934,8 @@ export class KoiKoi {
           setTimeout(() => {
             this.field = this.field.filter(c => c.month !== handCard.month);
             this.opponentCaptured.push(handCard, ...sameMonthOnField);
-            this.updateYaku('opponent');
+            this.updateYaku('opponent', true); // Defer decision during hand phase
             this.opponentPlayedCard = null;
-
-            // Don't continue if waiting for koi-koi decision
-            if (this.koikoiState.waitingForDecision) {
-              this.koikoiState.resumeAction = 'opponentDrawPhase';
-              return;
-            }
 
             this.opponentDrawPhase();
           }, 3600);
@@ -886,7 +983,9 @@ export class KoiKoi {
             this.field = this.field.filter(c => c.month !== drawnCard.month);
             this.opponentCaptured.push(drawnCard, ...sameMonthOnField);
             this.drawnCard = null;
-            this.updateYaku('opponent');
+
+            // Check for koi-koi decision after drawn card capture
+            this.checkForKoikoiDecision('opponent');
 
             // Don't continue if waiting for koi-koi decision
             if (this.koikoiState.waitingForDecision) {
@@ -910,7 +1009,9 @@ export class KoiKoi {
             this.field.splice(fieldIndex, 1);
             this.opponentCaptured.push(drawnCard, bestMatch);
             this.drawnCard = null;
-            this.updateYaku('opponent');
+
+            // Check for koi-koi decision after drawn card capture
+            this.checkForKoikoiDecision('opponent');
 
             // Don't continue if waiting for koi-koi decision
             if (this.koikoiState.waitingForDecision) {
@@ -934,7 +1035,9 @@ export class KoiKoi {
             this.field = this.field.filter(c => c.month !== drawnCard.month);
             this.opponentCaptured.push(drawnCard, ...sameMonthOnField);
             this.drawnCard = null;
-            this.updateYaku('opponent');
+
+            // Check for koi-koi decision after drawn card capture
+            this.checkForKoikoiDecision('opponent');
 
             // Don't continue if waiting for koi-koi decision
             if (this.koikoiState.waitingForDecision) {
