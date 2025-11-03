@@ -4,6 +4,7 @@
 
 import { Deck } from './Deck.js';
 import { Yaku } from './Yaku.js';
+import { CARD_TYPES } from '../data/cards.js';
 
 export class KoiKoi {
   constructor(gameOptions = null) {
@@ -16,6 +17,7 @@ export class KoiKoi {
     this.uiCallback = null; // Will be set by main.js to show koi-koi modal
     this.roundSummaryCallback = null; // Will be set by main.js to show round summary modal
     this.opponentKoikoiCallback = null; // Will be set by main.js to show opponent koi-koi notification
+    this.bombCardCounter = 0; // Counter for unique bomb card IDs
 
     // Koi-koi state tracking
     this.koikoiState = {
@@ -239,6 +241,19 @@ export class KoiKoi {
 
     // Select card from hand
     if (this.phase === 'select_hand' && owner === 'player') {
+      // Check if this is a bomb card
+      if (this.isBombCard(card)) {
+        // Bomb card - discard it and go to draw phase
+        const cardIndex = this.playerHand.findIndex(c => c.id === card.id);
+        if (cardIndex >= 0) {
+          this.playerHand.splice(cardIndex, 1);
+          this.message = '💣 Bomb card played - discarded';
+          this.drawPhase();
+          return true;
+        }
+        return false;
+      }
+
       this.selectedCards = [{ id: card.id, owner }];
       this.phase = 'select_field';
       this.message = 'Select a matching card from the field (or click again to place)';
@@ -299,9 +314,36 @@ export class KoiKoi {
   }
 
   /**
+   * Create a bomb card (special pass card for bomb variation)
+   */
+  createBombCard() {
+    this.bombCardCounter++;
+    return {
+      id: `bomb_${this.bombCardCounter}_${Date.now()}`,
+      month: null,
+      type: CARD_TYPES.BOMB,
+      name: 'Bomb Card 💣',
+      points: 0,
+      isBomb: true,
+      image: null // Will render as special card
+    };
+  }
+
+  /**
+   * Check if a card is a bomb card
+   */
+  isBombCard(card) {
+    return card && card.type === CARD_TYPES.BOMB;
+  }
+
+  /**
    * Check if two cards match (same month)
+   * Bomb cards never match anything
    */
   cardsMatch(card1, card2) {
+    if (this.isBombCard(card1) || this.isBombCard(card2)) {
+      return false;
+    }
     return card1.month === card2.month;
   }
 

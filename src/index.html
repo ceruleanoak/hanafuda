@@ -17,6 +17,7 @@
           <span>Opponent: <strong id="opponent-score">0</strong></span>
         </div>
         <button id="help-btn" title="Highlight matchable cards">Help</button>
+        <button id="variations-btn" title="Toggle game variations">💣</button>
         <button id="options-btn" title="Game options and rules">Options</button>
         <button id="new-game-btn">New Game</button>
       </div>
@@ -131,6 +132,38 @@
             <button id="options-save">Save</button>
             <button id="options-reset">Reset to Defaults</button>
             <button id="options-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Variations Modal -->
+      <div id="variations-modal" class="modal">
+        <div class="modal-content variations-modal-content">
+          <h2>Game Variations</h2>
+          <p class="variations-description">Toggle special game variations. These are advanced house rules that change gameplay mechanics.</p>
+
+          <div class="variations-list">
+            <div class="variation-item">
+              <div class="variation-header">
+                <span class="variation-emoji">💣</span>
+                <h3>Bomb Variation</h3>
+                <span class="variation-badge">🚧 In Development</span>
+              </div>
+              <p class="variation-description">
+                <strong>Vision:</strong> Play multiple matching cards simultaneously. Receive "bomb cards" (pass cards) to maintain balance. Example: Play 2 matching cards → capture all → receive 1 bomb card back.
+              </p>
+              <p class="variation-status">
+                <strong>Current Status:</strong> Infrastructure ready. Bomb card type added and basic handling implemented. Multi-card selection UI coming in future update.
+              </p>
+              <label class="variation-toggle">
+                <input type="checkbox" id="bomb-variation-enabled">
+                <span class="toggle-label">Enable (Experimental)</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="modal-buttons">
+            <button id="variations-close" class="primary-btn">Close</button>
           </div>
         </div>
       </div>
