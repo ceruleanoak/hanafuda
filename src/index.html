@@ -43,79 +43,66 @@
         <div class="modal-content options-modal-content">
           <h2>Game Options</h2>
 
-          <div class="options-section">
-            <h3>Koi-Koi Rules</h3>
+          <div class="options-grid">
+            <div class="options-section">
+              <h3>Koi-Koi Rules</h3>
 
-            <div class="option-row">
-              <label for="koikoi-enabled">
-                <input type="checkbox" id="koikoi-enabled" checked>
-                Enable Koi-Koi Decision
-              </label>
-              <span class="option-description">Choose to continue or end round after scoring</span>
+              <div class="option-row">
+                <label for="koikoi-enabled">
+                  <input type="checkbox" id="koikoi-enabled" checked>
+                  Enable Koi-Koi Decision
+                </label>
+                <span class="option-description">Choose to continue or end round after scoring</span>
+              </div>
+
+              <div class="option-row">
+                <label for="multiplier-mode">Multiplier Mode:</label>
+                <select id="multiplier-mode">
+                  <option value="2x" selected>2x (Single Double)</option>
+                  <option value="cumulative">2x→3x→4x (Cumulative)</option>
+                </select>
+                <span class="option-description">How points multiply after koi-koi</span>
+              </div>
+
+              <div class="option-row">
+                <label for="auto-double">
+                  <input type="checkbox" id="auto-double" checked>
+                  Auto-double 7+ Points
+                </label>
+                <span class="option-description">Scores of 7+ automatically double</span>
+              </div>
             </div>
 
-            <div class="option-row">
-              <label for="multiplier-mode">Multiplier Mode:</label>
-              <select id="multiplier-mode">
-                <option value="2x" selected>2x (Single Double)</option>
-                <option value="cumulative">2x→3x→4x (Cumulative)</option>
-              </select>
-              <span class="option-description">How points multiply after koi-koi</span>
-            </div>
+            <div class="options-section">
+              <h3>Yaku &amp; Scoring</h3>
 
-            <div class="option-row">
-              <label for="auto-double">
-                <input type="checkbox" id="auto-double" checked>
-                Auto-double 7+ Points
-              </label>
-              <span class="option-description">Scores of 7+ automatically double</span>
-            </div>
+              <div class="option-row">
+                <label for="both-players-score">
+                  <input type="checkbox" id="both-players-score">
+                  Both Players Score
+                </label>
+                <span class="option-description">When OFF (default): winner-take-all scoring (traditional koi-koi)</span>
+              </div>
 
-            <div class="option-row">
-              <label for="both-players-score">
-                <input type="checkbox" id="both-players-score">
-                Both Players Score
-              </label>
-              <span class="option-description">When OFF (default): winner-take-all scoring (traditional koi-koi)</span>
-            </div>
-          </div>
+              <div class="option-row">
+                <label for="viewing-sake">Viewing Sake (Hanami):</label>
+                <select id="viewing-sake">
+                  <option value="always" selected>Always Enabled</option>
+                  <option value="never">Always Disabled</option>
+                  <option value="requireOther">Require Other Yaku</option>
+                </select>
+                <span class="option-description">Curtain + Sake Cup = 3 points</span>
+              </div>
 
-          <div class="options-section">
-            <h3>Yaku Rules</h3>
-
-            <div class="option-row">
-              <label for="viewing-sake">Viewing Sake (Hanami):</label>
-              <select id="viewing-sake">
-                <option value="always" selected>Always Enabled</option>
-                <option value="never">Always Disabled</option>
-                <option value="requireOther">Require Other Yaku</option>
-              </select>
-              <span class="option-description">Curtain + Sake Cup = 3 points</span>
-            </div>
-
-            <div class="option-row">
-              <label for="moon-viewing-sake">Moon Viewing Sake (Tsukimi):</label>
-              <select id="moon-viewing-sake">
-                <option value="always" selected>Always Enabled</option>
-                <option value="never">Always Disabled</option>
-                <option value="requireOther">Require Other Yaku</option>
-              </select>
-              <span class="option-description">Moon + Sake Cup = 3 points</span>
-            </div>
-          </div>
-
-          <div class="options-section">
-            <h3>Game Settings</h3>
-
-            <div class="option-row">
-              <label for="default-rounds">Default Rounds:</label>
-              <select id="default-rounds">
-                <option value="1">1 Round</option>
-                <option value="3">3 Rounds</option>
-                <option value="6" selected>6 Rounds</option>
-                <option value="12">12 Rounds</option>
-              </select>
-              <span class="option-description">Number of rounds per game</span>
+              <div class="option-row">
+                <label for="moon-viewing-sake">Moon Viewing Sake (Tsukimi):</label>
+                <select id="moon-viewing-sake">
+                  <option value="always" selected>Always Enabled</option>
+                  <option value="never">Always Disabled</option>
+                  <option value="requireOther">Require Other Yaku</option>
+                </select>
+                <span class="option-description">Moon + Sake Cup = 3 points</span>
+              </div>
             </div>
           </div>
 

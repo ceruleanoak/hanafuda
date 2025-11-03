@@ -149,6 +149,8 @@ footer {
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
   text-align: center;
   min-width: 400px;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 .modal-content h2 {
@@ -188,13 +190,19 @@ footer {
 
 /* Options Modal */
 .options-modal-content {
-  max-width: 600px;
-  min-width: 500px;
+  max-width: 900px;
+  min-width: 700px;
   text-align: left;
 }
 
-.options-section {
+.options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
   margin-bottom: 2rem;
+}
+
+.options-section {
   padding: 1.5rem;
   background: rgba(0, 0, 0, 0.3);
   border-radius: 8px;

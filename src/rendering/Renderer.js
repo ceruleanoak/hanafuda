@@ -220,6 +220,11 @@ export class Renderer {
     // Draw captured cards (right side)
     this.drawCapturedCards(gameState);
 
+    // Show help mode highlighting (before animating cards and overlays)
+    if (helpMode && gameState.phase === 'select_hand') {
+      this.highlightMatchableCards(gameState);
+    }
+
     // Draw animating cards on top
     this.drawAnimatingCards(animatingCards);
 
@@ -248,11 +253,6 @@ export class Renderer {
           this.drawTricksList(gameState.opponentCaptured, 'Opponent Tricks');
         }
       }
-    }
-
-    // Show help mode highlighting
-    if (helpMode && gameState.phase === 'select_hand') {
-      this.highlightMatchableCards(gameState);
     }
   }
 
