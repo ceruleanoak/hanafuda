@@ -16,6 +16,8 @@ export class CardRenderer {
     // Image cache: { imagePath: Image }
     this.imageCache = new Map();
     this.loadingImages = new Set();
+    // Track failed image loads to prevent retrying every frame
+    this.failedImages = new Set();
   }
 
   /**
@@ -51,6 +53,7 @@ export class CardRenderer {
       };
       img.onerror = () => {
         this.loadingImages.delete(imagePath);
+        this.failedImages.add(imagePath);
         reject(new Error(`Failed to load image: ${imagePath}`));
       };
       img.src = imagePath;
@@ -73,8 +76,8 @@ export class CardRenderer {
     // Apply opacity
     ctx.globalAlpha = opacity;
 
-    // Try to load image if available and not already loaded
-    if (card.image && !this.imageCache.has(card.image) && !this.loadingImages.has(card.image)) {
+    // Try to load image if available and not already loaded or failed
+    if (card.image && !this.imageCache.has(card.image) && !this.loadingImages.has(card.image) && !this.failedImages.has(card.image)) {
       this.loadImage(card.image).catch(() => {
         // Image failed to load, will use fallback
       });
