@@ -688,6 +688,14 @@ export class KoiKoi {
       return; // No new yaku or koi-koi disabled
     }
 
+    // Check if this is the last card (no more hand cards and no more deck cards)
+    const playerHand = player === 'player' ? this.playerHand : this.opponentHand;
+    const isLastCard = playerHand.length === 0 && this.deck.isEmpty();
+
+    if (isLastCard) {
+      return; // No point in koi-koi on last card - round will end anyway
+    }
+
     // Update previous yaku for future comparisons
     if (player === 'player') {
       this.previousPlayerYaku = [...currentYaku];
