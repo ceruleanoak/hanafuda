@@ -32,6 +32,10 @@ class Game {
     this.game.setRoundSummaryCallback((data) => this.showRoundSummary(data));
     this.game.setOpponentKoikoiCallback(() => this.showOpponentKoikoiNotification());
     this.renderer = new Renderer(this.canvas);
+
+    // Initialize card hue shift from saved options
+    this.renderer.setCardHueShift(this.gameOptions.get('cardHueShift'));
+
     this.animatingCards = [];
     this.currentSequence = null;  // Current animation sequence playing
     this.isAnimating = false;     // Block input during animations
@@ -122,6 +126,11 @@ class Game {
 
     // Tutorial bubble button
     document.getElementById('tutorial-got-it').addEventListener('click', () => this.hideTutorial());
+
+    // Hue shift slider
+    document.getElementById('card-hue-shift').addEventListener('input', (e) => {
+      document.getElementById('hue-shift-value').textContent = e.target.value;
+    });
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
@@ -319,6 +328,9 @@ class Game {
     document.getElementById('both-players-score').checked = options.bothPlayersScore;
     document.getElementById('viewing-sake').value = options.viewingSakeMode;
     document.getElementById('moon-viewing-sake').value = options.moonViewingSakeMode;
+    document.getElementById('animations-enabled').checked = options.animationsEnabled;
+    document.getElementById('card-hue-shift').value = options.cardHueShift;
+    document.getElementById('hue-shift-value').textContent = options.cardHueShift;
 
     this.optionsModal.classList.add('show');
   }
@@ -340,13 +352,18 @@ class Game {
       autoDouble7Plus: document.getElementById('auto-double').checked,
       bothPlayersScore: document.getElementById('both-players-score').checked,
       viewingSakeMode: document.getElementById('viewing-sake').value,
-      moonViewingSakeMode: document.getElementById('moon-viewing-sake').value
+      moonViewingSakeMode: document.getElementById('moon-viewing-sake').value,
+      animationsEnabled: document.getElementById('animations-enabled').checked,
+      cardHueShift: parseInt(document.getElementById('card-hue-shift').value)
     };
 
     this.gameOptions.update(newOptions);
 
     // Update game options
     this.game.updateOptions(this.gameOptions);
+
+    // Update card renderer hue shift
+    this.renderer.setCardHueShift(newOptions.cardHueShift);
 
     this.hideOptionsModal();
   }
@@ -610,21 +627,24 @@ class Game {
         card: triggeredCard.name
       });
 
-      const startPos = {
-        x: triggeredCard._lastRenderX || 0,
-        y: triggeredCard._lastRenderY || 0
-      };
-      const endPos = this.getZonePosition('player_hand', afterState);
+      // Only animate if animations are enabled
+      if (this.gameOptions.get('animationsEnabled')) {
+        const startPos = {
+          x: triggeredCard._lastRenderX || 0,
+          y: triggeredCard._lastRenderY || 0
+        };
+        const endPos = this.getZonePosition('player_hand', afterState);
 
-      // Simple animation to field
-      this.animateCard(
-        triggeredCard,
-        startPos.x,
-        startPos.y,
-        endPos.x,
-        endPos.y,
-        400
-      );
+        // Simple animation to field
+        this.animateCard(
+          triggeredCard,
+          startPos.x,
+          startPos.y,
+          endPos.x,
+          endPos.y,
+          400
+        );
+      }
     }
   }
 
@@ -632,6 +652,11 @@ class Game {
    * Fallback simple animation (if sequence logic fails)
    */
   fallbackSimpleAnimation(cards, capturedZone) {
+    // Skip if animations are disabled
+    if (!this.gameOptions.get('animationsEnabled')) {
+      return;
+    }
+
     const endPos = this.getZonePosition(capturedZone, this.game.getState());
 
     cards.forEach((card, index) => {
@@ -745,6 +770,13 @@ class Game {
    * Play an animation sequence
    */
   playSequence(sequence, onComplete = null) {
+    // Check if animations are disabled
+    if (!this.gameOptions.get('animationsEnabled')) {
+      debugLogger.log('animation', `⏭️  Skipping animation (disabled): ${sequence.name}`, null);
+      if (onComplete) onComplete();
+      return;
+    }
+
     if (this.isAnimating) {
       debugLogger.logAnimationWarning('Already playing animation, queuing sequence', { name: sequence.name });
       // Could implement a queue here if needed

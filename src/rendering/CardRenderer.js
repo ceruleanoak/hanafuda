@@ -12,12 +12,21 @@ export class CardRenderer {
     this.defaultColor = '#333';
     this.borderColor = '#666';
     this.textColor = '#fff';
+    this.hueShift = 0; // Hue shift in degrees (0-360)
 
     // Image cache: { imagePath: Image }
     this.imageCache = new Map();
     this.loadingImages = new Set();
     // Track failed image loads to prevent retrying every frame
     this.failedImages = new Set();
+  }
+
+  /**
+   * Set hue shift for card colors
+   * @param {number} degrees - Hue shift in degrees (0-360)
+   */
+  setHueShift(degrees) {
+    this.hueShift = degrees % 360;
   }
 
   /**
@@ -98,8 +107,18 @@ export class CardRenderer {
         ctx.strokeRect(x, y, this.cardWidth, this.cardHeight);
       }
     } else if (hasImage && cardImage) {
+      // Apply hue shift filter if set
+      if (this.hueShift !== 0) {
+        ctx.filter = `hue-rotate(${this.hueShift}deg)`;
+      }
+
       // Draw the card image
       ctx.drawImage(cardImage, x, y, this.cardWidth, this.cardHeight);
+
+      // Reset filter
+      if (this.hueShift !== 0) {
+        ctx.filter = 'none';
+      }
 
       // Selection border overlay
       if (isSelected) {
