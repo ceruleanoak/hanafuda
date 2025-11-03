@@ -13,6 +13,11 @@ export class Renderer {
     this.backgroundImage = null;
     this.backgroundColor = '#000';
 
+    // Rainbow hue shift cycling
+    this.hueShift = 0;
+    this.hueShiftSpeed = 0.5; // Degrees per frame at 60fps (30 degrees/second)
+    this.enableHueShift = true; // Toggle for palette shift effect
+
     this.setupCanvas();
   }
 
@@ -101,13 +106,30 @@ export class Renderer {
   }
 
   /**
+   * Update rainbow hue shift (called each frame)
+   */
+  updateHueShift() {
+    if (this.enableHueShift) {
+      this.hueShift = (this.hueShift + this.hueShiftSpeed) % 360;
+    }
+  }
+
+  /**
    * Main render function
    * @param {Object} gameState - Current game state
    * @param {Array} animatingCards - Array of cards currently animating
    */
   render(gameState, animatingCards = []) {
+    // Update rainbow hue shift
+    this.updateHueShift();
+
     this.clear();
     this.drawBackground();
+
+    // Apply hue rotation filter to entire canvas
+    if (this.enableHueShift) {
+      this.ctx.filter = `hue-rotate(${this.hueShift}deg)`;
+    }
 
     // Create set of animating card IDs for quick lookup
     const animatingCardIds = new Set(animatingCards.map(anim => anim.card.id));
@@ -212,6 +234,11 @@ export class Renderer {
 
     // Draw animating cards on top
     this.drawAnimatingCards(animatingCards);
+
+    // Reset filter for next frame
+    if (this.enableHueShift) {
+      this.ctx.filter = 'none';
+    }
   }
 
   /**
