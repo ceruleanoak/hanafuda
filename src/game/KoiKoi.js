@@ -14,6 +14,8 @@ export class KoiKoi {
     this.isAnimating = false;
     this.gameOptions = gameOptions;
     this.uiCallback = null; // Will be set by main.js to show koi-koi modal
+    this.roundSummaryCallback = null; // Will be set by main.js to show round summary modal
+    this.opponentKoikoiCallback = null; // Will be set by main.js to show opponent koi-koi notification
 
     // Koi-koi state tracking
     this.koikoiState = {
@@ -40,6 +42,20 @@ export class KoiKoi {
    */
   setUICallback(callback) {
     this.uiCallback = callback;
+  }
+
+  /**
+   * Set UI callback for showing round summary modal
+   */
+  setRoundSummaryCallback(callback) {
+    this.roundSummaryCallback = callback;
+  }
+
+  /**
+   * Set UI callback for showing opponent koi-koi notification
+   */
+  setOpponentKoikoiCallback(callback) {
+    this.opponentKoikoiCallback = callback;
   }
 
   /**
@@ -669,6 +685,11 @@ export class KoiKoi {
         this.koikoiState.opponentCalled = true;
         this.koikoiState.opponentCount++;
         this.message = 'Opponent called Koi-Koi! Playing continues...';
+
+        // Show opponent koi-koi notification
+        if (this.opponentKoikoiCallback) {
+          this.opponentKoikoiCallback();
+        }
       }
 
       // Resume the game flow that was paused
@@ -984,7 +1005,40 @@ export class KoiKoi {
     this.playerScore += playerRoundScore;
     this.opponentScore += opponentRoundScore;
 
-    // Check if game is over or continue to next round
+    // Prepare round summary data
+    const roundSummaryData = {
+      roundNumber: this.currentRound,
+      playerRoundScore: playerRoundScore,
+      opponentRoundScore: opponentRoundScore,
+      playerTotalScore: this.playerScore,
+      opponentTotalScore: this.opponentScore,
+      playerYaku: playerYaku,
+      opponentYaku: opponentYaku,
+      isGameOver: this.currentRound >= this.totalRounds,
+      totalRounds: this.totalRounds
+    };
+
+    // Show round summary modal
+    if (this.roundSummaryCallback) {
+      this.roundSummaryCallback(roundSummaryData);
+    } else {
+      // Fallback if no callback set (for backwards compatibility)
+      if (this.currentRound >= this.totalRounds) {
+        this.gameOver = true;
+        const winner = this.playerScore > this.opponentScore ? 'Player' :
+                       this.opponentScore > this.playerScore ? 'Opponent' : 'Tie';
+        this.message = `Game Over! ${winner} wins! Final: Player ${this.playerScore} - Opponent ${this.opponentScore}`;
+      } else {
+        this.message = `Round ${this.currentRound} complete! Player: ${playerRoundScore}pts, Opponent: ${opponentRoundScore}pts - Starting round ${this.currentRound + 1}...`;
+        setTimeout(() => this.startNextRound(), 3000);
+      }
+    }
+  }
+
+  /**
+   * Start next round (called from round summary modal)
+   */
+  startNextRound() {
     if (this.currentRound >= this.totalRounds) {
       this.gameOver = true;
       const winner = this.playerScore > this.opponentScore ? 'Player' :
@@ -992,8 +1046,7 @@ export class KoiKoi {
       this.message = `Game Over! ${winner} wins! Final: Player ${this.playerScore} - Opponent ${this.opponentScore}`;
     } else {
       this.currentRound++;
-      this.message = `Round ${this.currentRound - 1} complete! Player: ${playerRoundScore}pts, Opponent: ${opponentRoundScore}pts - Starting round ${this.currentRound}...`;
-      setTimeout(() => this.reset(), 3000);
+      this.reset();
     }
   }
 

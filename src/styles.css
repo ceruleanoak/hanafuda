@@ -374,6 +374,153 @@ footer {
   box-shadow: 0 6px 20px rgba(255, 107, 107, 0.5) !important;
 }
 
+/* Round Summary Modal */
+.round-summary-content {
+  min-width: 500px;
+}
+
+.round-summary-scores {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.round-score-section h3 {
+  color: #4ecdc4;
+  font-size: 1.2rem;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid #333;
+  padding-bottom: 0.5rem;
+}
+
+.score-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.player-round-score,
+.opponent-round-score,
+.player-total-score,
+.opponent-total-score {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+}
+
+.player-label {
+  font-weight: bold;
+  color: #ccc;
+}
+
+.round-points,
+.total-points {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #ffeb3b;
+  margin: 0 0.5rem;
+}
+
+.points-label {
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.round-yaku-details {
+  background: rgba(78, 205, 196, 0.1);
+  border: 2px solid #4ecdc4;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  text-align: left;
+}
+
+.round-yaku-details h4 {
+  color: #4ecdc4;
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
+}
+
+.round-yaku-details .yaku-list {
+  color: #ccc;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.round-yaku-details:empty {
+  display: none;
+}
+
+.primary-btn {
+  padding: 1rem 2rem;
+  font-size: 1.3rem;
+  font-weight: bold;
+  background: linear-gradient(135deg, #4ecdc4 0%, #44a09b 100%);
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 15px rgba(78, 205, 196, 0.3);
+}
+
+.primary-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(78, 205, 196, 0.5);
+  background: linear-gradient(135deg, #5eddd4 0%, #4ecdc4 100%);
+}
+
+/* Opponent Koi-Koi Notification */
+.opponent-koikoi-notification {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.8);
+  z-index: 1100;
+  background: linear-gradient(135deg, #ff6b6b 0%, #d94949 100%);
+  color: #fff;
+  padding: 2rem 3rem;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(255, 107, 107, 0.6);
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.3s ease;
+  border: 3px solid #ff5252;
+}
+
+.opponent-koikoi-notification.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  animation: pulseWarning 0.5s ease-in-out;
+}
+
+.opponent-koikoi-notification h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.8rem;
+  color: #fff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.opponent-koikoi-notification p {
+  margin: 0;
+  font-size: 1.1rem;
+  line-height: 1.5;
+}
+
+@keyframes pulseWarning {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+}
+
 /* Tutorial Bubble */
 .tutorial-bubble {
   position: fixed;

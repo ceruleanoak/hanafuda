@@ -21,6 +21,7 @@ class Game {
     this.roundModal = document.getElementById('round-modal');
     this.optionsModal = document.getElementById('options-modal');
     this.koikoiModal = document.getElementById('koikoi-modal');
+    this.roundSummaryModal = document.getElementById('round-summary-modal');
     this.tutorialBubble = document.getElementById('tutorial-bubble');
 
     // Initialize game options
@@ -28,6 +29,8 @@ class Game {
 
     this.game = new KoiKoi(this.gameOptions);
     this.game.setUICallback((yaku, score) => this.showKoikoiDecision(yaku, score));
+    this.game.setRoundSummaryCallback((data) => this.showRoundSummary(data));
+    this.game.setOpponentKoikoiCallback(() => this.showOpponentKoikoiNotification());
     this.renderer = new Renderer(this.canvas);
     this.animatingCards = [];
     this.currentSequence = null;  // Current animation sequence playing
@@ -113,6 +116,9 @@ class Game {
     // Koi-koi decision buttons
     document.getElementById('koikoi-shobu').addEventListener('click', () => this.handleKoikoiDecision('shobu'));
     document.getElementById('koikoi-continue').addEventListener('click', () => this.handleKoikoiDecision('koikoi'));
+
+    // Round summary button
+    document.getElementById('continue-next-round').addEventListener('click', () => this.handleContinueNextRound());
 
     // Tutorial bubble button
     document.getElementById('tutorial-got-it').addEventListener('click', () => this.hideTutorial());
@@ -386,6 +392,117 @@ class Game {
   handleKoikoiDecision(decision) {
     this.koikoiModal.classList.remove('show');
     this.game.resolveKoikoiDecision(decision);
+  }
+
+  /**
+   * Show round summary modal
+   */
+  showRoundSummary(data) {
+    // Update title
+    const title = document.getElementById('round-summary-title');
+    if (data.isGameOver) {
+      const winner = data.playerTotalScore > data.opponentTotalScore ? 'You Win!' :
+                     data.opponentTotalScore > data.playerTotalScore ? 'Opponent Wins!' : 'Tie Game!';
+      title.textContent = `Game Over - ${winner}`;
+    } else {
+      title.textContent = `Round ${data.roundNumber} Complete!`;
+    }
+
+    // Update round scores
+    document.getElementById('player-round-points').textContent = data.playerRoundScore;
+    document.getElementById('opponent-round-points').textContent = data.opponentRoundScore;
+
+    // Update total scores
+    document.getElementById('player-total-points').textContent = data.playerTotalScore;
+    document.getElementById('opponent-total-points').textContent = data.opponentTotalScore;
+
+    // Update yaku details
+    const yakuDetails = document.getElementById('round-yaku-details');
+    yakuDetails.innerHTML = '';
+
+    if (data.playerYaku.length > 0) {
+      const playerSection = document.createElement('div');
+      playerSection.innerHTML = '<h4>Your Yaku:</h4>';
+      const yakuList = document.createElement('div');
+      yakuList.className = 'yaku-list';
+      data.playerYaku.forEach(y => {
+        const yakuLine = document.createElement('div');
+        yakuLine.textContent = `• ${y.name} (${y.points} pts)`;
+        yakuList.appendChild(yakuLine);
+      });
+      playerSection.appendChild(yakuList);
+      yakuDetails.appendChild(playerSection);
+    }
+
+    if (data.opponentYaku.length > 0) {
+      const opponentSection = document.createElement('div');
+      opponentSection.innerHTML = '<h4>Opponent Yaku:</h4>';
+      const yakuList = document.createElement('div');
+      yakuList.className = 'yaku-list';
+      data.opponentYaku.forEach(y => {
+        const yakuLine = document.createElement('div');
+        yakuLine.textContent = `• ${y.name} (${y.points} pts)`;
+        yakuList.appendChild(yakuLine);
+      });
+      opponentSection.appendChild(yakuList);
+      yakuDetails.appendChild(opponentSection);
+    }
+
+    // Update button text
+    const continueBtn = document.getElementById('continue-next-round');
+    if (data.isGameOver) {
+      continueBtn.textContent = 'Start New Game';
+    } else {
+      continueBtn.textContent = `Continue to Round ${data.roundNumber + 1}`;
+    }
+
+    // Show modal
+    this.roundSummaryModal.classList.add('show');
+  }
+
+  /**
+   * Handle continue to next round button
+   */
+  handleContinueNextRound() {
+    this.roundSummaryModal.classList.remove('show');
+
+    if (this.game.gameOver) {
+      // Start new game
+      this.showRoundModal();
+    } else {
+      // Continue to next round
+      this.game.startNextRound();
+    }
+  }
+
+  /**
+   * Show opponent koi-koi notification
+   */
+  showOpponentKoikoiNotification() {
+    // Create notification element if it doesn't exist
+    let notification = document.getElementById('opponent-koikoi-notification');
+    if (!notification) {
+      notification = document.createElement('div');
+      notification.id = 'opponent-koikoi-notification';
+      notification.className = 'opponent-koikoi-notification';
+      document.body.appendChild(notification);
+    }
+
+    // Set notification content
+    notification.innerHTML = `
+      <div class="notification-content">
+        <h3>⚠️ Opponent Called Koi-Koi!</h3>
+        <p>They're pressing their luck! If you score next, you'll get double points!</p>
+      </div>
+    `;
+
+    // Show notification
+    notification.classList.add('show');
+
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+      notification.classList.remove('show');
+    }, 3000);
   }
 
   /**
