@@ -6,13 +6,46 @@ import { Deck } from './Deck.js';
 import { Yaku } from './Yaku.js';
 
 export class KoiKoi {
-  constructor() {
+  constructor(gameOptions = null) {
     this.deck = new Deck();
     this.totalRounds = 1;
     this.currentRound = 0;
     this.animationQueue = [];
     this.isAnimating = false;
+    this.gameOptions = gameOptions;
+    this.uiCallback = null; // Will be set by main.js to show koi-koi modal
+
+    // Koi-koi state tracking
+    this.koikoiState = {
+      playerCalled: false,
+      opponentCalled: false,
+      playerCount: 0,      // How many times player called koi-koi
+      opponentCount: 0,    // How many times opponent called koi-koi
+      roundActive: true,   // Is the round still going after koi-koi?
+      waitingForDecision: false,
+      decisionPlayer: null, // Who needs to make a decision
+      roundWinner: null    // Who won this round (for winner-take-all scoring)
+    };
+
+    // Track previous yaku to detect new yaku
+    this.previousPlayerYaku = [];
+    this.previousOpponentYaku = [];
+
     this.reset();
+  }
+
+  /**
+   * Set UI callback for showing koi-koi decision modal
+   */
+  setUICallback(callback) {
+    this.uiCallback = callback;
+  }
+
+  /**
+   * Update game options
+   */
+  updateOptions(gameOptions) {
+    this.gameOptions = gameOptions;
   }
 
   startNewGame(rounds) {
@@ -32,6 +65,8 @@ export class KoiKoi {
     this.opponentCaptured = [];
     this.playerYaku = [];
     this.opponentYaku = [];
+    this.previousPlayerYaku = [];
+    this.previousOpponentYaku = [];
     this.currentPlayer = 'player'; // 'player' or 'opponent'
     this.selectedCards = [];
     this.phase = 'select_hand'; // 'select_hand', 'select_field', 'draw_phase', 'select_drawn_match', 'opponent_playing'
@@ -40,6 +75,18 @@ export class KoiKoi {
     this.opponentPlayedCard = null; // Card opponent is currently playing
     this.gameOver = false;
     this.message = '';
+
+    // Reset koi-koi state for new round
+    this.koikoiState = {
+      playerCalled: false,
+      opponentCalled: false,
+      playerCount: 0,
+      opponentCount: 0,
+      roundActive: true,
+      waitingForDecision: false,
+      decisionPlayer: null,
+      roundWinner: null
+    };
 
     this.deal();
   }
@@ -298,19 +345,24 @@ export class KoiKoi {
     const sameMonthOnField = this.field.filter(c => c.month === handCard.month);
 
     if (sameMonthOnField.length === 3) {
-      // Celebrate! Capture all 4 cards
+      // Celebrate! Show message and pause (twice as long as draw)
       const handIndex = this.playerHand.findIndex(c => c.id === handCard.id);
       if (handIndex >= 0) this.playerHand.splice(handIndex, 1);
 
-      // Remove all matching cards from field
-      this.field = this.field.filter(c => c.month !== handCard.month);
+      this.phase = 'celebrate';
+      this.message = `🎉 Celebrate! All 4 ${handCard.month} cards captured!`;
 
-      // Add all 4 cards to captured
-      this.playerCaptured.push(handCard, ...sameMonthOnField);
+      setTimeout(() => {
+        // Remove all matching cards from field
+        this.field = this.field.filter(c => c.month !== handCard.month);
 
-      this.selectedCards = [];
-      this.updateYaku('player');
-      this.drawPhase();
+        // Add all 4 cards to captured
+        this.playerCaptured.push(handCard, ...sameMonthOnField);
+
+        this.selectedCards = [];
+        this.updateYaku('player');
+        this.drawPhase();
+      }, 3600); // Twice as long as regular draw (1800ms * 2)
       return;
     }
 
@@ -391,42 +443,63 @@ export class KoiKoi {
         this.message = `Drew ${drawnCard.name} - Select which card to match`;
       } else if (matches.length === 1) {
         // Single match - show drawn card briefly before auto-capturing
-        this.phase = 'show_drawn';
-        this.message = `Drew ${drawnCard.name} - Matching automatically...`;
+        // Check for 4-card capture (celebrate scenario) first
+        const sameMonthOnField = this.field.filter(c => c.month === drawnCard.month);
 
-        setTimeout(() => {
-          // Check for 4-card capture (celebrate scenario)
-          const sameMonthOnField = this.field.filter(c => c.month === drawnCard.month);
+        if (sameMonthOnField.length === 3) {
+          // Celebrate! Show special message with longer pause
+          this.phase = 'celebrate';
+          this.message = `🎉 Celebrate! Drew ${drawnCard.name} - All 4 ${drawnCard.month} cards captured!`;
 
-          if (sameMonthOnField.length === 3) {
-            // Celebrate! Capture all 4 cards
+          setTimeout(() => {
             this.field = this.field.filter(c => c.month !== drawnCard.month);
             this.playerCaptured.push(drawnCard, ...sameMonthOnField);
-          } else {
-            // Normal 2-card capture
+            this.drawnCard = null;
+            this.updateYaku('player');
+            this.endTurn();
+          }, 3600); // Twice as long as regular draw
+        } else {
+          // Normal single match
+          this.phase = 'show_drawn';
+          this.message = `Drew ${drawnCard.name} - Matching automatically...`;
+
+          setTimeout(() => {
             const fieldCard = matches[0];
             const fieldIndex = this.field.findIndex(c => c.id === fieldCard.id);
             this.field.splice(fieldIndex, 1);
             this.playerCaptured.push(drawnCard, fieldCard);
-          }
-
-          this.drawnCard = null;
-          this.updateYaku('player');
-          this.endTurn();
-        }, 1800);
+            this.drawnCard = null;
+            this.updateYaku('player');
+            this.endTurn();
+          }, 1800);
+        }
       } else {
-        // No match - show drawn card briefly before placing
-        this.phase = 'show_drawn';
-        this.message = `Drew ${drawnCard.name} - No match, adding to field...`;
+        // No match - check for celebrate when placing on field
+        const sameMonthOnField = this.field.filter(c => c.month === drawnCard.month);
 
-        setTimeout(() => {
-          // Check for 4-card same-month capture
-          if (!this.checkFourCardCapture(drawnCard, 'player')) {
+        if (sameMonthOnField.length === 3) {
+          // Celebrate! This drawn card completes 4 of same month
+          this.phase = 'celebrate';
+          this.message = `🎉 Celebrate! Drew ${drawnCard.name} - All 4 ${drawnCard.month} cards captured!`;
+
+          setTimeout(() => {
+            this.field = this.field.filter(c => c.month !== drawnCard.month);
+            this.playerCaptured.push(drawnCard, ...sameMonthOnField);
+            this.drawnCard = null;
+            this.updateYaku('player');
+            this.endTurn();
+          }, 3600);
+        } else {
+          // Normal no match - place on field
+          this.phase = 'show_drawn';
+          this.message = `Drew ${drawnCard.name} - No match, adding to field...`;
+
+          setTimeout(() => {
             this.field.push(drawnCard);
-          }
-          this.drawnCard = null;
-          this.endTurn();
-        }, 1800);
+            this.drawnCard = null;
+            this.endTurn();
+          }, 1800);
+        }
       }
     }, 300);
   }
@@ -436,7 +509,9 @@ export class KoiKoi {
    */
   updateYaku(player) {
     const captured = player === 'player' ? this.playerCaptured : this.opponentCaptured;
-    const yaku = Yaku.checkYaku(captured);
+    const yaku = Yaku.checkYaku(captured, this.gameOptions);
+
+    const previousYaku = player === 'player' ? this.previousPlayerYaku : this.previousOpponentYaku;
 
     if (player === 'player') {
       this.playerYaku = yaku;
@@ -451,6 +526,111 @@ export class KoiKoi {
       if (player === 'player' && this.currentPlayer === 'player') {
         this.message = `Yaku! ${yakuNames} (${score} points)`;
       }
+
+      // Check if this is a new yaku (koi-koi decision point)
+      const isNewYaku = this.hasNewYaku(previousYaku, yaku);
+
+      if (isNewYaku && this.gameOptions && this.gameOptions.get('koikoiEnabled')) {
+        // Update previous yaku
+        if (player === 'player') {
+          this.previousPlayerYaku = [...yaku];
+        } else {
+          this.previousOpponentYaku = [...yaku];
+        }
+
+        // Trigger koi-koi decision
+        if (player === 'player' && this.currentPlayer === 'player') {
+          // Show koi-koi decision modal for human player
+          this.koikoiState.waitingForDecision = true;
+          this.koikoiState.decisionPlayer = 'player';
+
+          if (this.uiCallback) {
+            this.uiCallback(yaku, score);
+          }
+        } else if (player === 'opponent' && this.currentPlayer === 'opponent') {
+          // Opponent AI makes decision
+          this.opponentKoikoiDecision(yaku, score);
+        }
+      }
+    }
+  }
+
+  /**
+   * Check if there's a new yaku compared to previous
+   */
+  hasNewYaku(previousYaku, currentYaku) {
+    // If no previous yaku, this is definitely new
+    if (previousYaku.length === 0 && currentYaku.length > 0) {
+      return true;
+    }
+
+    // Check if current has more yaku or higher score
+    const prevScore = Yaku.calculateScore(previousYaku);
+    const currScore = Yaku.calculateScore(currentYaku);
+
+    return currScore > prevScore;
+  }
+
+  /**
+   * Opponent AI makes koi-koi decision
+   */
+  opponentKoikoiDecision(yaku, score) {
+    // Simple AI strategy:
+    // - If score >= 10 points: Always call Shobu (safe)
+    // - If score 7-9 points: 70% Shobu, 30% Koi-Koi
+    // - If score 4-6 points: 50% Shobu, 50% Koi-Koi
+    // - If score <= 3 points: 70% Koi-Koi, 30% Shobu
+
+    let koikoiProbability;
+    if (score >= 10) {
+      koikoiProbability = 0.1; // Almost always shobu
+    } else if (score >= 7) {
+      koikoiProbability = 0.3;
+    } else if (score >= 4) {
+      koikoiProbability = 0.5;
+    } else {
+      koikoiProbability = 0.7;
+    }
+
+    const decision = Math.random() < koikoiProbability ? 'koikoi' : 'shobu';
+
+    // Short delay to make it feel natural
+    setTimeout(() => {
+      this.resolveKoikoiDecision(decision, 'opponent');
+    }, 1500);
+  }
+
+  /**
+   * Resolve koi-koi decision (called by UI or opponent AI)
+   */
+  resolveKoikoiDecision(decision, player = 'player') {
+    this.koikoiState.waitingForDecision = false;
+    this.koikoiState.decisionPlayer = null;
+
+    if (decision === 'shobu') {
+      // Mark this player as the round winner (they ended it with yaku)
+      this.koikoiState.roundWinner = player;
+
+      // End the round immediately
+      if (player === 'player') {
+        this.message = 'You called Shobu! Round ends.';
+      } else {
+        this.message = 'Opponent called Shobu! Round ends.';
+      }
+      setTimeout(() => this.endRound(), 1500);
+    } else {
+      // Continue playing (koi-koi)
+      if (player === 'player') {
+        this.koikoiState.playerCalled = true;
+        this.koikoiState.playerCount++;
+        this.message = 'Koi-Koi! Playing continues...';
+      } else {
+        this.koikoiState.opponentCalled = true;
+        this.koikoiState.opponentCount++;
+        this.message = 'Opponent called Koi-Koi! Playing continues...';
+      }
+      // Continue playing - don't end turn yet if it's player's turn
+      // The game will continue naturally
     }
   }
 
@@ -535,9 +715,18 @@ export class KoiKoi {
         const sameMonthOnField = this.field.filter(c => c.month === handCard.month);
 
         if (sameMonthOnField.length === 3) {
-          // Celebrate! Capture all 4 cards
-          this.field = this.field.filter(c => c.month !== handCard.month);
-          this.opponentCaptured.push(handCard, ...sameMonthOnField);
+          // Celebrate! Show message with longer pause
+          this.phase = 'opponent_celebrate';
+          this.message = `🎉 Opponent Celebrates! All 4 ${handCard.month} cards captured!`;
+
+          setTimeout(() => {
+            this.field = this.field.filter(c => c.month !== handCard.month);
+            this.opponentCaptured.push(handCard, ...sameMonthOnField);
+            this.updateYaku('opponent');
+            this.opponentPlayedCard = null;
+            this.opponentDrawPhase();
+          }, 3600);
+          return;
         } else {
           // Normal 2-card capture
           const fieldIndex = this.field.findIndex(c => c.id === selectedMatch.id);
@@ -546,8 +735,23 @@ export class KoiKoi {
         }
         this.updateYaku('opponent');
       } else {
-        // Check for 4-card same-month capture
-        if (!this.checkFourCardCapture(handCard, 'opponent')) {
+        // Check for 4-card same-month capture when placing
+        const sameMonthOnField = this.field.filter(c => c.month === handCard.month);
+
+        if (sameMonthOnField.length === 3) {
+          // Celebrate! Show message with longer pause
+          this.phase = 'opponent_celebrate';
+          this.message = `🎉 Opponent Celebrates! All 4 ${handCard.month} cards captured!`;
+
+          setTimeout(() => {
+            this.field = this.field.filter(c => c.month !== handCard.month);
+            this.opponentCaptured.push(handCard, ...sameMonthOnField);
+            this.updateYaku('opponent');
+            this.opponentPlayedCard = null;
+            this.opponentDrawPhase();
+          }, 3600);
+          return;
+        } else {
           this.field.push(handCard);
         }
       }
@@ -578,19 +782,27 @@ export class KoiKoi {
       const drawnMatches = this.field.filter(fc => this.cardsMatch(drawnCard, fc));
 
       if (drawnMatches.length > 0) {
-        // Show drawn card before matching
-        this.phase = 'opponent_drawn';
-        this.message = `Opponent drew ${drawnCard.name} - Matching...`;
+        // Check for 4-card capture (celebrate scenario)
+        const sameMonthOnField = this.field.filter(c => c.month === drawnCard.month);
 
-        setTimeout(() => {
-          // Check for 4-card capture (celebrate scenario)
-          const sameMonthOnField = this.field.filter(c => c.month === drawnCard.month);
+        if (sameMonthOnField.length === 3) {
+          // Celebrate! Show special message with longer pause
+          this.phase = 'opponent_celebrate';
+          this.message = `🎉 Opponent Celebrates! Drew ${drawnCard.name} - All 4 ${drawnCard.month} cards captured!`;
 
-          if (sameMonthOnField.length === 3) {
-            // Celebrate! Capture all 4 cards
+          setTimeout(() => {
             this.field = this.field.filter(c => c.month !== drawnCard.month);
             this.opponentCaptured.push(drawnCard, ...sameMonthOnField);
-          } else {
+            this.drawnCard = null;
+            this.updateYaku('opponent');
+            this.endTurn();
+          }, 3600);
+        } else {
+          // Normal match - show drawn card before matching
+          this.phase = 'opponent_drawn';
+          this.message = `Opponent drew ${drawnCard.name} - Matching...`;
+
+          setTimeout(() => {
             // Normal 2-card capture - prioritize high-value matches
             const bestMatch = drawnMatches.reduce((best, current) =>
               current.points > best.points ? current : best
@@ -598,25 +810,38 @@ export class KoiKoi {
             const fieldIndex = this.field.findIndex(c => c.id === bestMatch.id);
             this.field.splice(fieldIndex, 1);
             this.opponentCaptured.push(drawnCard, bestMatch);
-          }
-
-          this.drawnCard = null;
-          this.updateYaku('opponent');
-          this.endTurn();
-        }, 1800);
+            this.drawnCard = null;
+            this.updateYaku('opponent');
+            this.endTurn();
+          }, 1800);
+        }
       } else {
-        // Show drawn card before placing
-        this.phase = 'opponent_drawn';
-        this.message = `Opponent drew ${drawnCard.name} - No match`;
+        // No match - check for celebrate when placing
+        const sameMonthOnField = this.field.filter(c => c.month === drawnCard.month);
 
-        setTimeout(() => {
-          // Check for 4-card same-month capture
-          if (!this.checkFourCardCapture(drawnCard, 'opponent')) {
+        if (sameMonthOnField.length === 3) {
+          // Celebrate! Show special message with longer pause
+          this.phase = 'opponent_celebrate';
+          this.message = `🎉 Opponent Celebrates! Drew ${drawnCard.name} - All 4 ${drawnCard.month} cards captured!`;
+
+          setTimeout(() => {
+            this.field = this.field.filter(c => c.month !== drawnCard.month);
+            this.opponentCaptured.push(drawnCard, ...sameMonthOnField);
+            this.drawnCard = null;
+            this.updateYaku('opponent');
+            this.endTurn();
+          }, 3600);
+        } else {
+          // Normal no match - show drawn card before placing
+          this.phase = 'opponent_drawn';
+          this.message = `Opponent drew ${drawnCard.name} - No match`;
+
+          setTimeout(() => {
             this.field.push(drawnCard);
-          }
-          this.drawnCard = null;
-          this.endTurn();
-        }, 1800);
+            this.drawnCard = null;
+            this.endTurn();
+          }, 1800);
+        }
       }
     }, 300);
   }
@@ -625,11 +850,44 @@ export class KoiKoi {
    * End round and calculate scores
    */
   endRound() {
-    const playerYaku = Yaku.checkYaku(this.playerCaptured);
-    const opponentYaku = Yaku.checkYaku(this.opponentCaptured);
+    const playerYaku = Yaku.checkYaku(this.playerCaptured, this.gameOptions);
+    const opponentYaku = Yaku.checkYaku(this.opponentCaptured, this.gameOptions);
 
-    const playerRoundScore = Yaku.calculateScore(playerYaku);
-    const opponentRoundScore = Yaku.calculateScore(opponentYaku);
+    let playerRoundScore = Yaku.calculateScore(playerYaku);
+    let opponentRoundScore = Yaku.calculateScore(opponentYaku);
+
+    // Apply koi-koi multipliers if enabled
+    if (this.gameOptions && this.gameOptions.get('koikoiEnabled')) {
+      playerRoundScore = this.applyMultiplier(playerRoundScore, 'player');
+      opponentRoundScore = this.applyMultiplier(opponentRoundScore, 'opponent');
+    }
+
+    // Winner-take-all logic (traditional koi-koi)
+    if (this.gameOptions && !this.gameOptions.get('bothPlayersScore')) {
+      // Determine round winner
+      let roundWinner = this.koikoiState.roundWinner;
+
+      // If no explicit winner (shobu wasn't called), determine by yaku scores
+      if (!roundWinner) {
+        if (playerRoundScore > opponentRoundScore) {
+          roundWinner = 'player';
+        } else if (opponentRoundScore > playerRoundScore) {
+          roundWinner = 'opponent';
+        }
+        // If tied or both have 0, no one wins (both get 0)
+      }
+
+      // Apply winner-take-all: only winner gets points
+      if (roundWinner === 'player') {
+        opponentRoundScore = 0;
+      } else if (roundWinner === 'opponent') {
+        playerRoundScore = 0;
+      } else {
+        // Tie or no yaku - both get 0
+        playerRoundScore = 0;
+        opponentRoundScore = 0;
+      }
+    }
 
     this.playerScore += playerRoundScore;
     this.opponentScore += opponentRoundScore;
@@ -645,6 +903,64 @@ export class KoiKoi {
       this.message = `Round ${this.currentRound - 1} complete! Player: ${playerRoundScore}pts, Opponent: ${opponentRoundScore}pts - Starting round ${this.currentRound}...`;
       setTimeout(() => this.reset(), 3000);
     }
+  }
+
+  /**
+   * Apply multiplier based on koi-koi state
+   */
+  applyMultiplier(score, player) {
+    let finalScore = score;
+
+    // Apply auto-double for 7+ points
+    if (this.gameOptions.get('autoDouble7Plus') && score >= 7) {
+      finalScore *= 2;
+    }
+
+    // Apply koi-koi multipliers
+    const multiplierMode = this.gameOptions.get('multiplierMode');
+
+    if (player === 'player') {
+      // If player called koi-koi and won
+      if (this.koikoiState.playerCalled) {
+        if (multiplierMode === 'cumulative') {
+          // Cumulative: 2x, 3x, 4x based on call count
+          const multiplier = Math.min(this.koikoiState.playerCount + 1, 4);
+          finalScore *= multiplier;
+        } else if (multiplierMode === '2x') {
+          // Single 2x
+          finalScore *= 2;
+        }
+      }
+      // If opponent called koi-koi but player won
+      else if (this.koikoiState.opponentCalled) {
+        if (multiplierMode === 'cumulative') {
+          const multiplier = Math.min(this.koikoiState.opponentCount + 1, 4);
+          finalScore *= multiplier;
+        } else if (multiplierMode === '2x') {
+          finalScore *= 2;
+        }
+      }
+    } else {
+      // Same logic for opponent
+      if (this.koikoiState.opponentCalled) {
+        if (multiplierMode === 'cumulative') {
+          const multiplier = Math.min(this.koikoiState.opponentCount + 1, 4);
+          finalScore *= multiplier;
+        } else if (multiplierMode === '2x') {
+          finalScore *= 2;
+        }
+      }
+      else if (this.koikoiState.playerCalled) {
+        if (multiplierMode === 'cumulative') {
+          const multiplier = Math.min(this.koikoiState.playerCount + 1, 4);
+          finalScore *= multiplier;
+        } else if (multiplierMode === '2x') {
+          finalScore *= 2;
+        }
+      }
+    }
+
+    return finalScore;
   }
 
   /**

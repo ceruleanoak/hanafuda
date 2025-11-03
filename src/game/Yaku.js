@@ -8,9 +8,10 @@ export class Yaku {
   /**
    * Check all possible yaku in a collection of cards
    * @param {Array} cards - Array of captured cards
+   * @param {GameOptions} gameOptions - Game options (optional)
    * @returns {Array} Array of yaku objects { name, points, cards }
    */
-  static checkYaku(cards) {
+  static checkYaku(cards, gameOptions = null) {
     const yaku = [];
 
     // Five Brights (五光) - 15 points (all 5 bright cards)
@@ -57,13 +58,44 @@ export class Yaku {
 
     // Viewing Sake (花見酒) - 3 points
     const hanami = this.checkHanami(cards);
-    if (hanami) yaku.push(hanami);
+    if (hanami && this.shouldIncludeViewingYaku(hanami, yaku, gameOptions, 'viewingSakeMode')) {
+      yaku.push(hanami);
+    }
 
     // Moon Viewing Sake (月見酒) - 3 points
     const tsukimi = this.checkTsukimi(cards);
-    if (tsukimi) yaku.push(tsukimi);
+    if (tsukimi && this.shouldIncludeViewingYaku(tsukimi, yaku, gameOptions, 'moonViewingSakeMode')) {
+      yaku.push(tsukimi);
+    }
 
     return yaku;
+  }
+
+  /**
+   * Check if viewing yaku should be included based on options
+   */
+  static shouldIncludeViewingYaku(viewingYaku, existingYaku, gameOptions, optionKey) {
+    if (!gameOptions) {
+      // No options provided, default to always include
+      return true;
+    }
+
+    const mode = gameOptions.get(optionKey);
+
+    if (mode === 'always') {
+      return true;
+    } else if (mode === 'never') {
+      return false;
+    } else if (mode === 'requireOther') {
+      // Only include if there's at least one other (non-viewing) yaku
+      // Filter out the other viewing yaku from the count
+      const nonViewingYaku = existingYaku.filter(y =>
+        y.name !== 'Viewing Sake' && y.name !== 'Moon Viewing Sake'
+      );
+      return nonViewingYaku.length > 0;
+    }
+
+    return true; // Default to include
   }
 
   static checkFiveBrights(cards) {
