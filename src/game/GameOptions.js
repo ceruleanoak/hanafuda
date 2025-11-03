@@ -18,7 +18,9 @@ export class GameOptions {
 
       // UI Settings
       helpMode: false,                    // Help highlighting
-      tutorialShown: false                // Has user seen tutorial bubble?
+      tutorialShown: false,               // Has user seen tutorial bubble?
+      animationsEnabled: true,            // Enable/disable card animations
+      cardHueShift: 0                     // Hue shift for cards in degrees (0-360)
     };
 
     this.options = this.load();
