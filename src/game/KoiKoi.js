@@ -108,7 +108,14 @@ export class KoiKoi {
       roundActive: true,
       waitingForDecision: false,
       decisionPlayer: null,
-      roundWinner: null
+      roundWinner: null,
+      resumeAction: null
+    };
+
+    // Reset turn start yaku tracking
+    this.turnStartYaku = {
+      player: [],
+      opponent: []
     };
 
     this.deal();
@@ -684,8 +691,30 @@ export class KoiKoi {
     // Check if yaku improved during this turn
     const yakuImproved = this.hasNewYaku(turnStartYaku, currentYaku);
 
+    // Log yaku detection
+    const yakuNames = currentYaku.map(y => y.name).join(', ');
+    const score = Yaku.calculateScore(currentYaku);
+    const turnStartScore = Yaku.calculateScore(turnStartYaku);
+    const turnStartNames = turnStartYaku.map(y => y.name).join(', ');
+
+    console.log(`[YAKU] ${player} current: ${yakuNames} (${score} pts), turn start: ${turnStartNames || 'none'} (${turnStartScore} pts), improved: ${yakuImproved}`);
+
     if (!yakuImproved || !this.gameOptions || !this.gameOptions.get('koikoiEnabled')) {
+      if (!yakuImproved) {
+        console.log(`[KOIKOI] No koi-koi decision - yaku did not improve for ${player}`);
+      } else if (!this.gameOptions || !this.gameOptions.get('koikoiEnabled')) {
+        console.log(`[KOIKOI] No koi-koi decision - koi-koi is disabled`);
+      }
       return; // No new yaku or koi-koi disabled
+    }
+
+    // Check if this is the last card (no more hand cards and no more deck cards)
+    const playerHand = player === 'player' ? this.playerHand : this.opponentHand;
+    const isLastCard = playerHand.length === 0 && this.deck.isEmpty();
+
+    if (isLastCard) {
+      console.log(`[KOIKOI] Last card - no koi-koi decision for ${player}`);
+      return; // No point in koi-koi on last card - round will end anyway
     }
 
     // Update previous yaku for future comparisons
@@ -773,11 +802,11 @@ export class KoiKoi {
     this.koikoiState.waitingForDecision = false;
     this.koikoiState.decisionPlayer = null;
 
-    if (decision === 'shobu') {
-      // Mark this player as the round winner (they ended it with yaku)
-      this.koikoiState.roundWinner = player;
+    console.log(`[KOIKOI] ${player} chose: ${decision}`);
 
+    if (decision === 'shobu') {
       // End the round immediately
+      // Note: We don't set roundWinner here - winner is determined by score in endRound()
       if (player === 'player') {
         this.message = 'You called Shobu! Round ends.';
       } else {
@@ -1072,10 +1101,22 @@ export class KoiKoi {
     let playerRoundScore = Yaku.calculateScore(playerYaku);
     let opponentRoundScore = Yaku.calculateScore(opponentYaku);
 
+    console.log(`[SCORING] Round end - Player: ${playerYaku.map(y => y.name).join(', ')} (${playerRoundScore} pts)`);
+    console.log(`[SCORING] Round end - Opponent: ${opponentYaku.map(y => y.name).join(', ')} (${opponentRoundScore} pts)`);
+
     // Apply koi-koi multipliers if enabled
     if (this.gameOptions && this.gameOptions.get('koikoiEnabled')) {
+      const playerBeforeMultiplier = playerRoundScore;
+      const opponentBeforeMultiplier = opponentRoundScore;
       playerRoundScore = this.applyMultiplier(playerRoundScore, 'player');
       opponentRoundScore = this.applyMultiplier(opponentRoundScore, 'opponent');
+
+      if (playerRoundScore !== playerBeforeMultiplier) {
+        console.log(`[SCORING] Player multiplier applied: ${playerBeforeMultiplier} → ${playerRoundScore}`);
+      }
+      if (opponentRoundScore !== opponentBeforeMultiplier) {
+        console.log(`[SCORING] Opponent multiplier applied: ${opponentBeforeMultiplier} → ${opponentRoundScore}`);
+      }
     }
 
     // Winner-take-all logic (traditional koi-koi)
@@ -1083,7 +1124,7 @@ export class KoiKoi {
       // Determine round winner
       let roundWinner = this.koikoiState.roundWinner;
 
-      // If no explicit winner (shobu wasn't called), determine by yaku scores
+      // If no explicit winner (from 2x mode auto-win), determine by yaku scores
       if (!roundWinner) {
         if (playerRoundScore > opponentRoundScore) {
           roundWinner = 'player';
@@ -1092,6 +1133,8 @@ export class KoiKoi {
         }
         // If tied or both have 0, no one wins (both get 0)
       }
+
+      console.log(`[SCORING] Round winner: ${roundWinner || 'none (tie)'}`);
 
       // Apply winner-take-all: only winner gets points
       if (roundWinner === 'player') {
@@ -1104,6 +1147,8 @@ export class KoiKoi {
         opponentRoundScore = 0;
       }
     }
+
+    console.log(`[SCORING] Final round scores - Player: ${playerRoundScore}, Opponent: ${opponentRoundScore}`);
 
     this.playerScore += playerRoundScore;
     this.opponentScore += opponentRoundScore;
