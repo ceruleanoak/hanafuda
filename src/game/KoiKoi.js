@@ -108,7 +108,14 @@ export class KoiKoi {
       roundActive: true,
       waitingForDecision: false,
       decisionPlayer: null,
-      roundWinner: null
+      roundWinner: null,
+      resumeAction: null
+    };
+
+    // Reset turn start yaku tracking
+    this.turnStartYaku = {
+      player: [],
+      opponent: []
     };
 
     this.deal();
@@ -684,14 +691,22 @@ export class KoiKoi {
     // Check if yaku improved during this turn
     const yakuImproved = this.hasNewYaku(turnStartYaku, currentYaku);
 
-    if (!yakuImproved || !this.gameOptions || !this.gameOptions.get('koikoiEnabled')) {
-      return; // No new yaku or koi-koi disabled
-    }
-
     // Log yaku detection
     const yakuNames = currentYaku.map(y => y.name).join(', ');
     const score = Yaku.calculateScore(currentYaku);
-    console.log(`[YAKU] ${player} scored: ${yakuNames} (${score} points)`);
+    const turnStartScore = Yaku.calculateScore(turnStartYaku);
+    const turnStartNames = turnStartYaku.map(y => y.name).join(', ');
+
+    console.log(`[YAKU] ${player} current: ${yakuNames} (${score} pts), turn start: ${turnStartNames || 'none'} (${turnStartScore} pts), improved: ${yakuImproved}`);
+
+    if (!yakuImproved || !this.gameOptions || !this.gameOptions.get('koikoiEnabled')) {
+      if (!yakuImproved) {
+        console.log(`[KOIKOI] No koi-koi decision - yaku did not improve for ${player}`);
+      } else if (!this.gameOptions || !this.gameOptions.get('koikoiEnabled')) {
+        console.log(`[KOIKOI] No koi-koi decision - koi-koi is disabled`);
+      }
+      return; // No new yaku or koi-koi disabled
+    }
 
     // Check if this is the last card (no more hand cards and no more deck cards)
     const playerHand = player === 'player' ? this.playerHand : this.opponentHand;
