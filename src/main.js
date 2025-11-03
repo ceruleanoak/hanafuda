@@ -6,6 +6,7 @@ import { KoiKoi } from './game/KoiKoi.js';
 import { Renderer } from './rendering/Renderer.js';
 import { debugLogger } from './utils/DebugLogger.js';
 import { AnimationSequence } from './utils/AnimationSequence.js';
+import { GameOptions } from './game/GameOptions.js';
 
 class Game {
   constructor() {
@@ -16,9 +17,17 @@ class Game {
     this.opponentScoreElement = document.getElementById('opponent-score');
     this.newGameButton = document.getElementById('new-game-btn');
     this.helpButton = document.getElementById('help-btn');
+    this.optionsButton = document.getElementById('options-btn');
     this.roundModal = document.getElementById('round-modal');
+    this.optionsModal = document.getElementById('options-modal');
+    this.koikoiModal = document.getElementById('koikoi-modal');
+    this.tutorialBubble = document.getElementById('tutorial-bubble');
 
-    this.game = new KoiKoi();
+    // Initialize game options
+    this.gameOptions = new GameOptions();
+
+    this.game = new KoiKoi(this.gameOptions);
+    this.game.setUICallback((yaku, score) => this.showKoikoiDecision(yaku, score));
     this.renderer = new Renderer(this.canvas);
     this.animatingCards = [];
     this.currentSequence = null;  // Current animation sequence playing
@@ -28,7 +37,7 @@ class Game {
     this.frameCount = 0;
 
     // New features state
-    this.helpMode = false;        // Help mode shows matchable cards
+    this.helpMode = this.gameOptions.get('helpMode'); // Load from saved options
     this.hoverX = -1;             // Mouse hover X position
     this.hoverY = -1;             // Mouse hover Y position
 
@@ -49,6 +58,17 @@ class Game {
     });
 
     this.setupEventListeners();
+
+    // Initialize help button state
+    if (this.helpMode) {
+      this.helpButton.classList.add('active');
+    }
+
+    // Show tutorial bubble if first time user
+    if (this.gameOptions.isFirstTime()) {
+      setTimeout(() => this.showTutorial(), 1000);
+    }
+
     this.showRoundModal(); // Show modal on startup
     this.gameLoop();
 
@@ -74,6 +94,9 @@ class Game {
     // Help button
     this.helpButton.addEventListener('click', () => this.toggleHelpMode());
 
+    // Options button
+    this.optionsButton.addEventListener('click', () => this.showOptionsModal());
+
     // Round selection buttons
     document.querySelectorAll('.round-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -81,6 +104,18 @@ class Game {
         this.startNewGame(rounds);
       });
     });
+
+    // Options modal buttons
+    document.getElementById('options-save').addEventListener('click', () => this.saveOptions());
+    document.getElementById('options-cancel').addEventListener('click', () => this.hideOptionsModal());
+    document.getElementById('options-reset').addEventListener('click', () => this.resetOptions());
+
+    // Koi-koi decision buttons
+    document.getElementById('koikoi-shobu').addEventListener('click', () => this.handleKoikoiDecision('shobu'));
+    document.getElementById('koikoi-continue').addEventListener('click', () => this.handleKoikoiDecision('koikoi'));
+
+    // Tutorial bubble button
+    document.getElementById('tutorial-got-it').addEventListener('click', () => this.hideTutorial());
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
@@ -245,6 +280,110 @@ class Game {
     } else {
       this.helpButton.classList.remove('active');
     }
+    // Save help mode state
+    this.gameOptions.set('helpMode', this.helpMode);
+  }
+
+  /**
+   * Show tutorial bubble
+   */
+  showTutorial() {
+    this.tutorialBubble.classList.remove('hidden');
+  }
+
+  /**
+   * Hide tutorial bubble and mark as shown
+   */
+  hideTutorial() {
+    this.tutorialBubble.classList.add('hidden');
+    this.gameOptions.markTutorialShown();
+  }
+
+  /**
+   * Show options modal
+   */
+  showOptionsModal() {
+    // Populate current values
+    const options = this.gameOptions.getAll();
+    document.getElementById('koikoi-enabled').checked = options.koikoiEnabled;
+    document.getElementById('multiplier-mode').value = options.multiplierMode;
+    document.getElementById('auto-double').checked = options.autoDouble7Plus;
+    document.getElementById('viewing-sake').value = options.viewingSakeMode;
+    document.getElementById('moon-viewing-sake').value = options.moonViewingSakeMode;
+    document.getElementById('default-rounds').value = options.defaultRounds;
+
+    this.optionsModal.classList.add('show');
+  }
+
+  /**
+   * Hide options modal
+   */
+  hideOptionsModal() {
+    this.optionsModal.classList.remove('show');
+  }
+
+  /**
+   * Save options from modal
+   */
+  saveOptions() {
+    const newOptions = {
+      koikoiEnabled: document.getElementById('koikoi-enabled').checked,
+      multiplierMode: document.getElementById('multiplier-mode').value,
+      autoDouble7Plus: document.getElementById('auto-double').checked,
+      viewingSakeMode: document.getElementById('viewing-sake').value,
+      moonViewingSakeMode: document.getElementById('moon-viewing-sake').value,
+      defaultRounds: parseInt(document.getElementById('default-rounds').value)
+    };
+
+    this.gameOptions.update(newOptions);
+
+    // Update game options
+    this.game.updateOptions(this.gameOptions);
+
+    this.hideOptionsModal();
+  }
+
+  /**
+   * Reset options to defaults
+   */
+  resetOptions() {
+    if (confirm('Reset all options to defaults?')) {
+      this.gameOptions.reset();
+      // Reload the form
+      this.showOptionsModal();
+    }
+  }
+
+  /**
+   * Show koi-koi decision modal with yaku information
+   */
+  showKoikoiDecision(yaku, totalScore) {
+    const yakuDisplay = document.getElementById('koikoi-yaku-display');
+    yakuDisplay.innerHTML = '';
+
+    // Display each yaku
+    yaku.forEach(y => {
+      const yakuItem = document.createElement('div');
+      yakuItem.className = 'yaku-item';
+      yakuItem.textContent = `${y.name}: ${y.points} points`;
+      yakuDisplay.appendChild(yakuItem);
+    });
+
+    // Display total score
+    const totalDiv = document.createElement('div');
+    totalDiv.className = 'total-score';
+    totalDiv.textContent = `Total: ${totalScore} points`;
+    yakuDisplay.appendChild(totalDiv);
+
+    this.koikoiModal.classList.add('show');
+  }
+
+  /**
+   * Handle koi-koi decision (shobu or koikoi)
+   */
+  handleKoikoiDecision(decision) {
+    this.koikoiModal.classList.remove('show');
+    this.game.resolveKoikoiDecision(decision);
   }
 
   /**

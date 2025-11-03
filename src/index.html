@@ -16,6 +16,7 @@
           <span>Opponent: <strong id="opponent-score">0</strong></span>
         </div>
         <button id="help-btn" title="Highlight matchable cards">Help</button>
+        <button id="options-btn" title="Game options and rules">Options</button>
         <button id="new-game-btn">New Game</button>
       </div>
     </header>
@@ -32,8 +33,122 @@
             <button class="round-btn" data-rounds="1">1 Round</button>
             <button class="round-btn" data-rounds="3">3 Rounds</button>
             <button class="round-btn" data-rounds="6">6 Rounds</button>
+            <button class="round-btn" data-rounds="12">12 Rounds</button>
           </div>
         </div>
+      </div>
+
+      <!-- Options Modal -->
+      <div id="options-modal" class="modal">
+        <div class="modal-content options-modal-content">
+          <h2>Game Options</h2>
+
+          <div class="options-section">
+            <h3>Koi-Koi Rules</h3>
+
+            <div class="option-row">
+              <label for="koikoi-enabled">
+                <input type="checkbox" id="koikoi-enabled" checked>
+                Enable Koi-Koi Decision
+              </label>
+              <span class="option-description">Choose to continue or end round after scoring</span>
+            </div>
+
+            <div class="option-row">
+              <label for="multiplier-mode">Multiplier Mode:</label>
+              <select id="multiplier-mode">
+                <option value="2x" selected>2x (Single Double)</option>
+                <option value="cumulative">2x→3x→4x (Cumulative)</option>
+              </select>
+              <span class="option-description">How points multiply after koi-koi</span>
+            </div>
+
+            <div class="option-row">
+              <label for="auto-double">
+                <input type="checkbox" id="auto-double" checked>
+                Auto-double 7+ Points
+              </label>
+              <span class="option-description">Scores of 7+ automatically double</span>
+            </div>
+          </div>
+
+          <div class="options-section">
+            <h3>Yaku Rules</h3>
+
+            <div class="option-row">
+              <label for="viewing-sake">Viewing Sake (Hanami):</label>
+              <select id="viewing-sake">
+                <option value="always" selected>Always Enabled</option>
+                <option value="never">Always Disabled</option>
+                <option value="requireOther">Require Other Yaku</option>
+              </select>
+              <span class="option-description">Curtain + Sake Cup = 3 points</span>
+            </div>
+
+            <div class="option-row">
+              <label for="moon-viewing-sake">Moon Viewing Sake (Tsukimi):</label>
+              <select id="moon-viewing-sake">
+                <option value="always" selected>Always Enabled</option>
+                <option value="never">Always Disabled</option>
+                <option value="requireOther">Require Other Yaku</option>
+              </select>
+              <span class="option-description">Moon + Sake Cup = 3 points</span>
+            </div>
+          </div>
+
+          <div class="options-section">
+            <h3>Game Settings</h3>
+
+            <div class="option-row">
+              <label for="default-rounds">Default Rounds:</label>
+              <select id="default-rounds">
+                <option value="1">1 Round</option>
+                <option value="3">3 Rounds</option>
+                <option value="6" selected>6 Rounds</option>
+                <option value="12">12 Rounds</option>
+              </select>
+              <span class="option-description">Number of rounds per game</span>
+            </div>
+          </div>
+
+          <div class="modal-buttons">
+            <button id="options-save">Save</button>
+            <button id="options-reset">Reset to Defaults</button>
+            <button id="options-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Koi-Koi Decision Modal -->
+      <div id="koikoi-modal" class="modal">
+        <div class="modal-content koikoi-modal-content">
+          <h2>You Formed a Yaku!</h2>
+
+          <div id="koikoi-yaku-display" class="koikoi-yaku-display">
+            <!-- Will be filled with yaku names and points -->
+          </div>
+
+          <div class="koikoi-explanation">
+            <p><strong>Choose your next move:</strong></p>
+            <p><strong>Shobu:</strong> End the round now and keep your points (safe)</p>
+            <p><strong>Koi-Koi:</strong> Continue playing to score more, but risk opponent doubling their points!</p>
+          </div>
+
+          <div class="modal-buttons">
+            <button id="koikoi-shobu" class="koikoi-decision-btn">Shobu (End Round)</button>
+            <button id="koikoi-continue" class="koikoi-decision-btn koikoi-risky">Koi-Koi! (Continue)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tutorial Bubble -->
+      <div id="tutorial-bubble" class="tutorial-bubble hidden">
+        <div class="tutorial-content">
+          <p><strong>New to Hanafuda?</strong></p>
+          <p>Click the Help button to highlight matching cards!</p>
+          <button id="tutorial-got-it">Got it!</button>
+        </div>
+        <div class="tutorial-arrow"></div>
       </div>
     </main>
 

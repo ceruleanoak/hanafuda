@@ -13,7 +13,13 @@ Hanafuda (花札) are traditional Japanese playing cards used for various games.
 - ✅ Complete 48-card hanafuda deck (12 months × 4 cards)
 - ✅ HTML5 Canvas rendering with placeholder cards
 - ✅ Click-to-select card interaction
+- ✅ **Koi-Koi decision mechanic** - Choose to end round or continue playing for higher scores
+- ✅ **Configurable rule variations** - Customize multipliers, viewing yaku, and more
+- ✅ **Options menu** with persistent settings (localStorage)
 - ✅ Koi-koi game logic with yaku scoring
+- ✅ Multiple rounds (1, 3, 6, or 12 rounds)
+- ✅ Help mode with card matching highlights
+- ✅ Tutorial bubble for new players
 - ✅ Support for high-resolution background textures
 - 🎴 Ready for custom card images (PNG format recommended)
 
@@ -91,7 +97,32 @@ The deployment workflow is defined in `.github/workflows/deploy.yml`
    - If it matches a field card, both are captured automatically
    - Otherwise, it's placed on the field
 4. **Scoring**: Form yaku (combinations) to earn points
-5. **Round End**: The round ends when all cards are played
+5. **Koi-Koi Decision**: When you form a yaku, choose:
+   - **Shobu** - End the round and keep your points (safe)
+   - **Koi-Koi** - Continue playing to score more, but risk opponent doubling their points!
+6. **Round End**: The round ends when all cards are played or someone calls Shobu
+
+## Game Options
+
+Click the **Options** button to customize your game:
+
+### Koi-Koi Rules
+- **Enable Koi-Koi Decision**: Toggle the koi-koi decision mechanic (default: ON)
+- **Multiplier Mode**:
+  - **2x (Single Double)** - Any koi-koi call results in 2x multiplier (default)
+  - **2x→3x→4x (Cumulative)** - Multiple koi-koi calls stack multipliers
+- **Auto-double 7+ Points**: Automatically double scores of 7 or more points (default: ON)
+
+### Yaku Rules
+- **Viewing Sake (Hanami)**: Curtain + Sake Cup = 3 points
+  - Always Enabled (default) / Always Disabled / Require Other Yaku
+- **Moon Viewing Sake (Tsukimi)**: Moon + Sake Cup = 3 points
+  - Always Enabled (default) / Always Disabled / Require Other Yaku
+
+### Game Settings
+- **Default Rounds**: 1, 3, 6, or 12 rounds (default: 6)
+
+All settings are automatically saved to your browser's localStorage.
 
 ## Card Images
 
@@ -144,8 +175,9 @@ hanafuda/
 ## Controls
 
 - **Mouse**: Click to select cards
-- **N key**: Start new game
-- **New Game button**: Reset the game
+- **H key** or **Help button**: Toggle help mode (highlights matching cards)
+- **N key** or **New Game button**: Start new game
+- **Options button**: Open game settings
 
 ## Development
 
@@ -162,15 +194,17 @@ MIT
 
 ## TODO / Future Enhancements
 
-- [ ] Implement full AI opponent
-- [ ] Add "koi-koi" decision (continue or cash out)
-- [ ] Multiple rounds with cumulative scoring
+- [x] Implement full AI opponent
+- [x] Add "koi-koi" decision (continue or cash out)
+- [x] Multiple rounds with cumulative scoring
+- [x] Rule variations and options menu
 - [ ] Sound effects
-- [ ] Animation for card captures
+- [x] Animation for card captures
 - [ ] Multiplayer support
 - [ ] Mobile touch controls optimization
 - [ ] Card image loading system
-- [ ] Save/load game state
+- [ ] Advanced AI strategy for koi-koi decisions
+- [ ] Statistics tracking and game history
 
 ## Contributing
 

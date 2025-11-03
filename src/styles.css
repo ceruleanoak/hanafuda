@@ -49,6 +49,7 @@ h1 {
 }
 
 #help-btn,
+#options-btn,
 #new-game-btn {
   padding: 0.5rem 1.5rem;
   background: #4ecdc4;
@@ -61,6 +62,7 @@ h1 {
 }
 
 #help-btn:hover,
+#options-btn:hover,
 #new-game-btn:hover {
   background: #45b8b0;
 }
@@ -182,6 +184,252 @@ footer {
 
 .round-btn:active {
   transform: translateY(0);
+}
+
+/* Options Modal */
+.options-modal-content {
+  max-width: 600px;
+  min-width: 500px;
+  text-align: left;
+}
+
+.options-section {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  border: 1px solid #333;
+}
+
+.options-section h3 {
+  color: #ff6b6b;
+  margin-bottom: 1rem;
+  font-size: 1.2rem;
+}
+
+.option-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.option-row:last-child {
+  margin-bottom: 0;
+}
+
+.option-row label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1rem;
+  cursor: pointer;
+  color: #fff;
+}
+
+.option-row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #4ecdc4;
+}
+
+.option-row select {
+  padding: 0.5rem;
+  background: #1e1e1e;
+  border: 2px solid #4ecdc4;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.option-row select:focus {
+  outline: none;
+  border-color: #5effd6;
+}
+
+.option-description {
+  font-size: 0.85rem;
+  color: #aaa;
+  font-style: italic;
+}
+
+.options-modal-content .modal-buttons {
+  flex-direction: row;
+  justify-content: space-between;
+  margin-top: 2rem;
+}
+
+.options-modal-content .modal-buttons button {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: bold;
+  background: #4ecdc4;
+  color: #000;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.options-modal-content .modal-buttons button:hover {
+  background: #5effd6;
+  transform: translateY(-1px);
+}
+
+#options-reset {
+  background: #ff6b6b !important;
+  color: #fff !important;
+}
+
+#options-reset:hover {
+  background: #ff5252 !important;
+}
+
+#options-cancel {
+  background: #666 !important;
+  color: #fff !important;
+}
+
+#options-cancel:hover {
+  background: #777 !important;
+}
+
+/* Koi-Koi Decision Modal */
+.koikoi-modal-content {
+  min-width: 450px;
+}
+
+.koikoi-yaku-display {
+  background: rgba(78, 205, 196, 0.1);
+  border: 2px solid #4ecdc4;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.koikoi-yaku-display .yaku-item {
+  font-size: 1.2rem;
+  margin: 0.5rem 0;
+  color: #4ecdc4;
+}
+
+.koikoi-yaku-display .total-score {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #ffeb3b;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 2px solid #333;
+}
+
+.koikoi-explanation {
+  text-align: left;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+}
+
+.koikoi-explanation p {
+  margin: 0.5rem 0;
+  font-size: 0.95rem;
+}
+
+.koikoi-decision-btn {
+  padding: 1rem 2rem;
+  font-size: 1.2rem;
+  font-weight: bold;
+  background: linear-gradient(135deg, #4ecdc4 0%, #44a09b 100%);
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 15px rgba(78, 205, 196, 0.3);
+}
+
+.koikoi-decision-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(78, 205, 196, 0.5);
+}
+
+.koikoi-risky {
+  background: linear-gradient(135deg, #ff6b6b 0%, #d94949 100%) !important;
+  color: #fff !important;
+  box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3) !important;
+}
+
+.koikoi-risky:hover {
+  background: linear-gradient(135deg, #ff5252 0%, #ff6b6b 100%) !important;
+  box-shadow: 0 6px 20px rgba(255, 107, 107, 0.5) !important;
+}
+
+/* Tutorial Bubble */
+.tutorial-bubble {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  z-index: 999;
+  background: linear-gradient(135deg, #ffeb3b 0%, #ffd700 100%);
+  color: #000;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(255, 235, 59, 0.4);
+  max-width: 300px;
+  animation: tutorialBounce 2s infinite;
+}
+
+.tutorial-bubble.hidden {
+  display: none;
+}
+
+.tutorial-content p {
+  margin: 0.5rem 0;
+  font-size: 0.95rem;
+}
+
+.tutorial-content p:first-child {
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+#tutorial-got-it {
+  margin-top: 1rem;
+  padding: 0.5rem 1.5rem;
+  background: #000;
+  color: #ffeb3b;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+#tutorial-got-it:hover {
+  background: #333;
+  transform: scale(1.05);
+}
+
+.tutorial-arrow {
+  position: absolute;
+  top: -10px;
+  right: 100px;
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-bottom: 10px solid #ffeb3b;
+}
+
+@keyframes tutorialBounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
 }
 
 /* Responsive */
