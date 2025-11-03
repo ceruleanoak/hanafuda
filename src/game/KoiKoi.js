@@ -54,7 +54,13 @@ export class KoiKoi {
     this.playerHand = this.deck.drawMultiple(8);
     this.opponentHand = this.deck.drawMultiple(8);
 
-    this.message = 'Select a card from your hand';
+    // Check if player has a card that would complete a 4-card capture
+    const celebrateMonth = this.checkHandForFourCardCapture('player');
+    if (celebrateMonth) {
+      this.message = `Celebrate month of ${celebrateMonth}! You can capture all 4 cards!`;
+    } else {
+      this.message = 'Select a card from your hand';
+    }
   }
 
   /**
@@ -245,6 +251,23 @@ export class KoiKoi {
   }
 
   /**
+   * Check if player has a card in hand that would complete a 4-card capture
+   * Returns the month name if found, null otherwise
+   */
+  checkHandForFourCardCapture(player) {
+    const hand = player === 'player' ? this.playerHand : this.opponentHand;
+
+    for (const handCard of hand) {
+      const sameMonthOnField = this.field.filter(c => c.month === handCard.month);
+      if (sameMonthOnField.length === 3) {
+        return handCard.month;
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Place card on field without capturing
    */
   placeCardOnField() {
@@ -400,7 +423,14 @@ export class KoiKoi {
     } else {
       this.currentPlayer = 'player';
       this.phase = 'select_hand';
-      this.message = 'Your turn - select a card from your hand';
+
+      // Check if player has a card that would complete a 4-card capture
+      const celebrateMonth = this.checkHandForFourCardCapture('player');
+      if (celebrateMonth) {
+        this.message = `Celebrate month of ${celebrateMonth}! You can capture all 4 cards!`;
+      } else {
+        this.message = 'Your turn - select a card from your hand';
+      }
     }
   }
 

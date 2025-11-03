@@ -638,12 +638,11 @@ class Game {
     // Stage 3: Brief delay to show the match
     sequence.addDelay(200);
 
-    // Stage 4: Both cards to pile (with slight offset to avoid perfect overlap)
-    const cardOffset = 8; // Small offset to see both cards
+    // Stage 4: Both cards to pile together from the same position
     sequence.addParallelStage([
       {
         card: movingCard,
-        startX: targetPos.x + cardOffset,
+        startX: targetPos.x,
         startY: targetPos.y,
         endX: pilePos.x,
         endY: pilePos.y,
