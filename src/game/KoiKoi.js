@@ -23,7 +23,8 @@ export class KoiKoi {
       opponentCount: 0,    // How many times opponent called koi-koi
       roundActive: true,   // Is the round still going after koi-koi?
       waitingForDecision: false,
-      decisionPlayer: null // Who needs to make a decision
+      decisionPlayer: null, // Who needs to make a decision
+      roundWinner: null    // Who won this round (for winner-take-all scoring)
     };
 
     // Track previous yaku to detect new yaku
@@ -83,7 +84,8 @@ export class KoiKoi {
       opponentCount: 0,
       roundActive: true,
       waitingForDecision: false,
-      decisionPlayer: null
+      decisionPlayer: null,
+      roundWinner: null
     };
 
     this.deal();
@@ -580,6 +582,9 @@ export class KoiKoi {
     this.koikoiState.decisionPlayer = null;
 
     if (decision === 'shobu') {
+      // Mark this player as the round winner (they ended it with yaku)
+      this.koikoiState.roundWinner = player;
+
       // End the round immediately
       if (player === 'player') {
         this.message = 'You called Shobu! Round ends.';
@@ -784,6 +789,33 @@ export class KoiKoi {
     if (this.gameOptions && this.gameOptions.get('koikoiEnabled')) {
       playerRoundScore = this.applyMultiplier(playerRoundScore, 'player');
       opponentRoundScore = this.applyMultiplier(opponentRoundScore, 'opponent');
+    }
+
+    // Winner-take-all logic (traditional koi-koi)
+    if (this.gameOptions && !this.gameOptions.get('bothPlayersScore')) {
+      // Determine round winner
+      let roundWinner = this.koikoiState.roundWinner;
+
+      // If no explicit winner (shobu wasn't called), determine by yaku scores
+      if (!roundWinner) {
+        if (playerRoundScore > opponentRoundScore) {
+          roundWinner = 'player';
+        } else if (opponentRoundScore > playerRoundScore) {
+          roundWinner = 'opponent';
+        }
+        // If tied or both have 0, no one wins (both get 0)
+      }
+
+      // Apply winner-take-all: only winner gets points
+      if (roundWinner === 'player') {
+        opponentRoundScore = 0;
+      } else if (roundWinner === 'opponent') {
+        playerRoundScore = 0;
+      } else {
+        // Tie or no yaku - both get 0
+        playerRoundScore = 0;
+        opponentRoundScore = 0;
+      }
     }
 
     this.playerScore += playerRoundScore;

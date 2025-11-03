@@ -10,6 +10,7 @@ export class GameOptions {
       koikoiEnabled: true,
       multiplierMode: '2x',              // '2x' or 'cumulative' (2x→3x→4x)
       autoDouble7Plus: true,
+      bothPlayersScore: false,           // false = winner-take-all (traditional), true = both score
 
       // Yaku Rules
       viewingSakeMode: 'always',         // 'always', 'never', 'requireOther'

@@ -308,6 +308,7 @@ class Game {
     document.getElementById('koikoi-enabled').checked = options.koikoiEnabled;
     document.getElementById('multiplier-mode').value = options.multiplierMode;
     document.getElementById('auto-double').checked = options.autoDouble7Plus;
+    document.getElementById('both-players-score').checked = options.bothPlayersScore;
     document.getElementById('viewing-sake').value = options.viewingSakeMode;
     document.getElementById('moon-viewing-sake').value = options.moonViewingSakeMode;
     document.getElementById('default-rounds').value = options.defaultRounds;
@@ -330,6 +331,7 @@ class Game {
       koikoiEnabled: document.getElementById('koikoi-enabled').checked,
       multiplierMode: document.getElementById('multiplier-mode').value,
       autoDouble7Plus: document.getElementById('auto-double').checked,
+      bothPlayersScore: document.getElementById('both-players-score').checked,
       viewingSakeMode: document.getElementById('viewing-sake').value,
       moonViewingSakeMode: document.getElementById('moon-viewing-sake').value,
       defaultRounds: parseInt(document.getElementById('default-rounds').value)

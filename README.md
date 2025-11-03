@@ -112,6 +112,7 @@ Click the **Options** button to customize your game:
   - **2x (Single Double)** - Any koi-koi call results in 2x multiplier (default)
   - **2x→3x→4x (Cumulative)** - Multiple koi-koi calls stack multipliers
 - **Auto-double 7+ Points**: Automatically double scores of 7 or more points (default: ON)
+- **Both Players Score**: When OFF (default), uses traditional winner-take-all scoring where only the round winner gets points. When ON, both players score their yaku points.
 
 ### Yaku Rules
 - **Viewing Sake (Hanami)**: Curtain + Sake Cup = 3 points
