@@ -137,6 +137,55 @@
         </div>
       </div>
 
+      <!-- Round Summary Modal -->
+      <div id="round-summary-modal" class="modal">
+        <div class="modal-content round-summary-content">
+          <h2 id="round-summary-title">Round Complete!</h2>
+
+          <div class="round-summary-scores">
+            <div class="round-score-section">
+              <h3>This Round</h3>
+              <div class="score-breakdown">
+                <div class="player-round-score">
+                  <span class="player-label">You:</span>
+                  <span id="player-round-points" class="round-points">0</span>
+                  <span class="points-label">pts</span>
+                </div>
+                <div class="opponent-round-score">
+                  <span class="player-label">Opponent:</span>
+                  <span id="opponent-round-points" class="round-points">0</span>
+                  <span class="points-label">pts</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="round-score-section">
+              <h3>Total Score</h3>
+              <div class="score-breakdown">
+                <div class="player-total-score">
+                  <span class="player-label">You:</span>
+                  <span id="player-total-points" class="total-points">0</span>
+                  <span class="points-label">pts</span>
+                </div>
+                <div class="opponent-total-score">
+                  <span class="player-label">Opponent:</span>
+                  <span id="opponent-total-points" class="total-points">0</span>
+                  <span class="points-label">pts</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="round-yaku-details" class="round-yaku-details">
+            <!-- Will be filled with yaku details if any -->
+          </div>
+
+          <div class="modal-buttons">
+            <button id="continue-next-round" class="primary-btn">Continue to Next Round</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Tutorial Bubble -->
       <div id="tutorial-bubble" class="tutorial-bubble hidden">
         <div class="tutorial-content">
