@@ -34,9 +34,10 @@ export class KoiKoi {
     this.opponentYaku = [];
     this.currentPlayer = 'player'; // 'player' or 'opponent'
     this.selectedCards = [];
-    this.phase = 'select_hand'; // 'select_hand', 'select_field', 'draw_phase', 'select_drawn_match'
+    this.phase = 'select_hand'; // 'select_hand', 'select_field', 'draw_phase', 'select_drawn_match', 'opponent_playing'
     this.drawnCard = null;
     this.drawnCardMatches = [];
+    this.opponentPlayedCard = null; // Card opponent is currently playing
     this.gameOver = false;
     this.message = '';
 
@@ -88,6 +89,7 @@ export class KoiKoi {
       phase: this.phase,
       drawnCard: this.drawnCard,
       drawnCardMatches: this.drawnCardMatches,
+      opponentPlayedCard: this.opponentPlayedCard,
       message: this.message,
       gameOver: this.gameOver,
       currentRound: this.currentRound,
@@ -469,25 +471,33 @@ export class KoiKoi {
 
     const handCard = this.opponentHand[selectedCardIndex];
 
-    if (selectedMatch) {
-      // Capture with the selected match
-      const fieldIndex = this.field.findIndex(c => c.id === selectedMatch.id);
-      this.opponentHand.splice(selectedCardIndex, 1);
-      this.field.splice(fieldIndex, 1);
-      this.opponentCaptured.push(handCard, selectedMatch);
-      this.updateYaku('opponent');
-    } else {
-      // Place on field
+    // Show the opponent's card before processing
+    this.phase = 'opponent_playing';
+    this.opponentPlayedCard = handCard; // Store for display
+    this.message = `Opponent plays ${handCard.name}...`;
+
+    setTimeout(() => {
+      // Remove from opponent's hand
       this.opponentHand.splice(selectedCardIndex, 1);
 
-      // Check for 4-card same-month capture
-      if (!this.checkFourCardCapture(handCard, 'opponent')) {
-        this.field.push(handCard);
+      if (selectedMatch) {
+        // Capture with the selected match
+        const fieldIndex = this.field.findIndex(c => c.id === selectedMatch.id);
+        this.field.splice(fieldIndex, 1);
+        this.opponentCaptured.push(handCard, selectedMatch);
+        this.updateYaku('opponent');
+      } else {
+        // Check for 4-card same-month capture
+        if (!this.checkFourCardCapture(handCard, 'opponent')) {
+          this.field.push(handCard);
+        }
       }
-    }
 
-    // Draw phase for opponent with visual feedback
-    this.opponentDrawPhase();
+      this.opponentPlayedCard = null;
+
+      // Draw phase for opponent with visual feedback
+      this.opponentDrawPhase();
+    }, 1200);
   }
 
   /**

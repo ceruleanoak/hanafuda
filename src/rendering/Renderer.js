@@ -169,6 +169,12 @@ export class Renderer {
       }
     }
 
+    // Draw opponent played card (before they draw from deck)
+    if (gameState.opponentPlayedCard && gameState.phase === 'opponent_playing') {
+      const playedCardY = margin + 60;
+      this.drawOpponentPlayedCardHover(gameState.opponentPlayedCard, centerX, playedCardY);
+    }
+
     // Draw drawn card hover area (if waiting for selection OR showing drawn card)
     // Position it at TOP of screen to avoid covering field cards
     if (gameState.drawnCard && (
@@ -226,8 +232,8 @@ export class Renderer {
       }
 
       // Check for hover on player captured pile
-      const playerCapturedX = this.displayWidth - cardWidth - rightMargin;
-      const playerCapturedY = this.displayHeight - cardHeight - verticalMargin;
+      const playerCapturedX = this.displayWidth - cardWidth - this.rightMargin;
+      const playerCapturedY = this.displayHeight - cardHeight - this.verticalMargin;
       if (gameState.playerCaptured && gameState.playerCaptured.length > 0) {
         if (this.cardRenderer.isPointInCard(hoverX, hoverY, playerCapturedX, playerCapturedY)) {
           this.drawTricksList(gameState.playerCaptured, 'Player Tricks');
@@ -235,8 +241,8 @@ export class Renderer {
       }
 
       // Check for hover on opponent captured pile
-      const opponentCapturedX = this.displayWidth - cardWidth - rightMargin;
-      const opponentCapturedY = verticalMargin;
+      const opponentCapturedX = this.displayWidth - cardWidth - this.rightMargin;
+      const opponentCapturedY = this.verticalMargin;
       if (gameState.opponentCaptured && gameState.opponentCaptured.length > 0) {
         if (this.cardRenderer.isPointInCard(hoverX, hoverY, opponentCapturedX, opponentCapturedY)) {
           this.drawTricksList(gameState.opponentCaptured, 'Opponent Tricks');
@@ -334,6 +340,34 @@ export class Renderer {
     this.ctx.font = 'bold 20px monospace';
     this.ctx.textAlign = 'center';
     this.ctx.fillText(`🎉 FOUR OF ${month.toUpperCase()} 🎉`, centerX, boxY + 25);
+
+    this.ctx.restore();
+  }
+
+  /**
+   * Draw opponent's played card hover area
+   */
+  drawOpponentPlayedCardHover(card, centerX, y) {
+    const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
+
+    // Draw background panel
+    this.ctx.save();
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+    this.ctx.fillRect(centerX - cardWidth / 2 - 20, y - 40, cardWidth + 40, cardHeight + 80);
+
+    // Red border for opponent action
+    this.ctx.strokeStyle = '#ff6b6b';
+    this.ctx.lineWidth = 3;
+    this.ctx.strokeRect(centerX - cardWidth / 2 - 20, y - 40, cardWidth + 40, cardHeight + 80);
+
+    // Draw label
+    this.ctx.fillStyle = '#ff6b6b';
+    this.ctx.font = 'bold 14px monospace';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText('OPPONENT PLAYS', centerX, y - 20);
+
+    // Draw card
+    this.cardRenderer.drawCard(this.ctx, card, centerX - cardWidth / 2, y, false, false);
 
     this.ctx.restore();
   }
@@ -641,15 +675,15 @@ export class Renderer {
     this.ctx.fillStyle = '#ffeb3b';
     this.ctx.font = 'bold 18px monospace';
     this.ctx.textAlign = 'center';
-    this.ctx.fillText('All Cards (grayed = not in draw pile)', x + overlayWidth / 2, y + 30);
+    this.ctx.fillText('All Cards (grayed = captured)', x + overlayWidth / 2, y + 30);
 
-    // Create set of card IDs that are NOT in the draw pile (i.e., already drawn/played)
-    const drawnCardIds = new Set();
-    gameState.field.forEach(c => drawnCardIds.add(c.id));
-    gameState.playerHand.forEach(c => drawnCardIds.add(c.id));
-    gameState.opponentHand.forEach(c => drawnCardIds.add(c.id));
-    gameState.playerCaptured.forEach(c => drawnCardIds.add(c.id));
-    gameState.opponentCaptured.forEach(c => drawnCardIds.add(c.id));
+    // Create sets for different card states
+    const capturedCardIds = new Set();
+    gameState.playerCaptured.forEach(c => capturedCardIds.add(c.id));
+    gameState.opponentCaptured.forEach(c => capturedCardIds.add(c.id));
+
+    const playerHandIds = new Set(gameState.playerHand.map(c => c.id));
+    const fieldIds = new Set(gameState.field.map(c => c.id));
 
     // Draw all 48 cards
     HANAFUDA_DECK.forEach((card, index) => {
@@ -658,11 +692,28 @@ export class Renderer {
       const cardX = x + padding + col * (cardWidth + cardSpacing);
       const cardY = y + padding + 40 + row * (cardHeight + cardSpacing);
 
-      // Check if card is still in draw pile (not yet drawn)
-      const isInDrawPile = !drawnCardIds.has(card.id);
-      const opacity = isInDrawPile ? 1.0 : 0.3;
+      // Gray out captured cards, highlight player's hand and field cards
+      const isCaptured = capturedCardIds.has(card.id);
+      const isInPlayerHand = playerHandIds.has(card.id);
+      const isInField = fieldIds.has(card.id);
+
+      let opacity = 1.0;
+      let highlight = false;
+
+      if (isCaptured) {
+        opacity = 0.3; // Grayed out
+      } else if (isInPlayerHand || isInField) {
+        highlight = true; // Highlight these
+      }
 
       this.cardRenderer.drawCard(this.ctx, card, cardX, cardY, false, false, opacity);
+
+      // Draw highlight border for player's hand and field cards
+      if (highlight) {
+        this.ctx.strokeStyle = isInPlayerHand ? '#4ecdc4' : '#ffeb3b';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(cardX, cardY, cardWidth, cardHeight);
+      }
     });
 
     this.ctx.restore();
