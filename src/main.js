@@ -464,6 +464,31 @@ class Game {
         yakuList.appendChild(yakuLine);
       });
       playerSection.appendChild(yakuList);
+
+      // Add score breakdown if available
+      if (data.playerScoreBreakdown) {
+        const breakdown = data.playerScoreBreakdown;
+        const breakdownDiv = document.createElement('div');
+        breakdownDiv.className = 'score-breakdown-detail';
+        breakdownDiv.innerHTML = '<strong>Score Calculation:</strong>';
+
+        if (breakdown.koikoiPenalty) {
+          breakdownDiv.innerHTML += '<br>• Koi-Koi penalty applied (didn\'t improve) = 0 pts';
+        } else {
+          breakdownDiv.innerHTML += `<br>• Base score: ${breakdown.baseScore} pts`;
+          if (breakdown.autoDouble) {
+            breakdownDiv.innerHTML += '<br>• Auto-double (7+ pts) ×2';
+          }
+          if (breakdown.koikoiMultiplier > 0) {
+            breakdownDiv.innerHTML += `<br>• Koi-Koi bonus ×${breakdown.koikoiMultiplier} (opponent called koi-koi)`;
+          }
+          if (breakdown.autoDouble || breakdown.koikoiMultiplier > 0) {
+            breakdownDiv.innerHTML += `<br>• <strong>Final: ${breakdown.finalScore} pts</strong>`;
+          }
+        }
+        playerSection.appendChild(breakdownDiv);
+      }
+
       yakuDetails.appendChild(playerSection);
     }
 
@@ -478,6 +503,31 @@ class Game {
         yakuList.appendChild(yakuLine);
       });
       opponentSection.appendChild(yakuList);
+
+      // Add score breakdown if available
+      if (data.opponentScoreBreakdown) {
+        const breakdown = data.opponentScoreBreakdown;
+        const breakdownDiv = document.createElement('div');
+        breakdownDiv.className = 'score-breakdown-detail';
+        breakdownDiv.innerHTML = '<strong>Score Calculation:</strong>';
+
+        if (breakdown.koikoiPenalty) {
+          breakdownDiv.innerHTML += '<br>• Koi-Koi penalty applied (didn\'t improve) = 0 pts';
+        } else {
+          breakdownDiv.innerHTML += `<br>• Base score: ${breakdown.baseScore} pts`;
+          if (breakdown.autoDouble) {
+            breakdownDiv.innerHTML += '<br>• Auto-double (7+ pts) ×2';
+          }
+          if (breakdown.koikoiMultiplier > 0) {
+            breakdownDiv.innerHTML += `<br>• Koi-Koi bonus ×${breakdown.koikoiMultiplier} (you called koi-koi)`;
+          }
+          if (breakdown.autoDouble || breakdown.koikoiMultiplier > 0) {
+            breakdownDiv.innerHTML += `<br>• <strong>Final: ${breakdown.finalScore} pts</strong>`;
+          }
+        }
+        opponentSection.appendChild(breakdownDiv);
+      }
+
       yakuDetails.appendChild(opponentSection);
     }
 

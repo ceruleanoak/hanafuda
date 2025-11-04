@@ -487,53 +487,108 @@ export class Renderer {
 
     const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
 
-    // Draw yaku list and progress above captured stack
-    let yakuY = y - 30;
+    // Check if this is the opponent's stack (at top of screen)
+    const isOpponent = label.includes('Opponent');
 
-    // Draw completed yaku
-    if (yaku && yaku.length > 0) {
-      this.ctx.fillStyle = '#4ecdc4';
-      this.ctx.font = 'bold 11px monospace';
-      this.ctx.textAlign = 'right';
+    // For opponent, draw info below the pile; for player, draw above
+    if (isOpponent) {
+      // Draw label below pile
+      this.ctx.fillStyle = '#fff';
+      this.ctx.font = 'bold 13px monospace';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText(`${label}: ${cards.length}`, x + cardWidth / 2, y + cardHeight + 20);
 
-      // Draw yaku in reverse order (most recent at bottom)
-      for (let i = Math.min(yaku.length - 1, 4); i >= 0; i--) {
-        const yakuItem = yaku[i];
-        this.ctx.fillText(`${yakuItem.name} (${yakuItem.points})`, x + cardWidth, yakuY);
-        yakuY -= 14;
+      // Draw yaku list and progress below label
+      let yakuY = y + cardHeight + 35;
+
+      // Draw completed yaku
+      if (yaku && yaku.length > 0) {
+        this.ctx.fillStyle = '#4ecdc4';
+        this.ctx.font = 'bold 11px monospace';
+        this.ctx.textAlign = 'right';
+
+        // Draw yaku in order (top to bottom)
+        for (let i = Math.max(0, yaku.length - 5); i < yaku.length; i++) {
+          const yakuItem = yaku[i];
+          this.ctx.fillText(`${yakuItem.name} (${yakuItem.points})`, x + cardWidth, yakuY);
+          yakuY += 14;
+        }
+
+        if (yaku.length > 5) {
+          this.ctx.fillStyle = '#888';
+          this.ctx.fillText(`+${yaku.length - 5} more...`, x + cardWidth, yakuY);
+          yakuY += 14;
+        }
       }
 
-      if (yaku.length > 5) {
-        this.ctx.fillStyle = '#888';
-        this.ctx.fillText(`+${yaku.length - 5} more...`, x + cardWidth, yakuY);
-        yakuY -= 14;
+      // Draw yaku progress (incomplete combinations)
+      if (yakuProgress && yakuProgress.length > 0) {
+        this.ctx.font = '11px monospace';
+        this.ctx.textAlign = 'right';
+
+        for (let i = 0; i < Math.min(yakuProgress.length, 3); i++) {
+          const prog = yakuProgress[i];
+          // Use red color if impossible, yellow if still possible
+          this.ctx.fillStyle = prog.isPossible === false ? '#ff6b6b' : '#ffeb3b';
+          this.ctx.fillText(`${prog.name} ${prog.current}/${prog.needed}`, x + cardWidth, yakuY);
+          yakuY += 14;
+        }
+
+        if (yakuProgress.length > 3) {
+          this.ctx.fillStyle = '#888';
+          this.ctx.fillText(`+${yakuProgress.length - 3} more...`, x + cardWidth, yakuY);
+        }
       }
+    } else {
+      // Player's stack - draw info above pile (existing behavior)
+      // Draw yaku list and progress above captured stack
+      let yakuY = y - 30;
+
+      // Draw completed yaku
+      if (yaku && yaku.length > 0) {
+        this.ctx.fillStyle = '#4ecdc4';
+        this.ctx.font = 'bold 11px monospace';
+        this.ctx.textAlign = 'right';
+
+        // Draw yaku in reverse order (most recent at bottom)
+        for (let i = Math.min(yaku.length - 1, 4); i >= 0; i--) {
+          const yakuItem = yaku[i];
+          this.ctx.fillText(`${yakuItem.name} (${yakuItem.points})`, x + cardWidth, yakuY);
+          yakuY -= 14;
+        }
+
+        if (yaku.length > 5) {
+          this.ctx.fillStyle = '#888';
+          this.ctx.fillText(`+${yaku.length - 5} more...`, x + cardWidth, yakuY);
+          yakuY -= 14;
+        }
+      }
+
+      // Draw yaku progress (incomplete combinations)
+      if (yakuProgress && yakuProgress.length > 0) {
+        this.ctx.font = '11px monospace';
+        this.ctx.textAlign = 'right';
+
+        for (let i = 0; i < Math.min(yakuProgress.length, 3); i++) {
+          const prog = yakuProgress[i];
+          // Use red color if impossible, yellow if still possible
+          this.ctx.fillStyle = prog.isPossible === false ? '#ff6b6b' : '#ffeb3b';
+          this.ctx.fillText(`${prog.name} ${prog.current}/${prog.needed}`, x + cardWidth, yakuY);
+          yakuY -= 14;
+        }
+
+        if (yakuProgress.length > 3) {
+          this.ctx.fillStyle = '#888';
+          this.ctx.fillText(`+${yakuProgress.length - 3} more...`, x + cardWidth, yakuY);
+        }
+      }
+
+      // Draw label above pile
+      this.ctx.fillStyle = '#fff';
+      this.ctx.font = 'bold 13px monospace';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText(`${label}: ${cards.length}`, x + cardWidth / 2, y - 10);
     }
-
-    // Draw yaku progress (incomplete combinations)
-    if (yakuProgress && yakuProgress.length > 0) {
-      this.ctx.font = '11px monospace';
-      this.ctx.textAlign = 'right';
-
-      for (let i = 0; i < Math.min(yakuProgress.length, 3); i++) {
-        const prog = yakuProgress[i];
-        // Use red color if impossible, yellow if still possible
-        this.ctx.fillStyle = prog.isPossible === false ? '#ff6b6b' : '#ffeb3b';
-        this.ctx.fillText(`${prog.name} ${prog.current}/${prog.needed}`, x + cardWidth, yakuY);
-        yakuY -= 14;
-      }
-
-      if (yakuProgress.length > 3) {
-        this.ctx.fillStyle = '#888';
-        this.ctx.fillText(`+${yakuProgress.length - 3} more...`, x + cardWidth, yakuY);
-      }
-    }
-
-    // Draw label
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = 'bold 13px monospace';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText(`${label}: ${cards.length}`, x + cardWidth / 2, y - 10);
 
     // Draw cards
     if (cards.length > 0) {

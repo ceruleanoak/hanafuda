@@ -1120,15 +1120,36 @@ export class KoiKoi {
     console.log(`[SCORING] Round end - Player: ${playerYaku.map(y => y.name).join(', ')} (${playerRoundScore} pts)`);
     console.log(`[SCORING] Round end - Opponent: ${opponentYaku.map(y => y.name).join(', ')} (${opponentRoundScore} pts)`);
 
+    // Track scoring breakdown for display
+    const playerScoreBreakdown = {
+      baseScore: playerRoundScore,
+      koikoiPenalty: false,
+      autoDouble: false,
+      koikoiMultiplier: 0,
+      finalScore: playerRoundScore
+    };
+
+    const opponentScoreBreakdown = {
+      baseScore: opponentRoundScore,
+      koikoiPenalty: false,
+      autoDouble: false,
+      koikoiMultiplier: 0,
+      finalScore: opponentRoundScore
+    };
+
     // Check for koi-koi penalty: if someone called koi-koi but didn't improve, they get 0 points
     if (this.gameOptions && this.gameOptions.get('koikoiEnabled')) {
       if (this.koikoiState.playerCalled && playerRoundScore <= this.koikoiState.playerScoreAtKoikoi) {
         console.log(`[SCORING] Player called koi-koi but didn't improve (${this.koikoiState.playerScoreAtKoikoi} → ${playerRoundScore}) - penalty applied`);
         playerRoundScore = 0;
+        playerScoreBreakdown.koikoiPenalty = true;
+        playerScoreBreakdown.finalScore = 0;
       }
       if (this.koikoiState.opponentCalled && opponentRoundScore <= this.koikoiState.opponentScoreAtKoikoi) {
         console.log(`[SCORING] Opponent called koi-koi but didn't improve (${this.koikoiState.opponentScoreAtKoikoi} → ${opponentRoundScore}) - penalty applied`);
         opponentRoundScore = 0;
+        opponentScoreBreakdown.koikoiPenalty = true;
+        opponentScoreBreakdown.finalScore = 0;
       }
     }
 
@@ -1136,8 +1157,10 @@ export class KoiKoi {
     if (this.gameOptions && this.gameOptions.get('koikoiEnabled')) {
       const playerBeforeMultiplier = playerRoundScore;
       const opponentBeforeMultiplier = opponentRoundScore;
-      playerRoundScore = this.applyMultiplier(playerRoundScore, 'player');
-      opponentRoundScore = this.applyMultiplier(opponentRoundScore, 'opponent');
+
+      // Track multipliers in breakdown
+      playerRoundScore = this.applyMultiplierWithBreakdown(playerRoundScore, 'player', playerScoreBreakdown);
+      opponentRoundScore = this.applyMultiplierWithBreakdown(opponentRoundScore, 'opponent', opponentScoreBreakdown);
 
       if (playerRoundScore !== playerBeforeMultiplier) {
         console.log(`[SCORING] Player multiplier applied: ${playerBeforeMultiplier} → ${playerRoundScore}`);
@@ -1167,12 +1190,16 @@ export class KoiKoi {
       // Apply winner-take-all: only winner gets points
       if (roundWinner === 'player') {
         opponentRoundScore = 0;
+        opponentScoreBreakdown.finalScore = 0;
       } else if (roundWinner === 'opponent') {
         playerRoundScore = 0;
+        playerScoreBreakdown.finalScore = 0;
       } else {
         // Tie or no yaku - both get 0
         playerRoundScore = 0;
         opponentRoundScore = 0;
+        playerScoreBreakdown.finalScore = 0;
+        opponentScoreBreakdown.finalScore = 0;
       }
     }
 
@@ -1190,6 +1217,8 @@ export class KoiKoi {
       opponentTotalScore: this.opponentScore,
       playerYaku: playerYaku,
       opponentYaku: opponentYaku,
+      playerScoreBreakdown: playerScoreBreakdown,
+      opponentScoreBreakdown: opponentScoreBreakdown,
       isGameOver: this.currentRound >= this.totalRounds,
       totalRounds: this.totalRounds
     };
@@ -1263,6 +1292,52 @@ export class KoiKoi {
       }
     }
 
+    return finalScore;
+  }
+
+  /**
+   * Apply multiplier with breakdown tracking for display
+   */
+  applyMultiplierWithBreakdown(score, player, breakdown) {
+    let finalScore = score;
+
+    // Apply auto-double for 7+ points
+    if (this.gameOptions.get('autoDouble7Plus') && score >= 7) {
+      finalScore *= 2;
+      breakdown.autoDouble = true;
+    }
+
+    // Apply koi-koi multipliers
+    // Rule: Only the opponent who scores after a koi-koi call gets doubled
+    const multiplierMode = this.gameOptions.get('multiplierMode');
+
+    if (player === 'player') {
+      // Player only gets multiplier if opponent called koi-koi
+      if (this.koikoiState.opponentCalled) {
+        if (multiplierMode === 'cumulative') {
+          const multiplier = Math.min(this.koikoiState.opponentCount + 1, 4);
+          finalScore *= multiplier;
+          breakdown.koikoiMultiplier = multiplier;
+        } else if (multiplierMode === '2x') {
+          finalScore *= 2;
+          breakdown.koikoiMultiplier = 2;
+        }
+      }
+    } else {
+      // Opponent only gets multiplier if player called koi-koi
+      if (this.koikoiState.playerCalled) {
+        if (multiplierMode === 'cumulative') {
+          const multiplier = Math.min(this.koikoiState.playerCount + 1, 4);
+          finalScore *= multiplier;
+          breakdown.koikoiMultiplier = multiplier;
+        } else if (multiplierMode === '2x') {
+          finalScore *= 2;
+          breakdown.koikoiMultiplier = 2;
+        }
+      }
+    }
+
+    breakdown.finalScore = finalScore;
     return finalScore;
   }
 
