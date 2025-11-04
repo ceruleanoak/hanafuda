@@ -12,23 +12,12 @@ export class CardRenderer {
     this.defaultColor = '#333';
     this.borderColor = '#666';
     this.textColor = '#fff';
-    this.hueShift = 0; // Hue shift in degrees (0-360)
 
     // Image cache: { imagePath: Image }
     this.imageCache = new Map();
     this.loadingImages = new Set();
     // Track failed image loads to prevent retrying every frame
     this.failedImages = new Set();
-  }
-
-  /**
-   * Set hue shift for card colors
-   * @param {number} degrees - Hue shift in degrees (0-360)
-   */
-  setHueShift(degrees) {
-    this.hueShift = degrees % 360;
-    console.log(`🎨 Hue shift set to: ${this.hueShift}°`);
-    console.log(`📊 Image cache status: ${this.imageCache.size} loaded, ${this.failedImages.size} failed`);
   }
 
   /**
@@ -58,19 +47,16 @@ export class CardRenderer {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => {
-        console.log(`✅ Successfully loaded image: ${imagePath}`);
         this.imageCache.set(imagePath, img);
         this.loadingImages.delete(imagePath);
         resolve(img);
       };
       img.onerror = () => {
-        console.error(`❌ Failed to load image: ${imagePath}`);
         this.loadingImages.delete(imagePath);
         this.failedImages.add(imagePath);
         reject(new Error(`Failed to load image: ${imagePath}`));
       };
       img.src = imagePath;
-      console.log(`🔄 Loading image: ${imagePath}`);
     });
   }
 
@@ -122,22 +108,8 @@ export class CardRenderer {
         ctx.strokeRect(x, y, this.cardWidth, this.cardHeight);
       }
     } else if (hasImage && cardImage) {
-      // Apply hue shift filter if set
-      // NOTE: Canvas 2D ctx.filter support varies by browser
-      if (this.hueShift !== 0) {
-        const filterValue = `hue-rotate(${this.hueShift}deg)`;
-        ctx.filter = filterValue;
-        console.log(`Filter applied: ${ctx.filter} (set to: ${filterValue})`);
-      }
-
       // Draw the card image
       ctx.drawImage(cardImage, x, y, this.cardWidth, this.cardHeight);
-
-      // Reset filter for border drawing
-      if (this.hueShift !== 0) {
-        ctx.filter = 'none';
-        console.log(`Filter reset: ${ctx.filter}`);
-      }
 
       // Selection border overlay
       if (isSelected) {
@@ -147,7 +119,6 @@ export class CardRenderer {
       }
     } else {
       // Fallback to text placeholder
-      console.log(`Using fallback text for card:`, card.name, `(hasImage: ${card.image ? 'yes' : 'no'}, cached: ${this.imageCache.has(card.image)}, failed: ${this.failedImages.has(card.image)})`);
       ctx.fillStyle = isSelected ? this.selectedColor : this.defaultColor;
       ctx.fillRect(x, y, this.cardWidth, this.cardHeight);
 
@@ -362,18 +333,8 @@ export class CardRenderer {
         ctx.strokeRect(x, y, scaledWidth, scaledHeight);
       }
     } else if (hasImage && cardImage) {
-      // Apply hue shift filter if set
-      if (this.hueShift !== 0) {
-        ctx.filter = `hue-rotate(${this.hueShift}deg)`;
-      }
-
       // Draw the card image (scaled)
       ctx.drawImage(cardImage, x, y, scaledWidth, scaledHeight);
-
-      // Reset filter
-      if (this.hueShift !== 0) {
-        ctx.filter = 'none';
-      }
 
       // Selection border overlay
       if (isSelected) {

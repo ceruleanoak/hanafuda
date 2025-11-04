@@ -38,9 +38,6 @@ class Game {
     this.game.setOpponentKoikoiCallback(() => this.showOpponentKoikoiNotification());
     this.renderer = new Renderer(this.canvas);
 
-    // Initialize card hue shift from saved options
-    this.renderer.setCardHueShift(this.gameOptions.get('cardHueShift'));
-
     // Initialize 3D animation system (old wave demo)
     this.animation3DManager = new Animation3DManager();
     this.is3DAnimationActive = false; // Track if 3D animation demo is running
@@ -172,14 +169,6 @@ class Game {
         this.game.updateOptions(this.gameOptions);
         this.updateVariationsButtonState();
       }
-    });
-
-    // Hue shift slider - live preview as you drag
-    document.getElementById('card-hue-shift').addEventListener('input', (e) => {
-      const hueValue = parseInt(e.target.value);
-      document.getElementById('hue-shift-value').textContent = hueValue;
-      // Apply immediately for live preview
-      this.renderer.setCardHueShift(hueValue);
     });
 
     // Keyboard shortcuts
@@ -448,11 +437,6 @@ class Game {
     document.getElementById('moon-viewing-sake').value = options.moonViewingSakeMode;
     document.getElementById('animations-enabled').checked = options.animationsEnabled;
     document.getElementById('experimental-3d-animations').checked = options.experimental3DAnimations;
-    document.getElementById('card-hue-shift').value = options.cardHueShift;
-    document.getElementById('hue-shift-value').textContent = options.cardHueShift;
-
-    // Store original hue shift for cancel functionality
-    this.originalHueShift = options.cardHueShift;
 
     this.optionsModal.classList.add('show');
   }
@@ -461,10 +445,6 @@ class Game {
    * Hide options modal (cancel)
    */
   hideOptionsModal() {
-    // Restore original hue shift if user cancelled
-    if (this.originalHueShift !== undefined) {
-      this.renderer.setCardHueShift(this.originalHueShift);
-    }
     this.optionsModal.classList.remove('show');
   }
 
@@ -480,17 +460,13 @@ class Game {
       viewingSakeMode: document.getElementById('viewing-sake').value,
       moonViewingSakeMode: document.getElementById('moon-viewing-sake').value,
       animationsEnabled: document.getElementById('animations-enabled').checked,
-      experimental3DAnimations: document.getElementById('experimental-3d-animations').checked,
-      cardHueShift: parseInt(document.getElementById('card-hue-shift').value)
+      experimental3DAnimations: document.getElementById('experimental-3d-animations').checked
     };
 
     this.gameOptions.update(newOptions);
 
     // Update game options
     this.game.updateOptions(this.gameOptions);
-
-    // Update card renderer hue shift
-    this.renderer.setCardHueShift(newOptions.cardHueShift);
 
     // Update 3D system flag
     this.use3DSystem = newOptions.experimental3DAnimations;
@@ -514,8 +490,6 @@ class Game {
   resetOptions() {
     if (confirm('Reset all options to defaults?')) {
       this.gameOptions.reset();
-      // Update renderer with default values
-      this.renderer.setCardHueShift(0);
       // Update game options
       this.game.updateOptions(this.gameOptions);
       // Update help mode
@@ -1344,6 +1318,7 @@ class Game {
           helpMode: this.helpMode,
           hoverX: this.hoverX,
           hoverY: this.hoverY,
+          isModalVisible: this.koikoiModal.classList.contains('show'),
           animation3DManager: this.is3DAnimationActive ? this.animation3DManager : null,
           card3DManager: this.use3DSystem ? this.card3DManager : null
         };

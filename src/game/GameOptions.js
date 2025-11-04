@@ -23,7 +23,6 @@ export class GameOptions {
       helpMode: false,                    // Help highlighting
       tutorialShown: false,               // Has user seen tutorial bubble?
       animationsEnabled: true,            // Enable/disable card animations
-      cardHueShift: 0,                    // Hue shift for cards in degrees (0-360)
 
       // Experimental Features
       experimental3DAnimations: false     // Enable experimental 3D animation system

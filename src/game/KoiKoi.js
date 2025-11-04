@@ -208,6 +208,14 @@ export class KoiKoi {
       return false;
     }
 
+    // Check for bomb variation automatic multi-play (4 cards total)
+    if (this.gameOptions && this.gameOptions.get('bombVariationEnabled')) {
+      const bombResult = this.checkAndExecuteBombPlay(card, 'player');
+      if (bombResult) {
+        return true;
+      }
+    }
+
     const fieldMatches = this.field.filter(fc => this.cardsMatch(card, fc));
 
     if (fieldMatches.length > 0) {
@@ -261,9 +269,12 @@ export class KoiKoi {
         return false;
       }
 
-      // Check if bomb variation is enabled for multi-card selection
+      // Check for bomb variation automatic multi-play (4 cards total)
       if (this.gameOptions && this.gameOptions.get('bombVariationEnabled')) {
-        return this.handleMultiCardSelection(card, owner);
+        const bombResult = this.checkAndExecuteBombPlay(card, 'player');
+        if (bombResult) {
+          return true;
+        }
       }
 
       // Standard single-card selection
@@ -275,37 +286,15 @@ export class KoiKoi {
 
     // Select field card to match with hand card
     if (this.phase === 'select_field') {
-      // Check if bomb variation is enabled and multiple cards selected
-      if (this.gameOptions && this.gameOptions.get('bombVariationEnabled') && this.selectedCards.length > 1) {
-        // Multi-card play mode
-        if (owner === 'player') {
-          // Clicking hand card again - handle multi-select
-          return this.handleMultiCardSelection(card, owner);
-        }
-
-        if (owner === 'field') {
-          // Clicking field card - execute multi-card play
-          const selectedHandCards = this.selectedCards.map(sc =>
-            this.playerHand.find(c => c.id === sc.id)
-          );
-          const month = selectedHandCards[0].month;
-
-          // Check if field card matches
-          if (card.month === month) {
-            this.playMultipleCards(selectedHandCards, card);
-            return true;
-          } else {
-            this.message = `Field card must match selected month (${month})`;
-            return false;
-          }
-        }
-      }
-
       // Standard single-card selection behavior
       // If clicking a different card from hand, switch selection
       if (owner === 'player' && this.selectedCards[0].id !== card.id) {
+        // Check for bomb play with the new card
         if (this.gameOptions && this.gameOptions.get('bombVariationEnabled')) {
-          return this.handleMultiCardSelection(card, owner);
+          const bombResult = this.checkAndExecuteBombPlay(card, 'player');
+          if (bombResult) {
+            return true;
+          }
         }
         this.selectedCards = [{ id: card.id, owner }];
         this.message = 'Select a matching card from the field (or click again to place)';
@@ -357,6 +346,116 @@ export class KoiKoi {
   }
 
   /**
+   * Check if bomb play conditions are met and execute automatically
+   * Bomb play requires exactly 4 cards of same month (hand + field)
+   * Returns true if bomb play was executed, false otherwise
+   */
+  checkAndExecuteBombPlay(card, player) {
+    const hand = player === 'player' ? this.playerHand : this.opponentHand;
+    const month = card.month;
+
+    // Count cards of this month in hand and field
+    const handCards = hand.filter(c => c.month === month);
+    const fieldCards = this.field.filter(c => c.month === month);
+
+    const totalCards = handCards.length + fieldCards.length;
+
+    // Bomb play only happens with exactly 4 cards
+    if (totalCards !== 4) {
+      return false;
+    }
+
+    // Determine scenario
+    const handCount = handCards.length;
+    const fieldCount = fieldCards.length;
+
+    // 1 hand + 3 field = celebrate the month (NOT a bomb, handled by existing logic)
+    if (handCount === 1 && fieldCount === 3) {
+      return false; // Let normal celebrate logic handle this
+    }
+
+    // 2 hand + 2 field = 1 bomb OR 3 hand + 1 field = 2 bombs
+    if ((handCount === 2 && fieldCount === 2) || (handCount === 3 && fieldCount === 1)) {
+      this.executeAutoBombPlay(handCards, fieldCards, player);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Execute automatic bomb play
+   */
+  executeAutoBombPlay(handCards, fieldCards, player) {
+    const month = handCards[0].month;
+    const bombsToReturn = handCards.length - 1; // 2 cards = 1 bomb, 3 cards = 2 bombs
+
+    if (player === 'player') {
+      // Remove hand cards
+      handCards.forEach(hc => {
+        const idx = this.playerHand.findIndex(c => c.id === hc.id);
+        if (idx >= 0) this.playerHand.splice(idx, 1);
+      });
+
+      // Remove field cards
+      this.field = this.field.filter(c => c.month !== month);
+
+      // Add all 4 cards to captured
+      this.playerCaptured.push(...handCards, ...fieldCards);
+
+      // Add bomb cards back to hand
+      for (let i = 0; i < bombsToReturn; i++) {
+        this.playerHand.push(this.createBombCard());
+      }
+
+      this.message = `💣 Automatic Bomb! Captured ${handCards.length + fieldCards.length} ${month} cards, received ${bombsToReturn} bomb card${bombsToReturn > 1 ? 's' : ''}`;
+
+      // Clear selection
+      this.selectedCards = [];
+
+      // Update yaku and continue
+      this.updateYaku('player', true);
+      this.drawPhase();
+    } else {
+      // Opponent logic - show phase for visual feedback
+      this.phase = 'opponent_bomb';
+
+      // Store first card for display (represents the bomb play)
+      this.opponentPlayedCard = handCards[0];
+
+      this.message = `💣 Opponent Bomb! Playing ${handCards.length} ${month} cards...`;
+
+      // Brief delay to show the bomb play
+      setTimeout(() => {
+        // Remove hand cards
+        handCards.forEach(hc => {
+          const idx = this.opponentHand.findIndex(c => c.id === hc.id);
+          if (idx >= 0) this.opponentHand.splice(idx, 1);
+        });
+
+        // Remove field cards
+        this.field = this.field.filter(c => c.month !== month);
+
+        // Add all 4 cards to captured
+        this.opponentCaptured.push(...handCards, ...fieldCards);
+
+        // Add bomb cards back to hand
+        for (let i = 0; i < bombsToReturn; i++) {
+          this.opponentHand.push(this.createBombCard());
+        }
+
+        this.message = `💣 Opponent Bomb! Captured ${handCards.length + fieldCards.length} ${month} cards`;
+
+        // Clear played card display
+        this.opponentPlayedCard = null;
+
+        // Update yaku
+        this.updateYaku('opponent', true);
+      }, 1200);
+    }
+  }
+
+  /**
    * Create a bomb card (special pass card for bomb variation)
    */
   createBombCard() {
@@ -377,58 +476,6 @@ export class KoiKoi {
    */
   isBombCard(card) {
     return card && card.type === CARD_TYPES.BOMB;
-  }
-
-  /**
-   * Handle multi-card selection for bomb variation
-   */
-  handleMultiCardSelection(card, owner) {
-    // Check if card is already selected
-    const alreadySelected = this.selectedCards.some(sc => sc.id === card.id);
-
-    if (alreadySelected) {
-      // Deselect the card
-      this.selectedCards = this.selectedCards.filter(sc => sc.id !== card.id);
-
-      if (this.selectedCards.length === 0) {
-        this.phase = 'select_hand';
-        this.message = 'Select cards from your hand (same month for multi-play)';
-      } else {
-        this.phase = 'select_field';
-        const selectedHandCards = this.selectedCards.map(sc =>
-          this.playerHand.find(c => c.id === sc.id)
-        );
-        const month = selectedHandCards[0].month;
-        this.message = `${this.selectedCards.length} ${month} cards selected. Click another ${month} or click field to play.`;
-      }
-      return true;
-    }
-
-    // If no cards selected yet, select this one
-    if (this.selectedCards.length === 0) {
-      this.selectedCards = [{ id: card.id, owner }];
-      this.phase = 'select_field';
-      this.message = `${card.month} card selected. Click more ${card.month} cards for multi-play, or click field to play.`;
-      return true;
-    }
-
-    // Check if this card matches the month of already selected cards
-    const selectedHandCards = this.selectedCards.map(sc =>
-      this.playerHand.find(c => c.id === sc.id)
-    );
-    const selectedMonth = selectedHandCards[0].month;
-
-    if (card.month === selectedMonth) {
-      // Add to selection
-      this.selectedCards.push({ id: card.id, owner });
-      this.phase = 'select_field';
-      this.message = `${this.selectedCards.length} ${selectedMonth} cards selected. Click field to play or select more.`;
-      return true;
-    } else {
-      // Different month - show error
-      this.message = `Can only select cards from same month. Selected: ${selectedMonth}, clicked: ${card.month}`;
-      return false;
-    }
   }
 
   /**
@@ -504,48 +551,6 @@ export class KoiKoi {
       this.selectedCards = [];
       this.drawPhase();
     }
-  }
-
-  /**
-   * Play multiple cards at once (bomb variation)
-   */
-  playMultipleCards(handCards, fieldCard) {
-    const month = handCards[0].month;
-
-    // Find all matching field cards
-    const matchingFieldCards = this.field.filter(c => c.month === month);
-
-    // Remove hand cards from hand
-    handCards.forEach(hc => {
-      const idx = this.playerHand.findIndex(c => c.id === hc.id);
-      if (idx >= 0) this.playerHand.splice(idx, 1);
-    });
-
-    // Remove matching field cards from field
-    this.field = this.field.filter(c => c.month !== month);
-
-    // Add all cards to captured
-    this.playerCaptured.push(...handCards, ...matchingFieldCards);
-
-    // Calculate bomb cards needed: (cards played) - 1
-    const bombsNeeded = handCards.length - 1;
-
-    // Create and add bomb cards to hand
-    if (bombsNeeded > 0) {
-      for (let i = 0; i < bombsNeeded; i++) {
-        this.playerHand.push(this.createBombCard());
-      }
-      this.message = `💣 Multi-play! Captured ${handCards.length + matchingFieldCards.length} cards, received ${bombsNeeded} bomb card${bombsNeeded > 1 ? 's' : ''}`;
-    } else {
-      this.message = `Multi-play! Captured ${handCards.length + matchingFieldCards.length} cards`;
-    }
-
-    // Clear selection
-    this.selectedCards = [];
-
-    // Update yaku and continue
-    this.updateYaku('player', true); // Defer decision during hand phase
-    this.drawPhase();
   }
 
   /**
@@ -681,20 +686,23 @@ export class KoiKoi {
           this.phase = 'celebrate';
           this.message = `🎉 Celebrate! Drew ${drawnCard.name} - All 4 ${drawnCard.month} cards captured!`;
 
+          // Delay state update so both drawn card AND field cards are visible together
           setTimeout(() => {
+            // Update captures after showing both cards
             this.field = this.field.filter(c => c.month !== drawnCard.month);
             this.playerCaptured.push(drawnCard, ...sameMonthOnField);
-            this.drawnCard = null;
-
-            // Check for koi-koi decision after drawn card capture
             this.checkForKoikoiDecision('player');
 
             // Don't continue if waiting for koi-koi decision
             if (this.koikoiState.waitingForDecision) {
-              this.koikoiState.resumeAction = 'endTurn';
+              this.koikoiState.resumeAction = () => {
+                this.drawnCard = null;
+                this.endTurn();
+              };
               return;
             }
 
+            this.drawnCard = null;
             this.endTurn();
           }, 3600); // Twice as long as regular draw
         } else {
@@ -702,22 +710,26 @@ export class KoiKoi {
           this.phase = 'show_drawn';
           this.message = `Drew ${drawnCard.name} - Matching automatically...`;
 
+          const fieldCard = matches[0];
+
+          // Delay state update so both drawn card AND field card are visible together
           setTimeout(() => {
-            const fieldCard = matches[0];
+            // Update captures after showing both cards
             const fieldIndex = this.field.findIndex(c => c.id === fieldCard.id);
             this.field.splice(fieldIndex, 1);
             this.playerCaptured.push(drawnCard, fieldCard);
-            this.drawnCard = null;
-
-            // Check for koi-koi decision after drawn card capture
             this.checkForKoikoiDecision('player');
 
             // Don't continue if waiting for koi-koi decision
             if (this.koikoiState.waitingForDecision) {
-              this.koikoiState.resumeAction = 'endTurn';
+              this.koikoiState.resumeAction = () => {
+                this.drawnCard = null;
+                this.endTurn();
+              };
               return;
             }
 
+            this.drawnCard = null;
             this.endTurn();
           }, 1800);
         }
@@ -730,20 +742,23 @@ export class KoiKoi {
           this.phase = 'celebrate';
           this.message = `🎉 Celebrate! Drew ${drawnCard.name} - All 4 ${drawnCard.month} cards captured!`;
 
+          // Delay state update so both drawn card AND field cards are visible together
           setTimeout(() => {
+            // Update captures after showing all cards
             this.field = this.field.filter(c => c.month !== drawnCard.month);
             this.playerCaptured.push(drawnCard, ...sameMonthOnField);
-            this.drawnCard = null;
-
-            // Check for koi-koi decision after drawn card capture
             this.checkForKoikoiDecision('player');
 
             // Don't continue if waiting for koi-koi decision
             if (this.koikoiState.waitingForDecision) {
-              this.koikoiState.resumeAction = 'endTurn';
+              this.koikoiState.resumeAction = () => {
+                this.drawnCard = null;
+                this.endTurn();
+              };
               return;
             }
 
+            this.drawnCard = null;
             this.endTurn();
           }, 3600);
         } else {
@@ -1025,7 +1040,10 @@ export class KoiKoi {
       const resumeAction = this.koikoiState.resumeAction;
       this.koikoiState.resumeAction = null;
 
-      if (resumeAction === 'drawPhase') {
+      if (typeof resumeAction === 'function') {
+        // New format: resumeAction is a function
+        resumeAction();
+      } else if (resumeAction === 'drawPhase') {
         this.drawPhase();
       } else if (resumeAction === 'endTurn') {
         this.endTurn();
@@ -1074,12 +1092,44 @@ export class KoiKoi {
   }
 
   /**
-   * Opponent AI turn - prioritizes matches
+   * Opponent AI turn - prioritizes matches and automatic bomb play
    */
   opponentTurn() {
     if (this.opponentHand.length === 0 || this.deck.isEmpty()) {
       this.endRound();
       return;
+    }
+
+    // Check for bomb cards first - play them immediately
+    const bombCardIndex = this.opponentHand.findIndex(c => this.isBombCard(c));
+    if (bombCardIndex >= 0) {
+      const bombCard = this.opponentHand[bombCardIndex];
+      this.phase = 'opponent_playing';
+      this.opponentPlayedCard = bombCard;
+      this.message = `Opponent plays bomb card...`;
+
+      setTimeout(() => {
+        this.opponentHand.splice(bombCardIndex, 1);
+        this.message = '💣 Opponent played bomb card - discarded';
+        this.opponentPlayedCard = null;
+        this.opponentDrawPhase();
+      }, 1200);
+      return;
+    }
+
+    // Check for automatic bomb play (4 cards total) if bomb variation enabled
+    if (this.gameOptions && this.gameOptions.get('bombVariationEnabled')) {
+      for (let i = 0; i < this.opponentHand.length; i++) {
+        const handCard = this.opponentHand[i];
+        const bombResult = this.checkAndExecuteBombPlay(handCard, 'opponent');
+        if (bombResult) {
+          // Bomb play was executed, now continue to draw phase
+          setTimeout(() => {
+            this.opponentDrawPhase();
+          }, 1200);
+          return;
+        }
+      }
     }
 
     // Smart AI: Look for cards that have matches first
@@ -1199,20 +1249,23 @@ export class KoiKoi {
           this.phase = 'opponent_celebrate';
           this.message = `🎉 Opponent Celebrates! Drew ${drawnCard.name} - All 4 ${drawnCard.month} cards captured!`;
 
+          // Delay state update so both drawn card AND field cards are visible together
           setTimeout(() => {
+            // Update captures after showing both cards
             this.field = this.field.filter(c => c.month !== drawnCard.month);
             this.opponentCaptured.push(drawnCard, ...sameMonthOnField);
-            this.drawnCard = null;
-
-            // Check for koi-koi decision after drawn card capture
             this.checkForKoikoiDecision('opponent');
 
             // Don't continue if waiting for koi-koi decision
             if (this.koikoiState.waitingForDecision) {
-              this.koikoiState.resumeAction = 'endTurn';
+              this.koikoiState.resumeAction = () => {
+                this.drawnCard = null;
+                this.endTurn();
+              };
               return;
             }
 
+            this.drawnCard = null;
             this.endTurn();
           }, 3600);
         } else {
@@ -1220,25 +1273,28 @@ export class KoiKoi {
           this.phase = 'opponent_drawn';
           this.message = `Opponent drew ${drawnCard.name} - Matching...`;
 
+          const bestMatch = drawnMatches.reduce((best, current) =>
+            current.points > best.points ? current : best
+          );
+
+          // Delay state update so both drawn card AND field card are visible together
           setTimeout(() => {
-            // Normal 2-card capture - prioritize high-value matches
-            const bestMatch = drawnMatches.reduce((best, current) =>
-              current.points > best.points ? current : best
-            );
+            // Update captures after showing both cards
             const fieldIndex = this.field.findIndex(c => c.id === bestMatch.id);
             this.field.splice(fieldIndex, 1);
             this.opponentCaptured.push(drawnCard, bestMatch);
-            this.drawnCard = null;
-
-            // Check for koi-koi decision after drawn card capture
             this.checkForKoikoiDecision('opponent');
 
             // Don't continue if waiting for koi-koi decision
             if (this.koikoiState.waitingForDecision) {
-              this.koikoiState.resumeAction = 'endTurn';
+              this.koikoiState.resumeAction = () => {
+                this.drawnCard = null;
+                this.endTurn();
+              };
               return;
             }
 
+            this.drawnCard = null;
             this.endTurn();
           }, 1800);
         }
@@ -1251,20 +1307,23 @@ export class KoiKoi {
           this.phase = 'opponent_celebrate';
           this.message = `🎉 Opponent Celebrates! Drew ${drawnCard.name} - All 4 ${drawnCard.month} cards captured!`;
 
+          // Delay state update so both drawn card AND field cards are visible together
           setTimeout(() => {
+            // Update captures after showing all cards
             this.field = this.field.filter(c => c.month !== drawnCard.month);
             this.opponentCaptured.push(drawnCard, ...sameMonthOnField);
-            this.drawnCard = null;
-
-            // Check for koi-koi decision after drawn card capture
             this.checkForKoikoiDecision('opponent');
 
             // Don't continue if waiting for koi-koi decision
             if (this.koikoiState.waitingForDecision) {
-              this.koikoiState.resumeAction = 'endTurn';
+              this.koikoiState.resumeAction = () => {
+                this.drawnCard = null;
+                this.endTurn();
+              };
               return;
             }
 
+            this.drawnCard = null;
             this.endTurn();
           }, 3600);
         } else {
