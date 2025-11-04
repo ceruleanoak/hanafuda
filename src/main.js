@@ -1279,6 +1279,7 @@ class Game {
           helpMode: this.helpMode,
           hoverX: this.hoverX,
           hoverY: this.hoverY,
+          isModalVisible: this.koikoiModal.classList.contains('show'),
           animation3DManager: this.is3DAnimationActive ? this.animation3DManager : null
         });
       } catch (err) {

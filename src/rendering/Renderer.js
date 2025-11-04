@@ -116,7 +116,7 @@ export class Renderer {
    * @param {Object} options - Render options (helpMode, hoverX, hoverY)
    */
   render(gameState, animatingCards = [], options = {}) {
-    const { helpMode = false, hoverX = -1, hoverY = -1, animation3DManager = null } = options;
+    const { helpMode = false, hoverX = -1, hoverY = -1, isModalVisible = false, animation3DManager = null } = options;
 
     this.clear();
     this.drawBackground();
@@ -241,8 +241,8 @@ export class Renderer {
       this.draw3DAnimatedCards(animation3DManager);
     }
 
-    // Check for hover on deck and show all cards grid
-    if (hoverX >= 0 && hoverY >= 0) {
+    // Check for hover on deck and show all cards grid (only if no modal is visible)
+    if (hoverX >= 0 && hoverY >= 0 && !isModalVisible) {
       const deckX = margin;
       const deckY = zones.deck;
       if (this.cardRenderer.isPointInCard(hoverX, hoverY, deckX, deckY)) {
