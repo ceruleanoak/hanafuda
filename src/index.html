@@ -19,6 +19,7 @@
         <button id="help-btn" title="Highlight matchable cards">Help</button>
         <button id="variations-btn" title="Toggle game variations">💣</button>
         <button id="options-btn" title="Game options and rules">Options</button>
+        <button id="test-3d-btn" title="Test 3D wave animation">🌊 Wave</button>
         <button id="new-game-btn">New Game</button>
       </div>
     </header>
@@ -147,17 +148,24 @@
               <div class="variation-header">
                 <span class="variation-emoji">💣</span>
                 <h3>Bomb Variation</h3>
-                <span class="variation-badge">🚧 In Development</span>
+                <span class="variation-badge variation-badge-working">✅ Working</span>
               </div>
               <p class="variation-description">
-                <strong>Vision:</strong> Play multiple matching cards simultaneously. Receive "bomb cards" (pass cards) to maintain balance. Example: Play 2 matching cards → capture all → receive 1 bomb card back.
+                <strong>How it works:</strong> Play multiple matching cards simultaneously by selecting them in your hand. Receive "bomb cards" (pass cards) to maintain hand balance.
+              </p>
+              <p class="variation-how-to">
+                <strong>Instructions:</strong><br>
+                1. Select 2+ cards of the same month from your hand<br>
+                2. Click a matching field card to play all selected cards<br>
+                3. Receive (N-1) bomb cards back (e.g., play 2 cards → get 1 bomb)<br>
+                4. Bomb cards discard when played (free pass)
               </p>
               <p class="variation-status">
-                <strong>Current Status:</strong> Infrastructure ready. Bomb card type added and basic handling implemented. Multi-card selection UI coming in future update.
+                <strong>Note:</strong> Players start with 10 cards each (instead of 8) when this variation is enabled. Game resets when toggled.
               </p>
               <label class="variation-toggle">
                 <input type="checkbox" id="bomb-variation-enabled">
-                <span class="toggle-label">Enable (Experimental)</span>
+                <span class="toggle-label">Enable</span>
               </label>
             </div>
           </div>

@@ -390,12 +390,29 @@ footer {
   white-space: nowrap;
 }
 
+.variation-badge-working {
+  background: linear-gradient(135deg, #4caf50 0%, #45a049 100%) !important;
+  color: #fff !important;
+}
+
 .variation-item .variation-description {
   color: #ccc;
   font-size: 0.9rem;
   line-height: 1.5;
   margin-bottom: 0.75rem;
   text-align: left;
+}
+
+.variation-item .variation-how-to {
+  color: #ccc;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  margin-bottom: 0.75rem;
+  text-align: left;
+  padding: 0.75rem;
+  background: rgba(78, 205, 196, 0.1);
+  border-left: 3px solid #4ecdc4;
+  border-radius: 4px;
 }
 
 .variation-item .variation-status {

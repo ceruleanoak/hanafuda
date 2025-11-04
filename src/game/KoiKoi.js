@@ -128,15 +128,18 @@ export class KoiKoi {
   }
 
   /**
-   * Initial deal - 8 cards to field, 8 to each player
+   * Initial deal - 8 cards to field, 8 to each player (10 each if bomb variation)
    */
   deal() {
-    // Deal 8 cards to field
+    // Determine hand size based on bomb variation
+    const handSize = (this.gameOptions && this.gameOptions.get('bombVariationEnabled')) ? 10 : 8;
+
+    // Deal 8 cards to field (always 8)
     this.field = this.deck.drawMultiple(8);
 
-    // Deal 8 cards to each player
-    this.playerHand = this.deck.drawMultiple(8);
-    this.opponentHand = this.deck.drawMultiple(8);
+    // Deal cards to each player (8 or 10 depending on variation)
+    this.playerHand = this.deck.drawMultiple(handSize);
+    this.opponentHand = this.deck.drawMultiple(handSize);
 
     // Check if player has a card that would complete a 4-card capture
     const celebrateMonth = this.checkHandForFourCardCapture('player');
@@ -258,6 +261,12 @@ export class KoiKoi {
         return false;
       }
 
+      // Check if bomb variation is enabled for multi-card selection
+      if (this.gameOptions && this.gameOptions.get('bombVariationEnabled')) {
+        return this.handleMultiCardSelection(card, owner);
+      }
+
+      // Standard single-card selection
       this.selectedCards = [{ id: card.id, owner }];
       this.phase = 'select_field';
       this.message = 'Select a matching card from the field (or click again to place)';
@@ -266,8 +275,38 @@ export class KoiKoi {
 
     // Select field card to match with hand card
     if (this.phase === 'select_field') {
+      // Check if bomb variation is enabled and multiple cards selected
+      if (this.gameOptions && this.gameOptions.get('bombVariationEnabled') && this.selectedCards.length > 1) {
+        // Multi-card play mode
+        if (owner === 'player') {
+          // Clicking hand card again - handle multi-select
+          return this.handleMultiCardSelection(card, owner);
+        }
+
+        if (owner === 'field') {
+          // Clicking field card - execute multi-card play
+          const selectedHandCards = this.selectedCards.map(sc =>
+            this.playerHand.find(c => c.id === sc.id)
+          );
+          const month = selectedHandCards[0].month;
+
+          // Check if field card matches
+          if (card.month === month) {
+            this.playMultipleCards(selectedHandCards, card);
+            return true;
+          } else {
+            this.message = `Field card must match selected month (${month})`;
+            return false;
+          }
+        }
+      }
+
+      // Standard single-card selection behavior
       // If clicking a different card from hand, switch selection
       if (owner === 'player' && this.selectedCards[0].id !== card.id) {
+        if (this.gameOptions && this.gameOptions.get('bombVariationEnabled')) {
+          return this.handleMultiCardSelection(card, owner);
+        }
         this.selectedCards = [{ id: card.id, owner }];
         this.message = 'Select a matching card from the field (or click again to place)';
         return true;
@@ -338,6 +377,58 @@ export class KoiKoi {
    */
   isBombCard(card) {
     return card && card.type === CARD_TYPES.BOMB;
+  }
+
+  /**
+   * Handle multi-card selection for bomb variation
+   */
+  handleMultiCardSelection(card, owner) {
+    // Check if card is already selected
+    const alreadySelected = this.selectedCards.some(sc => sc.id === card.id);
+
+    if (alreadySelected) {
+      // Deselect the card
+      this.selectedCards = this.selectedCards.filter(sc => sc.id !== card.id);
+
+      if (this.selectedCards.length === 0) {
+        this.phase = 'select_hand';
+        this.message = 'Select cards from your hand (same month for multi-play)';
+      } else {
+        this.phase = 'select_field';
+        const selectedHandCards = this.selectedCards.map(sc =>
+          this.playerHand.find(c => c.id === sc.id)
+        );
+        const month = selectedHandCards[0].month;
+        this.message = `${this.selectedCards.length} ${month} cards selected. Click another ${month} or click field to play.`;
+      }
+      return true;
+    }
+
+    // If no cards selected yet, select this one
+    if (this.selectedCards.length === 0) {
+      this.selectedCards = [{ id: card.id, owner }];
+      this.phase = 'select_field';
+      this.message = `${card.month} card selected. Click more ${card.month} cards for multi-play, or click field to play.`;
+      return true;
+    }
+
+    // Check if this card matches the month of already selected cards
+    const selectedHandCards = this.selectedCards.map(sc =>
+      this.playerHand.find(c => c.id === sc.id)
+    );
+    const selectedMonth = selectedHandCards[0].month;
+
+    if (card.month === selectedMonth) {
+      // Add to selection
+      this.selectedCards.push({ id: card.id, owner });
+      this.phase = 'select_field';
+      this.message = `${this.selectedCards.length} ${selectedMonth} cards selected. Click field to play or select more.`;
+      return true;
+    } else {
+      // Different month - show error
+      this.message = `Can only select cards from same month. Selected: ${selectedMonth}, clicked: ${card.month}`;
+      return false;
+    }
   }
 
   /**
@@ -413,6 +504,48 @@ export class KoiKoi {
       this.selectedCards = [];
       this.drawPhase();
     }
+  }
+
+  /**
+   * Play multiple cards at once (bomb variation)
+   */
+  playMultipleCards(handCards, fieldCard) {
+    const month = handCards[0].month;
+
+    // Find all matching field cards
+    const matchingFieldCards = this.field.filter(c => c.month === month);
+
+    // Remove hand cards from hand
+    handCards.forEach(hc => {
+      const idx = this.playerHand.findIndex(c => c.id === hc.id);
+      if (idx >= 0) this.playerHand.splice(idx, 1);
+    });
+
+    // Remove matching field cards from field
+    this.field = this.field.filter(c => c.month !== month);
+
+    // Add all cards to captured
+    this.playerCaptured.push(...handCards, ...matchingFieldCards);
+
+    // Calculate bomb cards needed: (cards played) - 1
+    const bombsNeeded = handCards.length - 1;
+
+    // Create and add bomb cards to hand
+    if (bombsNeeded > 0) {
+      for (let i = 0; i < bombsNeeded; i++) {
+        this.playerHand.push(this.createBombCard());
+      }
+      this.message = `💣 Multi-play! Captured ${handCards.length + matchingFieldCards.length} cards, received ${bombsNeeded} bomb card${bombsNeeded > 1 ? 's' : ''}`;
+    } else {
+      this.message = `Multi-play! Captured ${handCards.length + matchingFieldCards.length} cards`;
+    }
+
+    // Clear selection
+    this.selectedCards = [];
+
+    // Update yaku and continue
+    this.updateYaku('player', true); // Defer decision during hand phase
+    this.drawPhase();
   }
 
   /**

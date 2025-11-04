@@ -116,7 +116,7 @@ export class Renderer {
    * @param {Object} options - Render options (helpMode, hoverX, hoverY)
    */
   render(gameState, animatingCards = [], options = {}) {
-    const { helpMode = false, hoverX = -1, hoverY = -1, isModalVisible = false } = options;
+    const { helpMode = false, hoverX = -1, hoverY = -1, isModalVisible = false, animation3DManager = null } = options;
 
     this.clear();
     this.drawBackground();
@@ -235,6 +235,11 @@ export class Renderer {
 
     // Draw animating cards on top
     this.drawAnimatingCards(animatingCards);
+
+    // Draw 3D animated cards (if active)
+    if (animation3DManager) {
+      this.draw3DAnimatedCards(animation3DManager);
+    }
 
     // Check for hover on deck and show all cards grid (only if no modal is visible)
     if (hoverX >= 0 && hoverY >= 0 && !isModalVisible) {
@@ -853,5 +858,19 @@ export class Renderer {
     });
 
     this.ctx.restore();
+  }
+
+  /**
+   * Draw 3D animated cards
+   * @param {Animation3DManager} animation3DManager - The 3D animation manager
+   */
+  draw3DAnimatedCards(animation3DManager) {
+    // Get cards sorted by Z position (back to front)
+    const sortedCards = animation3DManager.getCardsSortedByZ();
+
+    // Draw each card
+    sortedCards.forEach(card3D => {
+      this.cardRenderer.drawCard3D(this.ctx, card3D, false, 1.0);
+    });
   }
 }

@@ -7,6 +7,7 @@ import { Renderer } from './rendering/Renderer.js';
 import { debugLogger } from './utils/DebugLogger.js';
 import { AnimationSequence } from './utils/AnimationSequence.js';
 import { GameOptions } from './game/GameOptions.js';
+import { Animation3DManager } from './utils/Animation3D.js';
 
 class Game {
   constructor() {
@@ -19,6 +20,7 @@ class Game {
     this.helpButton = document.getElementById('help-btn');
     this.variationsButton = document.getElementById('variations-btn');
     this.optionsButton = document.getElementById('options-btn');
+    this.test3DButton = document.getElementById('test-3d-btn');
     this.roundModal = document.getElementById('round-modal');
     this.variationsModal = document.getElementById('variations-modal');
     this.optionsModal = document.getElementById('options-modal');
@@ -37,6 +39,10 @@ class Game {
 
     // Initialize card hue shift from saved options
     this.renderer.setCardHueShift(this.gameOptions.get('cardHueShift'));
+
+    // Initialize 3D animation system
+    this.animation3DManager = new Animation3DManager();
+    this.is3DAnimationActive = false; // Track if 3D animation demo is running
 
     this.animatingCards = [];
     this.currentSequence = null;  // Current animation sequence playing
@@ -112,6 +118,9 @@ class Game {
     // Options button
     this.optionsButton.addEventListener('click', () => this.showOptionsModal());
 
+    // Test 3D animation button
+    this.test3DButton.addEventListener('click', () => this.startWaveAnimation());
+
     // Round selection buttons
     document.querySelectorAll('.round-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -143,6 +152,17 @@ class Game {
       this.gameOptions.set('bombVariationEnabled', e.target.checked);
       this.game.updateOptions(this.gameOptions);
       this.updateVariationsButtonState();
+
+      // Reset game when variation is toggled
+      if (confirm('Changing variations will reset the current game. Continue?')) {
+        this.showRoundModal();
+      } else {
+        // Revert the change
+        e.target.checked = !e.target.checked;
+        this.gameOptions.set('bombVariationEnabled', e.target.checked);
+        this.game.updateOptions(this.gameOptions);
+        this.updateVariationsButtonState();
+      }
     });
 
     // Hue shift slider - live preview as you drag
@@ -437,6 +457,11 @@ class Game {
     this.renderer.setCardHueShift(newOptions.cardHueShift);
 
     this.hideOptionsModal();
+
+    // Reset game when options change
+    if (confirm('Options saved. Reset the current game to apply changes?')) {
+      this.showRoundModal();
+    }
   }
 
   /**
@@ -1239,13 +1264,23 @@ class Game {
         debugLogger.logError('Error in updateAnimations', err);
       }
 
+      // Update 3D animations
+      if (this.is3DAnimationActive) {
+        try {
+          this.animation3DManager.update(now);
+        } catch (err) {
+          debugLogger.logError('Error in 3D animation update', err);
+        }
+      }
+
       // Render
       try {
         this.renderer.render(state, this.animatingCards, {
           helpMode: this.helpMode,
           hoverX: this.hoverX,
           hoverY: this.hoverY,
-          isModalVisible: this.koikoiModal.classList.contains('show')
+          isModalVisible: this.koikoiModal.classList.contains('show'),
+          animation3DManager: this.is3DAnimationActive ? this.animation3DManager : null
         });
       } catch (err) {
         debugLogger.logError('Error in render', err);
@@ -1359,6 +1394,116 @@ class Game {
       // Unexpected count, use fallback
       this.fallbackSimpleAnimation(cards, capturedZone);
     }
+  }
+
+  /**
+   * Start the 3D wave animation demo
+   */
+  startWaveAnimation() {
+    // Clear existing 3D cards
+    this.animation3DManager.clear();
+
+    // Get all cards from the current game state
+    const state = this.game.getState();
+    const allCards = [
+      ...state.field,
+      ...state.playerHand,
+      ...state.opponentHand
+    ];
+
+    // If no cards, use a test deck
+    if (allCards.length === 0) {
+      console.log('No cards in game, creating test deck for wave animation');
+      // Import cards data to create a test deck
+      import('./data/cards.js').then(({ CARDS }) => {
+        this.createWaveFromCards(CARDS.slice(0, 12)); // Use first 12 cards for demo
+      });
+      return;
+    }
+
+    this.createWaveFromCards(allCards);
+  }
+
+  /**
+   * Create wave animation from a set of cards
+   */
+  createWaveFromCards(cards) {
+    // Get canvas dimensions
+    const canvasWidth = this.renderer.displayWidth;
+    const canvasHeight = this.renderer.displayHeight;
+
+    // Calculate grid layout for cards
+    const cardsPerRow = Math.ceil(Math.sqrt(cards.length));
+    const rows = Math.ceil(cards.length / cardsPerRow);
+    const cardWidth = this.renderer.cardRenderer.cardWidth;
+    const cardHeight = this.renderer.cardRenderer.cardHeight;
+
+    // Spacing between cards
+    const spacingX = (canvasWidth - (cardsPerRow * cardWidth)) / (cardsPerRow + 1);
+    const spacingY = (canvasHeight - (rows * cardHeight)) / (rows + 1);
+
+    // Create Card3D instances for each card
+    cards.forEach((card, index) => {
+      const row = Math.floor(index / cardsPerRow);
+      const col = index % cardsPerRow;
+
+      // Calculate position
+      const x = spacingX + col * (cardWidth + spacingX) + cardWidth / 2;
+      const y = spacingY + row * (cardHeight + spacingY) + cardHeight / 2;
+      const z = 0; // Start at board level
+
+      const card3D = this.animation3DManager.addCard(card, x, y, z);
+
+      // Set initial face state to down
+      card3D.faceUp = 0;
+      card3D.targetFaceUp = 0;
+
+      // Add wave animation parameters
+      // Each card will animate with a delay based on its position
+      const delay = (col + row) * 0.1; // Wave propagates diagonally
+
+      // Schedule the animation after a delay
+      setTimeout(() => {
+        // Animate face up
+        card3D.setFaceUp(1);
+
+        // Add a bouncing motion (sine wave in Z)
+        const frequency = 2.0; // Oscillations per second
+        const amplitude = 50; // Height of bounce
+        const startTime = performance.now();
+
+        // Store animation data on the card
+        card3D._waveStartTime = startTime;
+        card3D._waveFrequency = frequency;
+        card3D._waveAmplitude = amplitude;
+        card3D._originalZ = z;
+
+        // Set up a continuous animation that will be updated in the update loop
+        const animateWave = () => {
+          if (!this.is3DAnimationActive) return;
+
+          const elapsed = (performance.now() - startTime) / 1000; // seconds
+          const wave = Math.sin(elapsed * frequency * Math.PI * 2);
+          card3D.z = Math.max(0, z + amplitude * (wave + 1) / 2);
+
+          requestAnimationFrame(animateWave);
+        };
+
+        animateWave();
+      }, delay * 1000);
+    });
+
+    // Activate 3D animation system
+    this.is3DAnimationActive = true;
+
+    console.log(`Wave animation started with ${cards.length} cards`);
+
+    // Stop the animation after 10 seconds
+    setTimeout(() => {
+      this.is3DAnimationActive = false;
+      this.animation3DManager.clear();
+      console.log('Wave animation completed');
+    }, 10000);
   }
 
   /**
