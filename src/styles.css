@@ -586,6 +586,20 @@ footer {
   line-height: 1.6;
 }
 
+.round-yaku-details .score-breakdown-detail {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-left: 3px solid #ffeb3b;
+  color: #ffeb3b;
+  font-size: 0.9rem;
+  line-height: 1.8;
+}
+
+.round-yaku-details .score-breakdown-detail strong {
+  color: #fff;
+}
+
 .round-yaku-details:empty {
   display: none;
 }
