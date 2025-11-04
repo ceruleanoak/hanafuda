@@ -1244,7 +1244,8 @@ class Game {
         this.renderer.render(state, this.animatingCards, {
           helpMode: this.helpMode,
           hoverX: this.hoverX,
-          hoverY: this.hoverY
+          hoverY: this.hoverY,
+          isModalVisible: this.koikoiModal.classList.contains('show')
         });
       } catch (err) {
         debugLogger.logError('Error in render', err);
