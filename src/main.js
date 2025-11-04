@@ -143,6 +143,17 @@ class Game {
       this.gameOptions.set('bombVariationEnabled', e.target.checked);
       this.game.updateOptions(this.gameOptions);
       this.updateVariationsButtonState();
+
+      // Reset game when variation is toggled
+      if (confirm('Changing variations will reset the current game. Continue?')) {
+        this.showRoundModal();
+      } else {
+        // Revert the change
+        e.target.checked = !e.target.checked;
+        this.gameOptions.set('bombVariationEnabled', e.target.checked);
+        this.game.updateOptions(this.gameOptions);
+        this.updateVariationsButtonState();
+      }
     });
 
     // Hue shift slider - live preview as you drag
@@ -437,6 +448,11 @@ class Game {
     this.renderer.setCardHueShift(newOptions.cardHueShift);
 
     this.hideOptionsModal();
+
+    // Reset game when options change
+    if (confirm('Options saved. Reset the current game to apply changes?')) {
+      this.showRoundModal();
+    }
   }
 
   /**
