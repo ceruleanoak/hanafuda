@@ -113,17 +113,20 @@ export class CardRenderer {
       }
     } else if (hasImage && cardImage) {
       // Apply hue shift filter if set
+      // NOTE: Canvas 2D ctx.filter support varies by browser
       if (this.hueShift !== 0) {
-        ctx.filter = `hue-rotate(${this.hueShift}deg)`;
-        console.log(`Applying hue-rotate(${this.hueShift}deg) to card:`, card.name);
+        const filterValue = `hue-rotate(${this.hueShift}deg)`;
+        ctx.filter = filterValue;
+        console.log(`Filter applied: ${ctx.filter} (set to: ${filterValue})`);
       }
 
       // Draw the card image
       ctx.drawImage(cardImage, x, y, this.cardWidth, this.cardHeight);
 
-      // Reset filter
+      // Reset filter for border drawing
       if (this.hueShift !== 0) {
         ctx.filter = 'none';
+        console.log(`Filter reset: ${ctx.filter}`);
       }
 
       // Selection border overlay
