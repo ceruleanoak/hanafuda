@@ -165,6 +165,43 @@ card.springDamping = 0.85;  // Higher = less oscillation
 
 ## Zone Layout System
 
+### Critical Design Constraint: Fixed Anchor Points
+
+**🚨 IMPORTANT**: When 3D animations are enabled, card rows must use **left-aligned (or fixed anchor) positioning**, NOT centered positioning.
+
+**Why?**
+- **Centered layouts**: Card positions depend on total count in row
+  - Adding/removing cards shifts the center point
+  - All cards shift horizontally to re-center
+  - Home positions become unpredictable during animations
+  - Tween targets change mid-flight → visual stuttering
+
+- **Left-aligned layouts**: Card positions calculated from fixed anchor
+  - Each card position only depends on its index and anchor point
+  - Adding card at end doesn't shift existing cards' homes
+  - Removing cards creates gap, remaining cards stay put
+  - Predictable tween destinations
+
+**Example Problem (Centered)**:
+```javascript
+// Before: 3 cards centered at x=400
+cards: [350, 400, 450]  // positions
+
+// After adding 4th card: center shifts
+cards: [327.5, 382.5, 437.5, 492.5]  // ALL positions changed!
+```
+
+**Solution (Left-Aligned)**:
+```javascript
+// Before: 3 cards from anchor x=100, spacing=115
+cards: [100, 215, 330]  // positions
+
+// After adding 4th card: only new card positioned
+cards: [100, 215, 330, 445]  // existing cards unchanged
+```
+
+**Implementation**: Zone configs must specify `anchorPoint` instead of `centerPoint` when animations are enabled.
+
 ### Layout Manager Architecture
 
 Each zone has a layout manager that calculates home positions:
@@ -174,6 +211,7 @@ class LayoutManager {
   // Calculate positions for all cards in a zone
   layout(cards, zoneConfig) {
     // Returns array of {x, y, z, index} for each card
+    // Uses anchorPoint + spacing (not centered)
   }
 }
 ```
@@ -195,37 +233,50 @@ class LayoutManager {
 ```javascript
 {
   type: 'grid',
-  position: {x: centerX, y: centerY},
+  anchorPoint: {x: 100, y: centerY},  // Fixed left anchor (NOT centered)
   layout: 'row',           // or 'grid' for >8 cards
-  spacing: 15,
+  spacing: 115,            // Card width (100) + gap (15)
   maxPerRow: 8,
   faceUp: 1,
   renderLayer: 3
 }
 ```
 
+**Note**: Field uses left-aligned row. With 8 cards max and spacing=115, rightmost card is at x = 100 + (7 × 115) = 905. Adjust anchor if this exceeds viewport.
+
 #### **Player Hand Zone**
 ```javascript
 {
-  type: 'arc',             // Cards in slight arc
-  position: {x: centerX, y: screenHeight - 100},
-  arcRadius: 800,          // Large radius = gentle curve
-  arcAngle: 30,            // Degrees of arc
-  spacing: 15,
+  type: 'row',             // Simple row (arc optional for polish)
+  anchorPoint: {x: 50, y: screenHeight - 100},  // Fixed left anchor
+  spacing: 115,
+  maxCards: 8,
   faceUp: 1,
   renderLayer: 5,          // Above field
   hoverLift: 20            // Z-lift on hover
 }
 ```
 
-#### **Opponent Hand Zone**
+**Alternative Arc Layout** (if desired for aesthetics):
 ```javascript
 {
   type: 'arc',
-  position: {x: centerX, y: 100},
-  arcRadius: 800,
-  arcAngle: 30,
-  spacing: 15,
+  anchorPoint: {x: 50, y: screenHeight - 100},  // Arc starts from left
+  arcRadius: 800,          // Large radius = gentle curve
+  arcSpan: 800,            // Horizontal span (not centered!)
+  spacing: 100,            // Arc length spacing
+  faceUp: 1,
+  renderLayer: 5
+}
+```
+
+#### **Opponent Hand Zone**
+```javascript
+{
+  type: 'row',
+  anchorPoint: {x: 50, y: 100},  // Fixed left anchor
+  spacing: 115,
+  maxCards: 8,
   faceUp: 0,               // Face down
   renderLayer: 5
 }
@@ -242,6 +293,57 @@ class LayoutManager {
   renderLayer: 2
 }
 ```
+
+### Layout Anchor Points: Aesthetic Trade-offs
+
+**Left-Aligned Positioning**:
+- ✅ Predictable animation targets
+- ✅ Stable positions during card addition/removal
+- ✅ No re-centering jitter
+- ⚠️ Cards may appear "bunched" to left side with few cards
+- ⚠️ Visual balance depends on viewport size
+
+**Centering Fallback (When Animations Disabled)**:
+- ✅ Better visual balance with any card count
+- ✅ Traditional card game aesthetic
+- ⚠️ Incompatible with smooth animations
+
+**Hybrid Approach (Recommended)**:
+```javascript
+// In GameOptions
+animationsEnabled: true → use anchorPoint layout
+animationsEnabled: false → use centered layout
+
+// Layout calculation
+function calculateCardPositions(zone, cards, useAnimations) {
+  if (useAnimations) {
+    // Fixed anchor, left-aligned
+    return cards.map((card, i) => ({
+      x: zone.anchorPoint.x + (i * zone.spacing),
+      y: zone.anchorPoint.y
+    }));
+  } else {
+    // Traditional centered layout
+    const totalWidth = cards.length * zone.spacing;
+    const startX = centerX - totalWidth / 2;
+    return cards.map((card, i) => ({
+      x: startX + (i * zone.spacing),
+      y: zone.anchorPoint.y
+    }));
+  }
+}
+```
+
+**Visual Compensation Options**:
+1. **Dynamic Anchor Adjustment**: Shift anchor point based on card count (still predictable)
+   ```javascript
+   anchorX = centerX - (cardCount * spacing) / 2; // Recalc only when count changes, not during anim
+   ```
+2. **Viewport-Relative Anchors**: Use percentage of screen width
+   ```javascript
+   anchorX = screenWidth * 0.1; // 10% from left edge
+   ```
+3. **Accept Left-Alignment**: Embrace the aesthetic; common in many digital card games
 
 ### Dynamic Layout Updates
 
