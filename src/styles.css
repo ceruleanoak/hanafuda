@@ -49,6 +49,7 @@ h1 {
 }
 
 #help-btn,
+#variations-btn,
 #options-btn,
 #new-game-btn {
   padding: 0.5rem 1.5rem;
@@ -61,7 +62,14 @@ h1 {
   transition: background 0.2s;
 }
 
+#variations-btn {
+  font-size: 1.5rem;
+  padding: 0.3rem 0.8rem;
+  line-height: 1;
+}
+
 #help-btn:hover,
+#variations-btn:hover,
 #options-btn:hover,
 #new-game-btn:hover {
   background: #45b8b0;
@@ -70,6 +78,20 @@ h1 {
 #help-btn.active {
   background: #ffeb3b;
   color: #000;
+}
+
+#variations-btn.active {
+  background: #ff6b6b;
+  animation: pulseVariation 1s infinite;
+}
+
+@keyframes pulseVariation {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
 }
 
 main {
@@ -302,6 +324,119 @@ footer {
 
 #options-cancel:hover {
   background: #777 !important;
+}
+
+/* Variations Modal */
+.variations-modal-content {
+  max-width: 600px;
+  min-width: 500px;
+  text-align: left;
+}
+
+.variations-description {
+  color: #aaa;
+  font-size: 0.95rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.variations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.variation-item {
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  border: 2px solid #333;
+  transition: border-color 0.3s;
+}
+
+.variation-item:has(input:checked) {
+  border-color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.variation-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.variation-emoji {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.variation-item h3 {
+  color: #4ecdc4;
+  margin: 0;
+  font-size: 1.3rem;
+  flex: 1;
+}
+
+.variation-badge {
+  background: linear-gradient(135deg, #ffeb3b 0%, #ffd700 100%);
+  color: #000;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.variation-item .variation-description {
+  color: #ccc;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin-bottom: 0.75rem;
+  text-align: left;
+}
+
+.variation-item .variation-status {
+  color: #aaa;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  margin-bottom: 1rem;
+  text-align: left;
+  font-style: italic;
+  padding: 0.75rem;
+  background: rgba(255, 235, 59, 0.1);
+  border-left: 3px solid #ffeb3b;
+  border-radius: 4px;
+}
+
+.variation-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  width: fit-content;
+}
+
+.variation-toggle input[type="checkbox"] {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  accent-color: #ff6b6b;
+}
+
+.variation-toggle .toggle-label {
+  font-weight: bold;
+  color: #fff;
+  font-size: 1rem;
+}
+
+.variation-toggle:hover {
+  background: rgba(0, 0, 0, 0.4);
 }
 
 /* Koi-Koi Decision Modal */

@@ -16,6 +16,9 @@ export class GameOptions {
       viewingSakeMode: 'always',         // 'always', 'never', 'requireOther'
       moonViewingSakeMode: 'always',     // 'always', 'never', 'requireOther'
 
+      // Game Variations
+      bombVariationEnabled: false,       // Enable bomb variation (multi-card play)
+
       // UI Settings
       helpMode: false,                    // Help highlighting
       tutorialShown: false,               // Has user seen tutorial bubble?

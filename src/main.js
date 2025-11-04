@@ -17,8 +17,10 @@ class Game {
     this.opponentScoreElement = document.getElementById('opponent-score');
     this.newGameButton = document.getElementById('new-game-btn');
     this.helpButton = document.getElementById('help-btn');
+    this.variationsButton = document.getElementById('variations-btn');
     this.optionsButton = document.getElementById('options-btn');
     this.roundModal = document.getElementById('round-modal');
+    this.variationsModal = document.getElementById('variations-modal');
     this.optionsModal = document.getElementById('options-modal');
     this.koikoiModal = document.getElementById('koikoi-modal');
     this.roundSummaryModal = document.getElementById('round-summary-modal');
@@ -71,6 +73,9 @@ class Game {
       this.helpButton.classList.add('active');
     }
 
+    // Initialize variations button state
+    this.updateVariationsButtonState();
+
     // Show tutorial bubble if first time user
     if (this.gameOptions.isFirstTime()) {
       setTimeout(() => this.showTutorial(), 1000);
@@ -101,6 +106,9 @@ class Game {
     // Help button
     this.helpButton.addEventListener('click', () => this.toggleHelpMode());
 
+    // Variations button
+    this.variationsButton.addEventListener('click', () => this.toggleVariationsModal());
+
     // Options button
     this.optionsButton.addEventListener('click', () => this.showOptionsModal());
 
@@ -126,6 +134,16 @@ class Game {
 
     // Tutorial bubble button
     document.getElementById('tutorial-got-it').addEventListener('click', () => this.hideTutorial());
+
+    // Variations modal buttons
+    document.getElementById('variations-close').addEventListener('click', () => this.hideVariationsModal());
+
+    // Variations checkbox - live toggle
+    document.getElementById('bomb-variation-enabled').addEventListener('change', (e) => {
+      this.gameOptions.set('bombVariationEnabled', e.target.checked);
+      this.game.updateOptions(this.gameOptions);
+      this.updateVariationsButtonState();
+    });
 
     // Hue shift slider - live preview as you drag
     document.getElementById('card-hue-shift').addEventListener('input', (e) => {
@@ -317,6 +335,49 @@ class Game {
   hideTutorial() {
     this.tutorialBubble.classList.add('hidden');
     this.gameOptions.markTutorialShown();
+  }
+
+  /**
+   * Toggle variations modal
+   */
+  toggleVariationsModal() {
+    if (this.variationsModal.classList.contains('show')) {
+      this.hideVariationsModal();
+    } else {
+      this.showVariationsModal();
+    }
+  }
+
+  /**
+   * Show variations modal
+   */
+  showVariationsModal() {
+    // Populate current values
+    const options = this.gameOptions.getAll();
+    document.getElementById('bomb-variation-enabled').checked = options.bombVariationEnabled;
+
+    this.variationsModal.classList.add('show');
+  }
+
+  /**
+   * Hide variations modal
+   */
+  hideVariationsModal() {
+    this.variationsModal.classList.remove('show');
+  }
+
+  /**
+   * Update variations button state (active if any variation is enabled)
+   */
+  updateVariationsButtonState() {
+    const options = this.gameOptions.getAll();
+    const anyVariationEnabled = options.bombVariationEnabled;
+
+    if (anyVariationEnabled) {
+      this.variationsButton.classList.add('active');
+    } else {
+      this.variationsButton.classList.remove('active');
+    }
   }
 
   /**

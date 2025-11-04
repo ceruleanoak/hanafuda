@@ -7,7 +7,8 @@ export const CARD_TYPES = {
   BRIGHT: 'bright',      // 光 (hikari) - 20 points
   ANIMAL: 'animal',      // 種 (tane) - 10 points
   RIBBON: 'ribbon',      // 短 (tan) - 5 points
-  CHAFF: 'chaff'         // カス (kasu) - 1 point
+  CHAFF: 'chaff',        // カス (kasu) - 1 point
+  BOMB: 'bomb'           // 💣 Bomb card (special pass card for bomb variation)
 };
 
 export const MONTHS = {
