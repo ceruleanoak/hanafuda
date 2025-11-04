@@ -1441,78 +1441,139 @@ class Game {
     const spacingX = (canvasWidth - (cardsPerRow * cardWidth)) / (cardsPerRow + 1);
     const spacingY = (canvasHeight - (rows * cardHeight)) / (rows + 1);
 
-    // Create Card3D instances for each card
-    cards.forEach((card, index) => {
-      const row = Math.floor(index / cardsPerRow);
-      const col = index % cardsPerRow;
-
-      // Calculate position
-      const x = spacingX + col * (cardWidth + spacingX) + cardWidth / 2;
-      const y = spacingY + row * (cardHeight + spacingY) + cardHeight / 2;
-      const z = 0; // Start at board level
-
-      const card3D = this.animation3DManager.addCard(card, x, y, z);
-
-      // Set initial face state to down
-      card3D.faceUp = 0;
-      card3D.targetFaceUp = 0;
-
-      // Add wave animation parameters
-      // Each card will animate with a delay based on its position
-      const delay = (col + row) * 0.1; // Wave propagates diagonally
-
-      // Schedule the animation after a delay
-      setTimeout(() => {
-        // Animate face up
-        card3D.setFaceUp(1);
-
-        // Add a bouncing motion (sine wave in Z) with circular motion in X,Y
-        const frequency = 2.0; // Oscillations per second
-        const amplitudeZ = 50; // Height of bounce
-        const amplitudeXY = 20; // Horizontal/vertical movement radius
-        const startTime = performance.now();
-
-        // Store animation data on the card
-        card3D._waveStartTime = startTime;
-        card3D._waveFrequency = frequency;
-        card3D._waveAmplitude = amplitudeZ;
-        card3D._originalX = x;
-        card3D._originalY = y;
-        card3D._originalZ = z;
-
-        // Set up a continuous animation that will be updated in the update loop
-        const animateWave = () => {
-          if (!this.is3DAnimationActive) return;
-
-          const elapsed = (performance.now() - startTime) / 1000; // seconds
-          const angle = elapsed * frequency * Math.PI * 2;
-
-          // Vertical bouncing (Z axis) - sine wave
-          const wave = Math.sin(angle);
-          card3D.z = Math.max(0, z + amplitudeZ * (wave + 1) / 2);
-
-          // Circular motion in X,Y plane - 90° out of phase
-          card3D.x = x + amplitudeXY * Math.cos(angle);
-          card3D.y = y + amplitudeXY * Math.sin(angle);
-
-          requestAnimationFrame(animateWave);
-        };
-
-        animateWave();
-      }, delay * 1000);
-    });
+    // Get deck position (draw pile)
+    const margin = 30;
+    const centerY = this.renderer.displayHeight / 2;
+    const deckX = margin + cardWidth / 2;
+    const deckY = centerY;
 
     // Activate 3D animation system
     this.is3DAnimationActive = true;
 
-    console.log(`Wave animation started with ${cards.length} cards`);
+    // PHASE 1: Create all cards at deck position and move to grid positions
+    const card3DArray = cards.map((card, index) => {
+      const row = Math.floor(index / cardsPerRow);
+      const col = index % cardsPerRow;
 
-    // Stop the animation after 10 seconds
+      // Calculate target grid position
+      const targetX = spacingX + col * (cardWidth + spacingX) + cardWidth / 2;
+      const targetY = spacingY + row * (cardHeight + spacingY) + cardHeight / 2;
+      const targetZ = 0;
+
+      // Start all cards at deck position, face down
+      const card3D = this.animation3DManager.addCard(card, deckX, deckY, 0);
+      card3D.faceUp = 0;
+      card3D.targetFaceUp = 0;
+
+      // Store target position for later
+      card3D._gridX = targetX;
+      card3D._gridY = targetY;
+      card3D._gridZ = targetZ;
+      card3D._gridIndex = index;
+
+      // Delay based on position for staggered movement
+      const moveDelay = (col + row) * 100; // milliseconds
+
+      setTimeout(() => {
+        // Move to grid position
+        card3D.setTarget(targetX, targetY, targetZ, 400); // 400 pixels/second
+      }, moveDelay);
+
+      return card3D;
+    });
+
+    // PHASE 2: Wait for all cards to reach position, then flip and start wave
+    const totalMoveTime = ((cardsPerRow - 1) + (rows - 1)) * 100 + 1000; // Last card delay + travel time
+
     setTimeout(() => {
-      this.is3DAnimationActive = false;
-      this.animation3DManager.clear();
-      console.log('Wave animation completed');
-    }, 10000);
+      console.log('All cards in position, starting wave animation');
+
+      card3DArray.forEach((card3D, index) => {
+        // Stop any residual movement
+        card3D.vx = 0;
+        card3D.vy = 0;
+        card3D.vz = 0;
+
+        // Ensure at exact grid position
+        card3D.x = card3D._gridX;
+        card3D.y = card3D._gridY;
+        card3D.z = card3D._gridZ;
+
+        const row = Math.floor(index / cardsPerRow);
+        const col = index % cardsPerRow;
+        const flipDelay = (col + row) * 50;
+
+        setTimeout(() => {
+          // Flip face up
+          card3D.setFaceUp(1);
+        }, flipDelay);
+      });
+
+      // Start wave motion after flip animations
+      const waveStartDelay = ((cardsPerRow - 1) + (rows - 1)) * 50 + 500;
+
+      setTimeout(() => {
+        console.log('Starting wave motion');
+
+        card3DArray.forEach(card3D => {
+          const frequency = 2.0;
+          const amplitudeZ = 50;
+          const amplitudeXY = 20;
+          const startTime = performance.now();
+          const homeX = card3D._gridX;
+          const homeY = card3D._gridY;
+          const homeZ = card3D._gridZ;
+
+          const animateWave = () => {
+            if (!this.is3DAnimationActive) return;
+
+            const elapsed = (performance.now() - startTime) / 1000;
+            const angle = elapsed * frequency * Math.PI * 2;
+
+            // Circular motion + vertical bounce
+            const wave = Math.sin(angle);
+            card3D.z = Math.max(0, homeZ + amplitudeZ * (wave + 1) / 2);
+            card3D.x = homeX + amplitudeXY * Math.cos(angle);
+            card3D.y = homeY + amplitudeXY * Math.sin(angle);
+
+            requestAnimationFrame(animateWave);
+          };
+
+          animateWave();
+        });
+
+        // PHASE 3: After wave, send cards back to deck asynchronously
+        setTimeout(() => {
+          console.log('Wave complete, returning cards to deck');
+
+          card3DArray.forEach((card3D, index) => {
+            // Random delay for async return
+            const returnDelay = Math.random() * 2000;
+
+            setTimeout(() => {
+              // Flip back face down first
+              card3D.setFaceUp(0);
+
+              // After flip completes, move to deck
+              setTimeout(() => {
+                card3D.setTarget(deckX, deckY, 0, 300);
+              }, 400);
+            }, returnDelay);
+          });
+
+          // Clean up after all cards have returned
+          setTimeout(() => {
+            this.is3DAnimationActive = false;
+            this.animation3DManager.clear();
+            console.log('Wave animation sequence complete');
+          }, 4000); // Give time for cards to return
+
+        }, 3000); // Wave duration
+      }, waveStartDelay);
+
+    }, totalMoveTime);
+
+    console.log(`Wave animation sequence started with ${cards.length} cards`);
   }
 
   /**
