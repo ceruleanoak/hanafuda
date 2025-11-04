@@ -681,22 +681,22 @@ export class KoiKoi {
           this.phase = 'celebrate';
           this.message = `🎉 Celebrate! Drew ${drawnCard.name} - All 4 ${drawnCard.month} cards captured!`;
 
-          // Immediately update captures and check for koi-koi
-          this.field = this.field.filter(c => c.month !== drawnCard.month);
-          this.playerCaptured.push(drawnCard, ...sameMonthOnField);
-          this.checkForKoikoiDecision('player');
-
-          // Don't continue if waiting for koi-koi decision
-          if (this.koikoiState.waitingForDecision) {
-            this.koikoiState.resumeAction = () => {
-              this.drawnCard = null;
-              this.endTurn();
-            };
-            return;
-          }
-
-          // Visual cleanup after delay
+          // Delay state update so both drawn card AND field cards are visible together
           setTimeout(() => {
+            // Update captures after showing both cards
+            this.field = this.field.filter(c => c.month !== drawnCard.month);
+            this.playerCaptured.push(drawnCard, ...sameMonthOnField);
+            this.checkForKoikoiDecision('player');
+
+            // Don't continue if waiting for koi-koi decision
+            if (this.koikoiState.waitingForDecision) {
+              this.koikoiState.resumeAction = () => {
+                this.drawnCard = null;
+                this.endTurn();
+              };
+              return;
+            }
+
             this.drawnCard = null;
             this.endTurn();
           }, 3600); // Twice as long as regular draw
@@ -705,24 +705,25 @@ export class KoiKoi {
           this.phase = 'show_drawn';
           this.message = `Drew ${drawnCard.name} - Matching automatically...`;
 
-          // Immediately update captures and check for koi-koi
           const fieldCard = matches[0];
-          const fieldIndex = this.field.findIndex(c => c.id === fieldCard.id);
-          this.field.splice(fieldIndex, 1);
-          this.playerCaptured.push(drawnCard, fieldCard);
-          this.checkForKoikoiDecision('player');
 
-          // Don't continue if waiting for koi-koi decision
-          if (this.koikoiState.waitingForDecision) {
-            this.koikoiState.resumeAction = () => {
-              this.drawnCard = null;
-              this.endTurn();
-            };
-            return;
-          }
-
-          // Visual cleanup after delay
+          // Delay state update so both drawn card AND field card are visible together
           setTimeout(() => {
+            // Update captures after showing both cards
+            const fieldIndex = this.field.findIndex(c => c.id === fieldCard.id);
+            this.field.splice(fieldIndex, 1);
+            this.playerCaptured.push(drawnCard, fieldCard);
+            this.checkForKoikoiDecision('player');
+
+            // Don't continue if waiting for koi-koi decision
+            if (this.koikoiState.waitingForDecision) {
+              this.koikoiState.resumeAction = () => {
+                this.drawnCard = null;
+                this.endTurn();
+              };
+              return;
+            }
+
             this.drawnCard = null;
             this.endTurn();
           }, 1800);
@@ -736,22 +737,22 @@ export class KoiKoi {
           this.phase = 'celebrate';
           this.message = `🎉 Celebrate! Drew ${drawnCard.name} - All 4 ${drawnCard.month} cards captured!`;
 
-          // Immediately update captures and check for koi-koi
-          this.field = this.field.filter(c => c.month !== drawnCard.month);
-          this.playerCaptured.push(drawnCard, ...sameMonthOnField);
-          this.checkForKoikoiDecision('player');
-
-          // Don't continue if waiting for koi-koi decision
-          if (this.koikoiState.waitingForDecision) {
-            this.koikoiState.resumeAction = () => {
-              this.drawnCard = null;
-              this.endTurn();
-            };
-            return;
-          }
-
-          // Visual cleanup after delay
+          // Delay state update so both drawn card AND field cards are visible together
           setTimeout(() => {
+            // Update captures after showing all cards
+            this.field = this.field.filter(c => c.month !== drawnCard.month);
+            this.playerCaptured.push(drawnCard, ...sameMonthOnField);
+            this.checkForKoikoiDecision('player');
+
+            // Don't continue if waiting for koi-koi decision
+            if (this.koikoiState.waitingForDecision) {
+              this.koikoiState.resumeAction = () => {
+                this.drawnCard = null;
+                this.endTurn();
+              };
+              return;
+            }
+
             this.drawnCard = null;
             this.endTurn();
           }, 3600);
@@ -1211,22 +1212,22 @@ export class KoiKoi {
           this.phase = 'opponent_celebrate';
           this.message = `🎉 Opponent Celebrates! Drew ${drawnCard.name} - All 4 ${drawnCard.month} cards captured!`;
 
-          // Immediately update captures and check for koi-koi
-          this.field = this.field.filter(c => c.month !== drawnCard.month);
-          this.opponentCaptured.push(drawnCard, ...sameMonthOnField);
-          this.checkForKoikoiDecision('opponent');
-
-          // Don't continue if waiting for koi-koi decision
-          if (this.koikoiState.waitingForDecision) {
-            this.koikoiState.resumeAction = () => {
-              this.drawnCard = null;
-              this.endTurn();
-            };
-            return;
-          }
-
-          // Visual cleanup after delay
+          // Delay state update so both drawn card AND field cards are visible together
           setTimeout(() => {
+            // Update captures after showing both cards
+            this.field = this.field.filter(c => c.month !== drawnCard.month);
+            this.opponentCaptured.push(drawnCard, ...sameMonthOnField);
+            this.checkForKoikoiDecision('opponent');
+
+            // Don't continue if waiting for koi-koi decision
+            if (this.koikoiState.waitingForDecision) {
+              this.koikoiState.resumeAction = () => {
+                this.drawnCard = null;
+                this.endTurn();
+              };
+              return;
+            }
+
             this.drawnCard = null;
             this.endTurn();
           }, 3600);
@@ -1235,26 +1236,27 @@ export class KoiKoi {
           this.phase = 'opponent_drawn';
           this.message = `Opponent drew ${drawnCard.name} - Matching...`;
 
-          // Immediately update captures and check for koi-koi
           const bestMatch = drawnMatches.reduce((best, current) =>
             current.points > best.points ? current : best
           );
-          const fieldIndex = this.field.findIndex(c => c.id === bestMatch.id);
-          this.field.splice(fieldIndex, 1);
-          this.opponentCaptured.push(drawnCard, bestMatch);
-          this.checkForKoikoiDecision('opponent');
 
-          // Don't continue if waiting for koi-koi decision
-          if (this.koikoiState.waitingForDecision) {
-            this.koikoiState.resumeAction = () => {
-              this.drawnCard = null;
-              this.endTurn();
-            };
-            return;
-          }
-
-          // Visual cleanup after delay
+          // Delay state update so both drawn card AND field card are visible together
           setTimeout(() => {
+            // Update captures after showing both cards
+            const fieldIndex = this.field.findIndex(c => c.id === bestMatch.id);
+            this.field.splice(fieldIndex, 1);
+            this.opponentCaptured.push(drawnCard, bestMatch);
+            this.checkForKoikoiDecision('opponent');
+
+            // Don't continue if waiting for koi-koi decision
+            if (this.koikoiState.waitingForDecision) {
+              this.koikoiState.resumeAction = () => {
+                this.drawnCard = null;
+                this.endTurn();
+              };
+              return;
+            }
+
             this.drawnCard = null;
             this.endTurn();
           }, 1800);
@@ -1268,22 +1270,22 @@ export class KoiKoi {
           this.phase = 'opponent_celebrate';
           this.message = `🎉 Opponent Celebrates! Drew ${drawnCard.name} - All 4 ${drawnCard.month} cards captured!`;
 
-          // Immediately update captures and check for koi-koi
-          this.field = this.field.filter(c => c.month !== drawnCard.month);
-          this.opponentCaptured.push(drawnCard, ...sameMonthOnField);
-          this.checkForKoikoiDecision('opponent');
-
-          // Don't continue if waiting for koi-koi decision
-          if (this.koikoiState.waitingForDecision) {
-            this.koikoiState.resumeAction = () => {
-              this.drawnCard = null;
-              this.endTurn();
-            };
-            return;
-          }
-
-          // Visual cleanup after delay
+          // Delay state update so both drawn card AND field cards are visible together
           setTimeout(() => {
+            // Update captures after showing all cards
+            this.field = this.field.filter(c => c.month !== drawnCard.month);
+            this.opponentCaptured.push(drawnCard, ...sameMonthOnField);
+            this.checkForKoikoiDecision('opponent');
+
+            // Don't continue if waiting for koi-koi decision
+            if (this.koikoiState.waitingForDecision) {
+              this.koikoiState.resumeAction = () => {
+                this.drawnCard = null;
+                this.endTurn();
+              };
+              return;
+            }
+
             this.drawnCard = null;
             this.endTurn();
           }, 3600);
