@@ -85,6 +85,16 @@ export class CardRenderer {
     // Apply opacity
     ctx.globalAlpha = opacity;
 
+    // Check if this is a bomb card
+    const isBombCard = card.isBomb || (card.type === 'bomb');
+
+    if (isBombCard) {
+      // Special rendering for bomb cards
+      this.drawBombCard(ctx, x, y, isSelected);
+      ctx.restore();
+      return;
+    }
+
     // Try to load image if available and not already loaded or failed
     if (card.image && !this.imageCache.has(card.image) && !this.loadingImages.has(card.image) && !this.failedImages.has(card.image)) {
       this.loadImage(card.image).catch(() => {
@@ -139,6 +149,40 @@ export class CardRenderer {
     }
 
     ctx.restore();
+  }
+
+  /**
+   * Draw bomb card (special pass card)
+   */
+  drawBombCard(ctx, x, y, isSelected) {
+    // Background gradient (black to dark red)
+    const gradient = ctx.createLinearGradient(x, y, x, y + this.cardHeight);
+    gradient.addColorStop(0, '#1a0000');
+    gradient.addColorStop(1, '#4d0000');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(x, y, this.cardWidth, this.cardHeight);
+
+    // Border (red if selected, dark red otherwise)
+    ctx.strokeStyle = isSelected ? '#ff0000' : '#800000';
+    ctx.lineWidth = isSelected ? 4 : 2;
+    ctx.strokeRect(x, y, this.cardWidth, this.cardHeight);
+
+    // Draw bomb emoji
+    ctx.font = '48px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('💣', x + this.cardWidth / 2, y + this.cardHeight / 2 - 10);
+
+    // Label text
+    ctx.font = 'bold 12px Arial';
+    ctx.fillStyle = '#ff6b6b';
+    ctx.fillText('BOMB', x + this.cardWidth / 2, y + this.cardHeight - 20);
+
+    // Subtitle
+    ctx.font = '9px Arial';
+    ctx.fillStyle = '#aaa';
+    ctx.fillText('(Pass)', x + this.cardWidth / 2, y + this.cardHeight - 8);
   }
 
   /**
