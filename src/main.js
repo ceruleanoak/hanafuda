@@ -50,7 +50,8 @@ class Game {
       this.renderer.displayWidth,
       this.renderer.displayHeight
     );
-    this.use3DSystem = true; // Toggle to enable/disable 3D system
+    // Read experimental 3D setting from options
+    this.use3DSystem = this.gameOptions.get('experimental3DAnimations');
 
     this.animatingCards = [];
     this.currentSequence = null;  // Current animation sequence playing
@@ -446,6 +447,7 @@ class Game {
     document.getElementById('viewing-sake').value = options.viewingSakeMode;
     document.getElementById('moon-viewing-sake').value = options.moonViewingSakeMode;
     document.getElementById('animations-enabled').checked = options.animationsEnabled;
+    document.getElementById('experimental-3d-animations').checked = options.experimental3DAnimations;
     document.getElementById('card-hue-shift').value = options.cardHueShift;
     document.getElementById('hue-shift-value').textContent = options.cardHueShift;
 
@@ -478,6 +480,7 @@ class Game {
       viewingSakeMode: document.getElementById('viewing-sake').value,
       moonViewingSakeMode: document.getElementById('moon-viewing-sake').value,
       animationsEnabled: document.getElementById('animations-enabled').checked,
+      experimental3DAnimations: document.getElementById('experimental-3d-animations').checked,
       cardHueShift: parseInt(document.getElementById('card-hue-shift').value)
     };
 
@@ -488,6 +491,14 @@ class Game {
 
     // Update card renderer hue shift
     this.renderer.setCardHueShift(newOptions.cardHueShift);
+
+    // Update 3D system flag
+    this.use3DSystem = newOptions.experimental3DAnimations;
+
+    // Update Card3DManager animation settings
+    if (this.card3DManager) {
+      this.card3DManager.setAnimationsEnabled(newOptions.animationsEnabled);
+    }
 
     this.hideOptionsModal();
 
@@ -509,6 +520,12 @@ class Game {
       this.game.updateOptions(this.gameOptions);
       // Update help mode
       this.helpMode = this.gameOptions.get('helpMode');
+      // Update 3D system flag
+      this.use3DSystem = this.gameOptions.get('experimental3DAnimations');
+      // Update Card3DManager
+      if (this.card3DManager) {
+        this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
+      }
       // Reload the form
       this.showOptionsModal();
     }
