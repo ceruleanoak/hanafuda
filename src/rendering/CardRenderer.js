@@ -320,15 +320,25 @@ export class CardRenderer {
 
     // During flip transition, apply perspective skew effect
     if (faceUp > 0.05 && faceUp < 0.95) {
-      // Calculate flip progress (0 at edges, 1 at middle)
-      const flipProgress = 1 - Math.abs(faceUp - 0.5) * 2;
+      // Calculate rotation angle from faceUp value
+      // faceUp goes from 0 (face down, 0°) to 1 (face up, 180°)
+      const angle = faceUp * Math.PI; // Convert to radians
 
-      // Apply horizontal scaling to simulate 3D flip
-      // At 0.5 (middle of flip), scale is minimal
-      const flipScale = 0.2 + (1 - flipProgress) * 0.8;
+      // Use cosine to calculate visible width - this properly emulates 3D rotation
+      // When looking down at a card and it rotates:
+      // - At 0° (face down): cos(0) = 1 (full width visible)
+      // - At 90° (edge-on): cos(90°) = 0 (no width visible)
+      // - At 180° (face up): cos(180°) = -1, abs = 1 (full width visible)
+      // Small rotations near 0° or 180° cause little visual change (derivative is small)
+      // Rotations near 90° cause rapid visual changes (derivative is large)
+      const flipScale = Math.abs(Math.cos(angle));
+
+      // Add a minimum scale so card doesn't completely disappear at edge-on view
+      const minScale = 0.05;
+      const finalScale = Math.max(minScale, flipScale);
 
       ctx.translate(card3D.x, card3D.y);
-      ctx.scale(flipScale, 1);
+      ctx.scale(finalScale, 1);
       ctx.translate(-card3D.x, -card3D.y);
     }
 
