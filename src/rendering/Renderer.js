@@ -76,14 +76,6 @@ export class Renderer {
   }
 
   /**
-   * Set hue shift for card rendering
-   * @param {number} degrees - Hue shift in degrees (0-360)
-   */
-  setCardHueShift(degrees) {
-    this.cardRenderer.setHueShift(degrees);
-  }
-
-  /**
    * Clear and draw background
    */
   drawBackground() {
