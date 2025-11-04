@@ -27,6 +27,8 @@ export class CardRenderer {
    */
   setHueShift(degrees) {
     this.hueShift = degrees % 360;
+    console.log(`🎨 Hue shift set to: ${this.hueShift}°`);
+    console.log(`📊 Image cache status: ${this.imageCache.size} loaded, ${this.failedImages.size} failed`);
   }
 
   /**
@@ -56,16 +58,19 @@ export class CardRenderer {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => {
+        console.log(`✅ Successfully loaded image: ${imagePath}`);
         this.imageCache.set(imagePath, img);
         this.loadingImages.delete(imagePath);
         resolve(img);
       };
       img.onerror = () => {
+        console.error(`❌ Failed to load image: ${imagePath}`);
         this.loadingImages.delete(imagePath);
         this.failedImages.add(imagePath);
         reject(new Error(`Failed to load image: ${imagePath}`));
       };
       img.src = imagePath;
+      console.log(`🔄 Loading image: ${imagePath}`);
     });
   }
 
@@ -110,6 +115,7 @@ export class CardRenderer {
       // Apply hue shift filter if set
       if (this.hueShift !== 0) {
         ctx.filter = `hue-rotate(${this.hueShift}deg)`;
+        console.log(`Applying hue-rotate(${this.hueShift}deg) to card:`, card.name);
       }
 
       // Draw the card image
@@ -128,6 +134,7 @@ export class CardRenderer {
       }
     } else {
       // Fallback to text placeholder
+      console.log(`Using fallback text for card:`, card.name, `(hasImage: ${card.image ? 'yes' : 'no'}, cached: ${this.imageCache.has(card.image)}, failed: ${this.failedImages.has(card.image)})`);
       ctx.fillStyle = isSelected ? this.selectedColor : this.defaultColor;
       ctx.fillRect(x, y, this.cardWidth, this.cardHeight);
 
