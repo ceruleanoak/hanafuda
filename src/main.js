@@ -1466,15 +1466,18 @@ class Game {
         // Animate face up
         card3D.setFaceUp(1);
 
-        // Add a bouncing motion (sine wave in Z)
+        // Add a bouncing motion (sine wave in Z) with circular motion in X,Y
         const frequency = 2.0; // Oscillations per second
-        const amplitude = 50; // Height of bounce
+        const amplitudeZ = 50; // Height of bounce
+        const amplitudeXY = 20; // Horizontal/vertical movement radius
         const startTime = performance.now();
 
         // Store animation data on the card
         card3D._waveStartTime = startTime;
         card3D._waveFrequency = frequency;
-        card3D._waveAmplitude = amplitude;
+        card3D._waveAmplitude = amplitudeZ;
+        card3D._originalX = x;
+        card3D._originalY = y;
         card3D._originalZ = z;
 
         // Set up a continuous animation that will be updated in the update loop
@@ -1482,8 +1485,15 @@ class Game {
           if (!this.is3DAnimationActive) return;
 
           const elapsed = (performance.now() - startTime) / 1000; // seconds
-          const wave = Math.sin(elapsed * frequency * Math.PI * 2);
-          card3D.z = Math.max(0, z + amplitude * (wave + 1) / 2);
+          const angle = elapsed * frequency * Math.PI * 2;
+
+          // Vertical bouncing (Z axis) - sine wave
+          const wave = Math.sin(angle);
+          card3D.z = Math.max(0, z + amplitudeZ * (wave + 1) / 2);
+
+          // Circular motion in X,Y plane - 90° out of phase
+          card3D.x = x + amplitudeXY * Math.cos(angle);
+          card3D.y = y + amplitudeXY * Math.sin(angle);
 
           requestAnimationFrame(animateWave);
         };
