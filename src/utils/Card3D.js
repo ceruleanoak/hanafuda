@@ -47,6 +47,12 @@ export class Card3D {
 
     this.scale = 1.0; // Uniform scale multiplier
     this.scaleVelocity = 0;
+    this.targetScale = 1.0; // Target scale for smooth transitions
+
+    // ===== HOVER STATE =====
+    this.isHovered = false; // Whether card is currently hovered
+    this.hoverScale = 1.15; // Scale multiplier when hovered (15% larger)
+    this.baseScale = 1.0; // Base scale when not hovered
 
     // ===== PRESENTATION STATE =====
     this.faceUp = 0; // Face orientation (0 = face down, 1 = face up)
@@ -122,6 +128,9 @@ export class Card3D {
 
     // Always update opacity
     this.updateOpacity(deltaTime);
+
+    // Always update scale (for hover animations)
+    this.updateScale(deltaTime);
   }
 
   /**
@@ -327,6 +336,25 @@ export class Card3D {
   }
 
   /**
+   * Update scale (for hover animations)
+   */
+  updateScale(deltaTime) {
+    const diff = this.targetScale - this.scale;
+    if (Math.abs(diff) > 0.001) {
+      // Quick spring-like animation for hover effect
+      this.scaleVelocity += diff * 15 * deltaTime;
+      this.scaleVelocity *= 0.7; // Damping
+      this.scale += this.scaleVelocity * deltaTime;
+
+      // Clamp to reasonable range
+      this.scale = Math.max(0.1, Math.min(3, this.scale));
+    } else {
+      this.scale = this.targetScale;
+      this.scaleVelocity = 0;
+    }
+  }
+
+  /**
    * Start tween animation to target
    * @param {Object} target - {x, y, z, rotation, scale, faceUp}
    * @param {number} duration - Duration in milliseconds
@@ -393,6 +421,15 @@ export class Card3D {
    */
   setFaceUp(faceUp) {
     this.targetFaceUp = Math.max(0, Math.min(1, faceUp));
+  }
+
+  /**
+   * Set hover state
+   */
+  setHovered(hovered) {
+    this.isHovered = hovered;
+    // Update target scale based on hover state
+    this.targetScale = hovered ? this.baseScale * this.hoverScale : this.baseScale;
   }
 
   /**
@@ -463,6 +500,9 @@ export class Card3D {
     this.rotation = 0;
     this.rotationVelocity = 0;
     this.scale = 1.0;
+    this.targetScale = 1.0;
+    this.baseScale = 1.0;
+    this.isHovered = false;
     this.faceUp = 0;
     this.targetFaceUp = 0;
     this.opacity = 1.0;
