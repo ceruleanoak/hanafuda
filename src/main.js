@@ -1557,227 +1557,89 @@ class Game {
   }
 
   /**
-   * Start the 3D wave animation demo
+   * Start the card showcase animation - displays all cards in a beautiful fan pattern
    */
   startWaveAnimation() {
-    // Clear existing 3D cards
-    this.animation3DManager.clear();
-
-    // Get all cards from the current game state
-    const state = this.game.getState();
-    const allCards = [
-      ...state.field,
-      ...state.playerHand,
-      ...state.opponentHand
-    ];
-
-    // If no cards, use a test deck
-    if (allCards.length === 0) {
-      console.log('No cards in game, creating test deck for wave animation');
-      // Import cards data to create a test deck
-      import('./data/cards.js').then(({ CARDS }) => {
-        this.createWaveFromCards(CARDS.slice(0, 12)); // Use first 12 cards for demo
-      });
+    if (!this.card3DManager) {
+      debugLogger.logError('Card3DManager not initialized', null);
       return;
     }
 
-    this.createWaveFromCards(allCards);
-  }
+    debugLogger.log('animation', '✨ Starting showcase animation', null);
 
-  /**
-   * Create wave animation from a set of cards
-   */
-  createWaveFromCards(cards) {
-    // Get canvas dimensions
-    const canvasWidth = this.renderer.displayWidth;
-    const canvasHeight = this.renderer.displayHeight;
+    // Get current game state
+    const state = this.game.getState();
 
-    // Calculate grid layout for cards
-    const cardsPerRow = Math.ceil(Math.sqrt(cards.length));
-    const rows = Math.ceil(cards.length / cardsPerRow);
-    const cardWidth = this.renderer.cardRenderer.cardWidth;
-    const cardHeight = this.renderer.cardRenderer.cardHeight;
-
-    // Spacing between cards
-    const spacingX = (canvasWidth - (cardsPerRow * cardWidth)) / (cardsPerRow + 1);
-    const spacingY = (canvasHeight - (rows * cardHeight)) / (rows + 1);
-
-    // Get deck position (draw pile)
-    const margin = 30;
-    const centerY = this.renderer.displayHeight / 2;
-    const deckX = margin + cardWidth / 2;
-    const deckY = centerY;
-
-    // Activate 3D animation system
-    this.is3DAnimationActive = true;
-
-    // Animation stage control
-    let currentStage = 'deploy'; // 'deploy' -> 'wave' -> 'return' -> 'done'
-    let waveAnimationLoops = []; // Store animation loop cancel functions
-
-    // STAGE 1: Create all cards at deck position and move to grid positions
-    const card3DArray = cards.map((card, index) => {
-      const row = Math.floor(index / cardsPerRow);
-      const col = index % cardsPerRow;
-
-      // Calculate target grid position
-      const targetX = spacingX + col * (cardWidth + spacingX) + cardWidth / 2;
-      const targetY = spacingY + row * (cardHeight + spacingY) + cardHeight / 2;
-      const targetZ = 0;
-
-      // Start all cards at deck position, face down
-      const card3D = this.animation3DManager.addCard(card, deckX, deckY, 0);
-      card3D.faceUp = 0;
-      card3D.targetFaceUp = 0;
-
-      // Store target position for later
-      card3D._gridX = targetX;
-      card3D._gridY = targetY;
-      card3D._gridZ = targetZ;
-      card3D._gridIndex = index;
-      card3D._waveActive = false;
-
-      // Delay based on position for staggered movement
-      const moveDelay = (col + row) * 100; // milliseconds
-
-      setTimeout(() => {
-        // Move to grid position
-        card3D.setTarget(targetX, targetY, targetZ, 400); // 400 pixels/second
-      }, moveDelay);
-
-      return card3D;
+    // Collect all Card3D objects from all zones
+    const allCard3Ds = [];
+    this.card3DManager.cards.forEach(card3D => {
+      allCard3Ds.push(card3D);
     });
 
-    console.log(`Wave animation started: deploying ${cards.length} cards from deck`);
+    if (allCard3Ds.length === 0) {
+      debugLogger.log('animation', 'No cards available for showcase', null);
+      return;
+    }
 
-    // Check for stage completion and advance
-    const checkStageCompletion = () => {
-      if (!this.is3DAnimationActive) return;
+    // Store original positions for return animation
+    allCard3Ds.forEach(card3D => {
+      card3D._showcaseOriginalZone = card3D.homeZone;
+      card3D._showcaseOriginalX = card3D.homePosition.x;
+      card3D._showcaseOriginalY = card3D.homePosition.y;
+    });
 
-      if (currentStage === 'deploy') {
-        // Check if all cards have arrived at their grid positions
-        const allArrived = card3DArray.every(card3D => {
-          const dx = Math.abs(card3D.x - card3D._gridX);
-          const dy = Math.abs(card3D.y - card3D._gridY);
-          const dz = Math.abs(card3D.z - card3D._gridZ);
-          return dx < 5 && dy < 5 && dz < 5 && !card3D.isAnimating();
-        });
+    // Calculate fan positions in a circular arc
+    const centerX = this.renderer.displayWidth / 2;
+    const centerY = this.renderer.displayHeight / 2;
+    const radius = Math.min(this.renderer.displayWidth, this.renderer.displayHeight) * 0.35;
+    const arcAngle = Math.PI * 1.2; // 216 degrees
+    const startAngle = -Math.PI / 2 - arcAngle / 2; // Start from top
 
-        if (allArrived) {
-          console.log('✓ Stage 1 complete: All cards arrived at grid positions');
-          currentStage = 'flip';
+    // Animate cards into fan formation
+    allCard3Ds.forEach((card3D, index) => {
+      const progress = allCard3Ds.length > 1 ? index / (allCard3Ds.length - 1) : 0.5;
+      const angle = startAngle + arcAngle * progress;
 
-          // Lock cards at exact positions
-          card3DArray.forEach(card3D => {
-            card3D.x = card3D._gridX;
-            card3D.y = card3D._gridY;
-            card3D.z = card3D._gridZ;
-            card3D.stop();
-          });
+      const targetX = centerX + Math.cos(angle) * radius;
+      const targetY = centerY + Math.sin(angle) * radius;
+      const targetZ = 20 + Math.sin(progress * Math.PI) * 30; // Arc in Z dimension
 
-          // Start flip animation with stagger
-          card3DArray.forEach((card3D, index) => {
-            const row = Math.floor(index / cardsPerRow);
-            const col = index % cardsPerRow;
-            const flipDelay = (col + row) * 50;
+      const delay = index * 30; // Stagger the animation
 
-            setTimeout(() => {
-              card3D.setFaceUp(1);
-            }, flipDelay);
-          });
-        }
-      } else if (currentStage === 'flip') {
-        // Check if all cards have finished flipping
-        const allFlipped = card3DArray.every(card3D =>
-          Math.abs(card3D.faceUp - card3D.targetFaceUp) < 0.01
-        );
+      setTimeout(() => {
+        card3D.tweenTo({
+          x: targetX,
+          y: targetY,
+          z: targetZ,
+          faceUp: 1,
+          rotation: angle + Math.PI / 2 // Cards face outward from center
+        }, 600, 'easeOutCubic');
+      }, delay);
+    });
 
-        if (allFlipped) {
-          console.log('✓ Stage 2 complete: All cards flipped face-up');
-          currentStage = 'wave';
+    // Return cards to original positions after showcase
+    const showcaseDuration = allCard3Ds.length * 30 + 600 + 2000; // Stagger + animation + hold time
 
-          // Start wave animation for each card
-          card3DArray.forEach(card3D => {
-            const frequency = 2.0;
-            const amplitudeZ = 50;
-            const amplitudeXY = 20;
-            const startTime = performance.now();
-            const homeX = card3D._gridX;
-            const homeY = card3D._gridY;
-            const homeZ = card3D._gridZ;
+    setTimeout(() => {
+      allCard3Ds.forEach((card3D, index) => {
+        const delay = index * 20; // Faster return stagger
 
-            card3D._waveActive = true;
+        setTimeout(() => {
+          // Restore original face-up state based on zone
+          const originalFaceUp = card3D._showcaseOriginalZone === 'opponentHand' ? 0 : 1;
 
-            const animateWave = () => {
-              if (!card3D._waveActive) return;
+          card3D.tweenTo({
+            x: card3D._showcaseOriginalX,
+            y: card3D._showcaseOriginalY,
+            z: 0,
+            faceUp: originalFaceUp,
+            rotation: 0
+          }, 500, 'easeInOutQuad');
+        }, delay);
+      });
 
-              const elapsed = (performance.now() - startTime) / 1000;
-              const angle = elapsed * frequency * Math.PI * 2;
-
-              // Each card oscillates around ITS OWN grid position
-              const wave = Math.sin(angle);
-              card3D.z = Math.max(0, homeZ + amplitudeZ * (wave + 1) / 2);
-              card3D.x = homeX + amplitudeXY * Math.cos(angle);
-              card3D.y = homeY + amplitudeXY * Math.sin(angle);
-
-              requestAnimationFrame(animateWave);
-            };
-
-            animateWave();
-          });
-
-          // Schedule end of wave phase
-          setTimeout(() => {
-            if (currentStage === 'wave') {
-              console.log('✓ Stage 3 complete: Wave animation finished');
-              currentStage = 'return';
-
-              // Stop all wave animations
-              card3DArray.forEach(card3D => {
-                card3D._waveActive = false;
-              });
-
-              // Start return with random delays
-              card3DArray.forEach((card3D, index) => {
-                const returnDelay = Math.random() * 2000;
-
-                setTimeout(() => {
-                  // Flip back face down first
-                  card3D.setFaceUp(0);
-
-                  // After flip completes, move to deck
-                  setTimeout(() => {
-                    card3D.setTarget(deckX, deckY, 0, 300);
-                  }, 500);
-                }, returnDelay);
-              });
-            }
-          }, 3000); // 3 seconds of wave
-        }
-      } else if (currentStage === 'return') {
-        // Check if all cards have returned to deck
-        const allReturned = card3DArray.every(card3D => {
-          const dx = Math.abs(card3D.x - deckX);
-          const dy = Math.abs(card3D.y - deckY);
-          return dx < 5 && dy < 5 && !card3D.isAnimating();
-        });
-
-        if (allReturned) {
-          console.log('✓ Stage 4 complete: All cards returned to deck');
-          currentStage = 'done';
-          this.is3DAnimationActive = false;
-          this.animation3DManager.clear();
-          console.log('Wave animation sequence complete');
-          return; // Stop checking
-        }
-      }
-
-      // Continue checking
-      requestAnimationFrame(checkStageCompletion);
-    };
-
-    // Start checking for stage completion
-    checkStageCompletion();
+      debugLogger.log('animation', '✨ Showcase animation complete', null);
+    }, showcaseDuration);
   }
 
   /**
