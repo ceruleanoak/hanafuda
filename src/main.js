@@ -5,9 +5,7 @@
 import { KoiKoi } from './game/KoiKoi.js';
 import { Renderer } from './rendering/Renderer.js';
 import { debugLogger } from './utils/DebugLogger.js';
-import { AnimationSequence } from './utils/AnimationSequence.js';
 import { GameOptions } from './game/GameOptions.js';
-import { Animation3DManager } from './utils/Animation3D.js';
 import { Card3DManager } from './utils/Card3DManager.js';
 
 class Game {
@@ -38,21 +36,12 @@ class Game {
     this.game.setOpponentKoikoiCallback(() => this.showOpponentKoikoiNotification());
     this.renderer = new Renderer(this.canvas);
 
-    // Initialize 3D animation system (old wave demo)
-    this.animation3DManager = new Animation3DManager();
-    this.is3DAnimationActive = false; // Track if 3D animation demo is running
-
-    // Initialize new Card3D system (real-time 3D rendering)
+    // Initialize Card3D system
     this.card3DManager = new Card3DManager(
       this.renderer.displayWidth,
       this.renderer.displayHeight
     );
-    // Read experimental 3D setting from options
-    this.use3DSystem = this.gameOptions.get('experimental3DAnimations');
 
-    this.animatingCards = [];
-    this.currentSequence = null;  // Current animation sequence playing
-    this.isAnimating = false;     // Block input during animations
     this.lastMessage = '';
     this.lastGameOverMessage = '';
     this.frameCount = 0;
@@ -196,151 +185,65 @@ class Game {
     this.statusElement.classList.remove('show');
 
     // Initialize Card3D system from game state
-    if (this.use3DSystem) {
-      this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
-      this.card3DManager.initializeFromGameState(this.game.getState());
-      debugLogger.log('3dCards', '✨ Card3D system initialized for new game', null);
-    }
+    this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
+    this.card3DManager.initializeFromGameState(this.game.getState());
+    debugLogger.log('3dCards', '✨ Card3D system initialized for new game', null);
   }
 
   handleClick(event) {
-    // Block input during animations
-    if (this.isAnimating) {
-      debugLogger.log('gameState', '🚫 Click blocked - animation playing', null);
-      return;
-    }
-
     const rect = this.canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
 
     const gameState = this.game.getState();
 
-    // Use 3D hit detection if 3D system is enabled
+    // Use 3D hit detection
     let result = null;
-    if (this.use3DSystem && this.card3DManager) {
-      const card3D = this.card3DManager.getCardAtPosition(x, y);
-      if (card3D) {
-        // Map zone back to owner
-        const zoneToOwnerMap = {
-          'playerHand': 'player',
-          'field': 'field',
-          'opponentHand': 'opponent'
-        };
-        const owner = zoneToOwnerMap[card3D.homeZone] || 'field';
-        result = { card: card3D.cardData, owner };
-      }
-    } else {
-      // Legacy 2D hit detection
-      result = this.renderer.getCardAtPosition(x, y, gameState);
+    const card3D = this.card3DManager.getCardAtPosition(x, y);
+    if (card3D) {
+      // Map zone back to owner
+      const zoneToOwnerMap = {
+        'playerHand': 'player',
+        'field': 'field',
+        'opponentHand': 'opponent'
+      };
+      const owner = zoneToOwnerMap[card3D.homeZone] || 'field';
+      result = { card: card3D.cardData, owner };
     }
 
     if (result) {
       const { card, owner } = result;
 
-      debugLogger.log('gameState', `Card clicked: ${card.name}`, {
-        owner,
-        hasRenderPosition: card._renderX !== undefined,
-        renderPosition: card._renderX !== undefined ?
-          `(${Math.round(card._renderX)}, ${Math.round(card._renderY)})` :
-          'not set'
-      });
-
-      // Store card position before state changes
-      if (card._renderX !== undefined && card._renderY !== undefined) {
-        card._lastRenderX = card._renderX;
-        card._lastRenderY = card._renderY;
-        debugLogger.log('animation', 'Captured card position for animation', {
-          card: card.name,
-          position: `(${Math.round(card._renderX)}, ${Math.round(card._renderY)})`
-        });
-      } else {
-        debugLogger.logAnimationWarning('Card clicked but has no render position', {
-          card: card.name,
-          owner
-        });
-      }
-
-      // Capture state LENGTHS before action (getState() returns references, not copies!)
-      const state = this.game.getState();
-      const beforeLengths = {
-        playerCaptured: state.playerCaptured.length,
-        opponentCaptured: state.opponentCaptured.length,
-        field: state.field.length,
-        playerHand: state.playerHand.length
-      };
-
-      debugLogger.log('gameState', `BEFORE selectCard - lengths captured`, {
-        playerCaptured: beforeLengths.playerCaptured,
-        opponentCaptured: beforeLengths.opponentCaptured,
-        field: beforeLengths.field
-      });
+      debugLogger.log('gameState', `Card clicked: ${card.name}`, { owner });
 
       const success = this.game.selectCard(card, owner);
 
       if (success) {
-        // Check if we should animate by comparing actual changes
-        const afterState = this.game.getState();
-
-        debugLogger.log('gameState', `AFTER selectCard - checking lengths`, {
-          playerCapturedBefore: beforeLengths.playerCaptured,
-          playerCapturedAfter: afterState.playerCaptured.length,
-          willTriggerAnimation: afterState.playerCaptured.length > beforeLengths.playerCaptured
-        });
-
-        this.handleGameStateChange(beforeLengths, afterState, card);
         this.updateUI();
       }
     }
   }
 
   handleDoubleClick(event) {
-    // Block input during animations
-    if (this.isAnimating) {
-      debugLogger.log('gameState', '🚫 Double-click blocked - animation playing', null);
-      return;
-    }
-
     const rect = this.canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
 
     const gameState = this.game.getState();
-    const result = this.renderer.getCardAtPosition(x, y, gameState);
 
-    if (result && result.owner === 'player' && gameState.phase === 'select_hand') {
-      const { card } = result;
+    // Use 3D hit detection
+    const card3D = this.card3DManager.getCardAtPosition(x, y);
+    if (card3D && card3D.homeZone === 'playerHand' && gameState.phase === 'select_hand') {
+      const card = card3D.cardData;
 
       debugLogger.log('gameState', `Card double-clicked (auto-match): ${card.name}`, {
-        owner: result.owner,
         phase: gameState.phase
       });
-
-      // Store card position before state changes
-      if (card._renderX !== undefined && card._renderY !== undefined) {
-        card._lastRenderX = card._renderX;
-        card._lastRenderY = card._renderY;
-        debugLogger.log('animation', 'Captured card position for auto-match animation', {
-          card: card.name,
-          position: `(${Math.round(card._renderX)}, ${Math.round(card._renderY)})`
-        });
-      }
-
-      // Capture state LENGTHS before action (getState() returns references, not copies!)
-      const state = this.game.getState();
-      const beforeLengths = {
-        playerCaptured: state.playerCaptured.length,
-        opponentCaptured: state.opponentCaptured.length,
-        field: state.field.length,
-        playerHand: state.playerHand.length
-      };
 
       // Auto-match if match exists
       const success = this.game.autoMatchCard(card);
 
       if (success) {
-        const afterState = this.game.getState();
-        this.handleGameStateChange(beforeLengths, afterState, card);
         this.updateUI();
       }
     }
@@ -1277,39 +1180,14 @@ class Game {
       const state = this.game.getState();
 
       // Update Card3D system
-      if (this.use3DSystem && this.card3DManager) {
-        try {
-          // Update physics and animations
-          this.card3DManager.update(now);
+      try {
+        // Update physics and animations
+        this.card3DManager.update(now);
 
-          // Synchronize with game state (detects card movements between zones)
-          this.card3DManager.synchronize(state);
-        } catch (err) {
-          debugLogger.logError('Error in Card3D system update', err);
-        }
-      }
-
-      // Check for state changes and trigger animations (only when not already animating)
-      if (!this.isAnimating && !this.use3DSystem) {
-        this.checkForStateChanges(state);
-      }
-
-      // Update legacy 2D animations
-      if (!this.use3DSystem) {
-        try {
-          this.updateAnimations(deltaTime);
-        } catch (err) {
-          debugLogger.logError('Error in updateAnimations', err);
-        }
-      }
-
-      // Update 3D wave demo animations (old system)
-      if (this.is3DAnimationActive) {
-        try {
-          this.animation3DManager.update(now);
-        } catch (err) {
-          debugLogger.logError('Error in 3D animation update', err);
-        }
+        // Synchronize with game state (detects card movements between zones)
+        this.card3DManager.synchronize(state);
+      } catch (err) {
+        debugLogger.logError('Error in Card3D system update', err);
       }
 
       // Render
@@ -1319,17 +1197,10 @@ class Game {
           hoverX: this.hoverX,
           hoverY: this.hoverY,
           isModalVisible: this.koikoiModal.classList.contains('show'),
-          animation3DManager: this.is3DAnimationActive ? this.animation3DManager : null,
-          card3DManager: this.use3DSystem ? this.card3DManager : null
+          card3DManager: this.card3DManager
         };
 
-        if (this.use3DSystem) {
-          // Use 3D rendering path
-          this.renderer.render(state, [], renderOptions);
-        } else {
-          // Use legacy 2D rendering path
-          this.renderer.render(state, this.animatingCards, renderOptions);
-        }
+        this.renderer.render(state, [], renderOptions);
       } catch (err) {
         debugLogger.logError('Error in render', err);
       }
@@ -1347,7 +1218,6 @@ class Game {
         debugLogger.log('gameState', '🎮 Game loop started', null);
       } else if (this.frameCount % 300 === 0) {
         debugLogger.log('gameState', `Game loop running (frame ${this.frameCount})`, {
-          animatingCards: this.animatingCards.length,
           phase: state.phase,
           deltaTime: Math.round(deltaTime)
         });

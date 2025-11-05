@@ -105,168 +105,15 @@ export class Renderer {
   /**
    * Main render function
    * @param {Object} gameState - Current game state
-   * @param {Array} animatingCards - Array of cards currently animating (legacy 2D system)
+   * @param {Array} _ - Unused (kept for backwards compatibility)
    * @param {Object} options - Render options (helpMode, hoverX, hoverY, isModalVisible, card3DManager)
    */
-  render(gameState, animatingCards = [], options = {}) {
-    const { helpMode = false, hoverX = -1, hoverY = -1, isModalVisible = false, animation3DManager = null, card3DManager = null } = options;
+  render(gameState, _ = [], options = {}) {
+    const { helpMode = false, hoverX = -1, hoverY = -1, isModalVisible = false, card3DManager = null } = options;
 
-    // If Card3DManager is provided, use new 3D rendering path
+    // Always use 3D rendering path
     if (card3DManager) {
       this.render3D(gameState, card3DManager, { helpMode, hoverX, hoverY, isModalVisible });
-      return;
-    }
-
-    // Otherwise, use legacy 2D rendering path
-
-    this.clear();
-    this.drawBackground();
-
-    // Create set of animating card IDs for quick lookup
-    const animatingCardIds = new Set(animatingCards.map(anim => anim.card.id));
-
-    const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
-    const spacing = 15;
-    const margin = 30;
-
-    // Calculate layout zones
-    const centerX = this.displayWidth / 2;
-    const centerY = this.displayHeight / 2;
-
-    // Define distinct zones for each area
-    const zones = {
-      opponentHand: margin + 10,
-      opponentCaptured: margin + 10,
-      field: centerY - cardHeight / 2,
-      playerHand: this.displayHeight - cardHeight - margin - 10,
-      playerCaptured: this.displayHeight - cardHeight - margin - 10,
-      deck: centerY - cardHeight / 2
-    };
-
-    // Draw opponent hand (top, face down)
-    if (gameState.opponentHand && gameState.opponentHand.length > 0) {
-      const visibleCards = gameState.opponentHand.filter(c => !animatingCardIds.has(c.id));
-      if (visibleCards.length > 0) {
-        this.drawCardRow(
-          visibleCards,
-          centerX,
-          zones.opponentHand,
-          [],
-          'opponent',
-          true // face down
-        );
-      }
-    }
-
-    // Draw field cards (center) - exclude animating cards
-    if (gameState.field && gameState.field.length > 0) {
-      const visibleCards = gameState.field.filter(c => !animatingCardIds.has(c.id));
-
-      // Highlight matching cards if in drawn card selection phase
-      const highlightedCards = gameState.phase === 'select_drawn_match'
-        ? gameState.drawnCardMatches.map(c => ({ id: c.id, owner: 'field' }))
-        : gameState.selectedCards;
-
-      if (visibleCards.length > 0) {
-        this.drawCardRow(
-          visibleCards,
-          centerX,
-          zones.field,
-          highlightedCards,
-          'field'
-        );
-      }
-    }
-
-    // Draw opponent played card (before they draw from deck)
-    if (gameState.opponentPlayedCard && gameState.phase === 'opponent_playing') {
-      const playedCardY = margin + 60;
-      this.drawOpponentPlayedCardHover(gameState.opponentPlayedCard, centerX, playedCardY);
-    }
-
-    // Draw drawn card hover area (if waiting for selection OR showing drawn card)
-    // Position it at TOP of screen to avoid covering field cards
-    if (gameState.drawnCard && (
-      gameState.phase === 'select_drawn_match' ||
-      gameState.phase === 'show_drawn' ||
-      gameState.phase === 'drawing' ||
-      gameState.phase === 'opponent_drawing' ||
-      gameState.phase === 'opponent_drawn'
-    )) {
-      // Draw at very top of screen (just below margin)
-      const drawnCardY = margin + 60;
-      this.drawDrawnCardHover(gameState.drawnCard, centerX, drawnCardY, gameState.phase);
-    }
-
-    // Draw player hand (bottom) - exclude animating cards
-    if (gameState.playerHand && gameState.playerHand.length > 0) {
-      const visibleCards = gameState.playerHand.filter(c => !animatingCardIds.has(c.id));
-      if (visibleCards.length > 0) {
-        this.drawCardRow(
-          visibleCards,
-          centerX,
-          zones.playerHand,
-          gameState.selectedCards,
-          'player'
-        );
-      }
-    }
-
-    // Draw deck (left side)
-    if (gameState.deckCount > 0) {
-      const deckX = margin;
-      const deckY = zones.deck;
-      this.cardRenderer.drawCard(
-        this.ctx,
-        { name: `Deck (${gameState.deckCount})` },
-        deckX,
-        deckY,
-        false,
-        true
-      );
-    }
-
-    // Draw captured cards (right side)
-    this.drawCapturedCards(gameState);
-
-    // Show help mode highlighting (before animating cards and overlays)
-    if (helpMode && gameState.phase === 'select_hand') {
-      this.highlightMatchableCards(gameState);
-    }
-
-    // Draw animating cards on top
-    this.drawAnimatingCards(animatingCards);
-
-    // Draw 3D animated cards (if active)
-    if (animation3DManager) {
-      this.draw3DAnimatedCards(animation3DManager);
-    }
-
-    // Check for hover on deck and show all cards grid (only if no modal is visible)
-    if (hoverX >= 0 && hoverY >= 0 && !isModalVisible) {
-      const deckX = margin;
-      const deckY = zones.deck;
-      if (this.cardRenderer.isPointInCard(hoverX, hoverY, deckX, deckY)) {
-        this.drawAllCardsGrid(gameState);
-      }
-
-      // Check for hover on player captured pile
-      const playerCapturedX = this.displayWidth - cardWidth - this.rightMargin;
-      const playerCapturedY = this.displayHeight - cardHeight - this.verticalMargin;
-      if (gameState.playerCaptured && gameState.playerCaptured.length > 0) {
-        if (this.cardRenderer.isPointInCard(hoverX, hoverY, playerCapturedX, playerCapturedY)) {
-          this.drawTricksList(gameState.playerCaptured, 'Player Tricks');
-        }
-      }
-
-      // Check for hover on opponent captured pile
-      const opponentCapturedX = this.displayWidth - cardWidth - this.rightMargin;
-      const opponentCapturedY = this.verticalMargin;
-      if (gameState.opponentCaptured && gameState.opponentCaptured.length > 0) {
-        if (this.cardRenderer.isPointInCard(hoverX, hoverY, opponentCapturedX, opponentCapturedY)) {
-          this.drawTricksList(gameState.opponentCaptured, 'Opponent Tricks');
-        }
-      }
     }
   }
 
@@ -330,6 +177,26 @@ export class Renderer {
     // Draw yaku information
     this.draw3DYakuInfo(gameState, card3DManager);
 
+    // Draw drawn card if present (during drawing phases)
+    if (gameState.drawnCard && (
+      gameState.phase === 'select_drawn_match' ||
+      gameState.phase === 'show_drawn' ||
+      gameState.phase === 'drawing' ||
+      gameState.phase === 'opponent_drawing' ||
+      gameState.phase === 'opponent_drawn'
+    )) {
+      const centerX = this.displayWidth / 2;
+      const drawnCardY = 30 + 60; // Top of screen
+      this.drawDrawnCardHover(gameState.drawnCard, centerX, drawnCardY, gameState.phase);
+    }
+
+    // Draw opponent played card if present
+    if (gameState.opponentPlayedCard && gameState.phase === 'opponent_playing') {
+      const centerX = this.displayWidth / 2;
+      const playedCardY = 30 + 60; // Top of screen
+      this.drawOpponentPlayedCardHover(gameState.opponentPlayedCard, centerX, playedCardY);
+    }
+
     // Show help mode highlighting
     if (helpMode && gameState.phase === 'select_hand') {
       this.highlight3DMatchableCards(gameState, card3DManager);
@@ -344,12 +211,12 @@ export class Renderer {
         this.drawAllCardsGrid(gameState);
       }
 
-      // Trick pile hover - show trick text list
+      // Trick pile hover - show trick list (card grid)
       if (hoveredCard && hoveredCard.homeZone === 'playerTrick') {
-        this.drawTrickTextList(gameState.playerCaptured, 'Player Captured Cards');
+        this.drawTricksList(gameState.playerCaptured, 'Player Tricks');
       }
       if (hoveredCard && hoveredCard.homeZone === 'opponentTrick') {
-        this.drawTrickTextList(gameState.opponentCaptured, 'Opponent Captured Cards');
+        this.drawTricksList(gameState.opponentCaptured, 'Opponent Tricks');
       }
     }
   }
