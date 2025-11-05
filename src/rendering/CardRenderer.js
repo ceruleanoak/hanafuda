@@ -224,15 +224,17 @@ export class CardRenderer {
     ctx.fillStyle = this.textColor;
 
     // Wrap card name text
-    const words = card.name.split(' - ');
-    ctx.font = `${this.fontSize - 2}px monospace`;
+    if (card.name) {
+      const words = card.name.split(' - ');
+      ctx.font = `${this.fontSize - 2}px monospace`;
 
-    for (let i = 1; i < words.length && currentY < y + this.cardHeight - 15; i++) {
-      const text = words[i];
-      // Truncate if too long
-      const displayText = text.length > 10 ? text.substring(0, 9) + '.' : text;
-      ctx.fillText(displayText, centerX, currentY);
-      currentY += 12;
+      for (let i = 1; i < words.length && currentY < y + this.cardHeight - 15; i++) {
+        const text = words[i];
+        // Truncate if too long
+        const displayText = text.length > 10 ? text.substring(0, 9) + '.' : text;
+        ctx.fillText(displayText, centerX, currentY);
+        currentY += 12;
+      }
     }
 
     // Points at bottom
@@ -419,14 +421,16 @@ export class CardRenderer {
     ctx.fillStyle = this.textColor;
 
     // Wrap card name text
-    const words = card.name.split(' - ');
-    ctx.font = `${(fontSize - 2)}px monospace`;
+    if (card.name) {
+      const words = card.name.split(' - ');
+      ctx.font = `${(fontSize - 2)}px monospace`;
 
-    for (let i = 1; i < words.length && currentY < y + height - 15 * scale; i++) {
-      const text = words[i];
-      const displayText = text.length > 10 ? text.substring(0, 9) + '.' : text;
-      ctx.fillText(displayText, centerX, currentY);
-      currentY += 12 * scale;
+      for (let i = 1; i < words.length && currentY < y + height - 15 * scale; i++) {
+        const text = words[i];
+        const displayText = text.length > 10 ? text.substring(0, 9) + '.' : text;
+        ctx.fillText(displayText, centerX, currentY);
+        currentY += 12 * scale;
+      }
     }
 
     // Points at bottom
