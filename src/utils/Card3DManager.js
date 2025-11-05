@@ -76,9 +76,13 @@ export class Card3DManager {
 
     let totalCards = 0;
     cardSources.forEach(({ cards, zone }) => {
-      cards.forEach(cardData => {
+      cards.forEach((cardData, index) => {
         if (!this.cards.has(cardData.id)) {
           const card3D = new Card3D(cardData);
+          // Assign grid slot for field cards to maintain fixed positions
+          if (zone === 'field') {
+            card3D.gridSlot = index;
+          }
           this.cards.set(cardData.id, card3D);
           this.assignToZone(card3D, zone, false); // Don't animate initial placement
           totalCards++;
@@ -158,6 +162,11 @@ export class Card3DManager {
       this.dirtyZones.add(card3D.homeZone);
     }
 
+    // If moving to field zone, assign next available grid slot
+    if (newZone === 'field' && card3D.gridSlot === undefined) {
+      card3D.gridSlot = this.getNextAvailableFieldSlot();
+    }
+
     // Add to new zone
     this.zoneCards[newZone].add(card3D);
     card3D.homeZone = newZone;
@@ -165,6 +174,24 @@ export class Card3DManager {
 
     // Mark render queue dirty
     this.renderQueueDirty = true;
+  }
+
+  /**
+   * Get next available grid slot for field (prioritizes top-left)
+   */
+  getNextAvailableFieldSlot() {
+    const fieldCards = Array.from(this.zoneCards.field);
+    const occupiedSlots = new Set(fieldCards.map(card => card.gridSlot).filter(slot => slot !== undefined));
+
+    // Find first unoccupied slot (0-7, prioritizing top-left)
+    for (let slot = 0; slot < 8; slot++) {
+      if (!occupiedSlots.has(slot)) {
+        return slot;
+      }
+    }
+
+    // Fallback: return next sequential slot
+    return fieldCards.length;
   }
 
   /**

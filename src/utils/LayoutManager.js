@@ -79,10 +79,14 @@ export class LayoutManager {
    * Grid layout - cards in rows and columns
    */
   layoutGrid(cards, config, useAnimations) {
-    const { anchorPoint, spacing = 115, maxPerRow = 8, rowSpacing = 160 } = config;
+    const { anchorPoint, spacing = 115, maxPerRow = 8, rowSpacing = 160, useFixedPositions = false } = config;
 
     let startX;
-    if (useAnimations) {
+    if (useFixedPositions) {
+      // Always use fixed grid positions (8 slots)
+      const totalWidth = maxPerRow * spacing;
+      startX = (config.centerX || anchorPoint.x) - totalWidth / 2;
+    } else if (useAnimations) {
       startX = anchorPoint.x;
     } else {
       // Center based on actual card count in first row
@@ -94,14 +98,16 @@ export class LayoutManager {
     const startY = anchorPoint.y;
 
     return cards.map((card, i) => {
-      const row = Math.floor(i / maxPerRow);
-      const col = i % maxPerRow;
+      // If using fixed positions, use the card's gridSlot if available
+      const slotIndex = (useFixedPositions && card.gridSlot !== undefined) ? card.gridSlot : i;
+      const row = Math.floor(slotIndex / maxPerRow);
+      const col = slotIndex % maxPerRow;
 
       return {
         x: startX + (col * spacing),
         y: startY + (row * rowSpacing),
         z: 0,
-        index: i
+        index: slotIndex
       };
     });
   }
@@ -203,11 +209,12 @@ export class LayoutManager {
       },
 
       field: {
-        type: 'row',
+        type: 'grid',
         anchorPoint: { x: 100, y: centerY },
         centerX: centerX,
         spacing: 115,
         maxPerRow: 8,
+        useFixedPositions: true,
         faceUp: 1,
         renderLayer: 3
       },

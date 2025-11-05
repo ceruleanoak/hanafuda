@@ -5,6 +5,7 @@
 import { CardRenderer } from './CardRenderer.js';
 import { debugLogger } from '../utils/DebugLogger.js';
 import { HANAFUDA_DECK } from '../data/cards.js';
+import { LayoutManager } from '../utils/LayoutManager.js';
 
 export class Renderer {
   constructor(canvas) {
@@ -289,27 +290,41 @@ export class Renderer {
       this.cardRenderer.drawCard3D(this.ctx, card3D, false, card3D.opacity);
     });
 
-    // Draw deck counter
-    if (gameState.deckCount > 0) {
-      const deckCards = card3DManager.getCardsInZone('deck');
-      if (deckCards.length > 0) {
-        // Draw count on top card
-        const topCard = deckCards[deckCards.length - 1];
-        this.drawDeckCount(topCard.x, topCard.y, gameState.deckCount);
-      }
+    // Draw deck counter - always show at fixed position
+    const deckConfig = LayoutManager.getZoneConfig('deck', this.displayWidth, this.displayHeight);
+    const deckCards = card3DManager.getCardsInZone('deck');
+
+    // If no cards in deck zone, still draw a deck placeholder at the fixed position
+    if (deckCards.length === 0 && gameState.deckCount >= 0) {
+      // Draw a face-down card placeholder for the deck
+      const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
+      this.cardRenderer.drawCard(
+        this.ctx,
+        { name: 'Deck' },
+        deckConfig.position.x - cardWidth / 2,
+        deckConfig.position.y - cardHeight / 2,
+        false,
+        true // face down
+      );
+      this.drawDeckCount(deckConfig.position.x, deckConfig.position.y, gameState.deckCount);
+    } else if (deckCards.length > 0) {
+      // Draw count on top card
+      const topCard = deckCards[deckCards.length - 1];
+      this.drawDeckCount(topCard.x, topCard.y, gameState.deckCount);
     }
 
-    // Draw trick pile labels
+    // Draw trick pile labels using fixed zone positions
+    const playerTrickConfig = LayoutManager.getZoneConfig('playerTrick', this.displayWidth, this.displayHeight);
+    const opponentTrickConfig = LayoutManager.getZoneConfig('opponentTrick', this.displayWidth, this.displayHeight);
+
     const playerTrickCards = card3DManager.getCardsInZone('playerTrick');
     if (playerTrickCards.length > 0) {
-      const topCard = playerTrickCards[playerTrickCards.length - 1];
-      this.drawTrickLabel(topCard.x, topCard.y, `Player: ${playerTrickCards.length}`, false);
+      this.drawTrickLabel(playerTrickConfig.position.x, playerTrickConfig.position.y, `Player: ${playerTrickCards.length}`, false);
     }
 
     const opponentTrickCards = card3DManager.getCardsInZone('opponentTrick');
     if (opponentTrickCards.length > 0) {
-      const topCard = opponentTrickCards[opponentTrickCards.length - 1];
-      this.drawTrickLabel(topCard.x, topCard.y, `Opponent: ${opponentTrickCards.length}`, true);
+      this.drawTrickLabel(opponentTrickConfig.position.x, opponentTrickConfig.position.y, `Opponent: ${opponentTrickCards.length}`, true);
     }
 
     // Draw yaku information
@@ -376,15 +391,17 @@ export class Renderer {
    * Draw yaku info for 3D rendering
    */
   draw3DYakuInfo(gameState, card3DManager) {
-    // Find trick pile positions
+    // Use fixed zone positions instead of card positions
+    const playerTrickConfig = LayoutManager.getZoneConfig('playerTrick', this.displayWidth, this.displayHeight);
+    const opponentTrickConfig = LayoutManager.getZoneConfig('opponentTrick', this.displayWidth, this.displayHeight);
+
     const playerTrickCards = card3DManager.getCardsInZone('playerTrick');
     const opponentTrickCards = card3DManager.getCardsInZone('opponentTrick');
 
     if (playerTrickCards.length > 0) {
-      const topCard = playerTrickCards[playerTrickCards.length - 1];
       this.drawYakuList(
-        topCard.x,
-        topCard.y - 50,
+        playerTrickConfig.position.x,
+        playerTrickConfig.position.y - 50,
         gameState.playerYaku || [],
         gameState.playerYakuProgress || [],
         false
@@ -392,10 +409,9 @@ export class Renderer {
     }
 
     if (opponentTrickCards.length > 0) {
-      const topCard = opponentTrickCards[opponentTrickCards.length - 1];
       this.drawYakuList(
-        topCard.x,
-        topCard.y + 180,
+        opponentTrickConfig.position.x,
+        opponentTrickConfig.position.y + 180,
         gameState.opponentYaku || [],
         gameState.opponentYakuProgress || [],
         true
