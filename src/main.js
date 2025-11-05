@@ -57,6 +57,7 @@ class Game {
     this.helpMode = this.gameOptions.get('helpMode'); // Load from saved options
     this.hoverX = -1;             // Mouse hover X position
     this.hoverY = -1;             // Mouse hover Y position
+    this.hoveredCard3D = null;    // Currently hovered Card3D object
 
     // Track state for change detection
     this.lastStateLengths = {
@@ -266,6 +267,45 @@ class Game {
     const rect = this.canvas.getBoundingClientRect();
     this.hoverX = event.clientX - rect.left;
     this.hoverY = event.clientY - rect.top;
+  }
+
+  /**
+   * Update hover state for Card3D objects based on mouse position
+   */
+  updateCardHoverState() {
+    // Only detect hover if mouse is within canvas bounds
+    if (this.hoverX < 0 || this.hoverY < 0) {
+      // Clear hover state from previously hovered card
+      if (this.hoveredCard3D) {
+        this.hoveredCard3D.setHovered(false);
+        this.hoveredCard3D = null;
+      }
+      return;
+    }
+
+    // Get card at current hover position
+    const card3D = this.card3DManager.getCardAtPosition(this.hoverX, this.hoverY);
+
+    // Check if this card is hoverable (playerHand or field zones only)
+    const isHoverable = card3D && (
+      card3D.homeZone === 'playerHand' ||
+      card3D.homeZone === 'field'
+    );
+
+    // Update hover state
+    if (isHoverable && card3D !== this.hoveredCard3D) {
+      // Clear previous hover
+      if (this.hoveredCard3D) {
+        this.hoveredCard3D.setHovered(false);
+      }
+      // Set new hover
+      card3D.setHovered(true);
+      this.hoveredCard3D = card3D;
+    } else if (!isHoverable && this.hoveredCard3D) {
+      // Mouse moved away from hoverable card
+      this.hoveredCard3D.setHovered(false);
+      this.hoveredCard3D = null;
+    }
   }
 
   toggleHelpMode() {
@@ -1203,6 +1243,11 @@ class Game {
 
           // Synchronize with game state (detects card movements between zones)
           this.card3DManager.synchronize(state);
+
+          // Handle hover detection for 3D cards (only if 3D animations enabled)
+          if (this.gameOptions.get('experimental3DAnimations')) {
+            this.updateCardHoverState();
+          }
         } catch (err) {
           debugLogger.logError('Error in Card3D system update', err);
         }
