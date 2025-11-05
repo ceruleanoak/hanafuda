@@ -316,7 +316,7 @@ export class Card3DManager {
     if (this.dirtyZones.size === 0) return;
 
     this.dirtyZones.forEach(zone => {
-      this.relayoutZone(zone, true);
+      this.relayoutZone(zone, this.useAnimations);
     });
 
     this.dirtyZones.clear();
