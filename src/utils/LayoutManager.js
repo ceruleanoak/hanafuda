@@ -194,7 +194,8 @@ export class LayoutManager {
 
       field: {
         type: 'grid',
-        anchorPoint: { x: 100, y: centerY },
+        // Center field vertically between player hand (viewportHeight - 170) and opponent hand (40)
+        anchorPoint: { x: 100, y: (viewportHeight - 130) / 2 },
         centerX: centerX,
         spacing: 115,
         maxPerRow: 8,
@@ -226,7 +227,8 @@ export class LayoutManager {
 
       playerTrick: {
         type: 'fan',
-        position: { x: viewportWidth - 150, y: viewportHeight - 170 },
+        // Align to right edge: cardWidth (100) + fan spread (4 * 8 = 32) + margin (30) = 162
+        position: { x: viewportWidth - 162, y: viewportHeight - 170 },
         fanOffset: { x: 8, y: 8, z: 2 },
         maxVisible: 5,
         faceUp: 1,
@@ -235,7 +237,8 @@ export class LayoutManager {
 
       opponentTrick: {
         type: 'fan',
-        position: { x: viewportWidth - 150, y: 40 },
+        // Align to right edge: cardWidth (100) + fan spread (4 * 8 = 32) + margin (30) = 162
+        position: { x: viewportWidth - 162, y: 40 },
         fanOffset: { x: 8, y: 8, z: 2 },
         maxVisible: 5,
         faceUp: 1,

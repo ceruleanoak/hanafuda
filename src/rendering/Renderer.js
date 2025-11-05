@@ -215,11 +215,33 @@ export class Renderer {
         this.drawAllCardsGrid(gameState);
       }
 
-      // Trick pile hover - show trick list (card grid)
-      if (hoveredCard && hoveredCard.homeZone === 'playerTrick') {
+      // Trick pile hover - use zone-based detection instead of card-based
+      // This allows hover to work even when no cards are visible or between cards
+      const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
+
+      // Check if mouse is in player trick pile zone
+      const playerTrickZone = {
+        x: playerTrickConfig.position.x,
+        y: playerTrickConfig.position.y,
+        width: cardWidth + (4 * playerTrickConfig.fanOffset.x), // Account for fan spread
+        height: cardHeight + (4 * playerTrickConfig.fanOffset.y)
+      };
+      if (hoverX >= playerTrickZone.x && hoverX <= playerTrickZone.x + playerTrickZone.width &&
+          hoverY >= playerTrickZone.y && hoverY <= playerTrickZone.y + playerTrickZone.height &&
+          gameState.playerCaptured.length > 0) {
         this.drawTricksList(gameState.playerCaptured, 'Player Tricks');
       }
-      if (hoveredCard && hoveredCard.homeZone === 'opponentTrick') {
+
+      // Check if mouse is in opponent trick pile zone
+      const opponentTrickZone = {
+        x: opponentTrickConfig.position.x,
+        y: opponentTrickConfig.position.y,
+        width: cardWidth + (4 * opponentTrickConfig.fanOffset.x),
+        height: cardHeight + (4 * opponentTrickConfig.fanOffset.y)
+      };
+      if (hoverX >= opponentTrickZone.x && hoverX <= opponentTrickZone.x + opponentTrickZone.width &&
+          hoverY >= opponentTrickZone.y && hoverY <= opponentTrickZone.y + opponentTrickZone.height &&
+          gameState.opponentCaptured.length > 0) {
         this.drawTricksList(gameState.opponentCaptured, 'Opponent Tricks');
       }
     }
