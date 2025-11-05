@@ -1,34 +1,35 @@
 /**
  * AnimationTester - Test environment for card animations
- * Allows testing and tweaking animation parameters with visual feedback
+ * Stacks all existing cards face down on the left, then animates them to the right
  */
 
 import { Card3D } from './Card3D.js';
 import { debugLogger } from './DebugLogger.js';
 
 export class AnimationTester {
-  constructor(cardRenderer) {
+  constructor(cardRenderer, card3DManager) {
     this.cardRenderer = cardRenderer;
+    this.card3DManager = card3DManager;
     this.isActive = false;
 
     debugLogger.log('animation', '🎬 AnimationTester constructed', {
-      cardRenderer: !!cardRenderer
+      cardRenderer: !!cardRenderer,
+      card3DManager: !!card3DManager
     });
 
-    // Test card - using a simple dummy card
-    this.testCard = null;
-    this.testCard3D = null;
+    // Store all cards and their original states
+    this.allCards = [];
+    this.originalStates = [];
 
-    // Start and end positions
-    this.startPos = { x: 0, y: 0, z: 0 };
-    this.endPos = { x: 0, y: 0, z: 0 };
+    // Pile positions
+    this.leftPileX = 0;
+    this.leftPileY = 0;
+    this.rightPileX = 0;
+    this.rightPileY = 0;
 
     // Animation parameters (defaults)
     this.params = {
-      // Position
-      startX: 200,
-      startY: 300,
-      startZ: 0,
+      // End position (start is always left pile)
       endX: 600,
       endY: 300,
       endZ: 0,
@@ -38,21 +39,10 @@ export class AnimationTester {
       easing: 'easeInOutQuad',
 
       // Visual properties
-      startRotation: 0,
       endRotation: 0,
-      startScale: 1.0,
       endScale: 1.0,
-      startFaceUp: 1,
       endFaceUp: 1,
-      startOpacity: 1.0,
       endOpacity: 1.0,
-
-      // Physics (for future use)
-      enablePhysics: false,
-      gravity: 0,
-      velocityX: 0,
-      velocityY: 0,
-      velocityZ: 0,
     };
 
     // Animation state
@@ -75,102 +65,74 @@ export class AnimationTester {
       'Simple Slide': {
         duration: 500,
         easing: 'easeInOutQuad',
-        startRotation: 0,
         endRotation: 0,
-        startScale: 1.0,
         endScale: 1.0,
-        startFaceUp: 1,
         endFaceUp: 1,
-        startOpacity: 1.0,
         endOpacity: 1.0,
+        endZ: 0,
       },
       'Flip While Moving': {
         duration: 600,
         easing: 'easeInOutQuad',
-        startRotation: 0,
         endRotation: 0,
-        startScale: 1.0,
         endScale: 1.0,
-        startFaceUp: 1,
-        endFaceUp: 0,
-        startOpacity: 1.0,
+        endFaceUp: 1,
         endOpacity: 1.0,
+        endZ: 0,
       },
       'Arc Jump': {
         duration: 800,
         easing: 'easeOutQuad',
-        startRotation: 0,
         endRotation: 0,
-        startScale: 1.0,
         endScale: 1.0,
-        startFaceUp: 1,
         endFaceUp: 1,
-        startOpacity: 1.0,
         endOpacity: 1.0,
-        startZ: 0,
         endZ: 100,
       },
       'Spin and Grow': {
         duration: 700,
         easing: 'easeInOutCubic',
-        startRotation: 0,
         endRotation: Math.PI * 2,
-        startScale: 0.5,
         endScale: 1.5,
-        startFaceUp: 1,
         endFaceUp: 1,
-        startOpacity: 1.0,
         endOpacity: 1.0,
+        endZ: 0,
       },
       'Fade Out': {
         duration: 600,
         easing: 'easeInQuad',
-        startRotation: 0,
         endRotation: 0,
-        startScale: 1.0,
         endScale: 0.8,
-        startFaceUp: 1,
         endFaceUp: 1,
-        startOpacity: 1.0,
         endOpacity: 0.0,
+        endZ: 0,
       },
       'Bounce In (Back Easing)': {
         duration: 600,
         easing: 'easeOutBack',
-        startRotation: 0,
         endRotation: 0,
-        startScale: 0.3,
         endScale: 1.0,
-        startFaceUp: 1,
         endFaceUp: 1,
-        startOpacity: 0.0,
         endOpacity: 1.0,
+        endZ: 0,
       },
       'Victory Spin': {
         duration: 1000,
         easing: 'easeOutCubic',
-        startRotation: 0,
         endRotation: Math.PI * 4,
-        startScale: 1.0,
         endScale: 1.2,
-        startFaceUp: 1,
         endFaceUp: 1,
-        startOpacity: 1.0,
         endOpacity: 1.0,
-        startZ: 0,
         endZ: 50,
       },
       'Flip and Fade': {
         duration: 800,
         easing: 'easeInOutQuad',
-        startRotation: 0,
         endRotation: Math.PI,
-        startScale: 1.0,
         endScale: 1.0,
-        startFaceUp: 1,
         endFaceUp: 0,
-        startOpacity: 1.0,
         endOpacity: 0.3,
+        endZ: 0,
       },
     };
   }
@@ -184,77 +146,108 @@ export class AnimationTester {
       canvasHeight
     });
 
-    // Create a dummy card for testing
-    this.testCard = {
-      id: 'test-card',
-      suit: 'pine',
-      type: 'bright',
-      month: 'January',
-      name: 'January - bright - crane',
-      image: './images/cards/01-pine-bright.png',
-      points: 20
-    };
-
-    // Calculate default positions (left and right sides of screen, clearly visible)
+    // Calculate pile positions
     const centerY = canvasHeight / 2;
-    const leftX = canvasWidth * 0.3;
-    const rightX = canvasWidth * 0.7;
+    this.leftPileX = canvasWidth * 0.2;
+    this.leftPileY = centerY;
+    this.rightPileX = canvasWidth * 0.8;
+    this.rightPileY = centerY;
 
-    this.params.startX = leftX;
-    this.params.startY = centerY;
-    this.params.endX = rightX;
-    this.params.endY = centerY;
+    // Set default end position to right pile
+    this.params.endX = this.rightPileX;
+    this.params.endY = this.rightPileY;
 
-    // Don't create the card yet - only show outlines initially
-    this.testCard3D = null;
+    // Collect all cards from the game
+    this.allCards = [];
+    this.originalStates = [];
+
+    if (this.card3DManager && this.card3DManager.cards) {
+      this.card3DManager.cards.forEach(card3D => {
+        this.allCards.push(card3D);
+        // Store original state
+        this.originalStates.push({
+          x: card3D.x,
+          y: card3D.y,
+          z: card3D.z,
+          rotation: card3D.rotation,
+          scale: card3D.scale,
+          faceUp: card3D.faceUp,
+          opacity: card3D.opacity,
+          homeZone: card3D.homeZone,
+          homeX: card3D.homePosition.x,
+          homeY: card3D.homePosition.y,
+        });
+      });
+    }
+
+    // Stack all cards on the left pile (face down)
+    this.stackCardsOnLeft();
 
     this.isActive = true;
 
     debugLogger.log('animation', '✅ AnimationTester initialized', {
-      startPos: `(${Math.round(leftX)}, ${Math.round(centerY)})`,
-      endPos: `(${Math.round(rightX)}, ${Math.round(centerY)})`
+      cardCount: this.allCards.length,
+      leftPile: `(${Math.round(this.leftPileX)}, ${Math.round(this.leftPileY)})`,
+      rightPile: `(${Math.round(this.rightPileX)}, ${Math.round(this.rightPileY)})`
     });
   }
 
   /**
-   * Reset the test card to start position (only called internally by playAnimation)
+   * Stack all cards on the left pile (face down)
    */
-  resetCard() {
-    debugLogger.log('animation', '🔄 AnimationTester resetting card', {
-      startPos: `(${Math.round(this.params.startX)}, ${Math.round(this.params.startY)}, ${Math.round(this.params.startZ)})`,
-      startRotation: this.params.startRotation,
-      startScale: this.params.startScale,
-      startFaceUp: this.params.startFaceUp,
-      startOpacity: this.params.startOpacity
+  stackCardsOnLeft() {
+    this.allCards.forEach((card3D, index) => {
+      const offset = index * 0.5; // Slight stacking offset
+      card3D.x = this.leftPileX;
+      card3D.y = this.leftPileY + offset;
+      card3D.z = index * 0.1;
+      card3D.rotation = 0;
+      card3D.scale = 1.0;
+      card3D.faceUp = 0; // Face down
+      card3D.targetFaceUp = 0;
+      card3D.opacity = 1.0;
+      card3D.targetOpacity = 1.0;
     });
 
-    this.testCard3D = new Card3D(
-      this.testCard,
-      this.params.startX,
-      this.params.startY,
-      this.params.startZ
-    );
+    debugLogger.log('animation', '📚 Stacked cards on left pile', {
+      count: this.allCards.length,
+      position: `(${Math.round(this.leftPileX)}, ${Math.round(this.leftPileY)})`
+    });
+  }
 
-    this.testCard3D.rotation = this.params.startRotation;
-    this.testCard3D.scale = this.params.startScale;
-    this.testCard3D.faceUp = this.params.startFaceUp;
-    this.testCard3D.targetFaceUp = this.params.startFaceUp;
-    this.testCard3D.opacity = this.params.startOpacity;
-    this.testCard3D.targetOpacity = this.params.startOpacity;
+  /**
+   * Reset cards to left pile
+   */
+  resetCards() {
+    debugLogger.log('animation', '🔄 AnimationTester resetting cards to left pile', null);
 
+    this.stackCardsOnLeft();
     this.isPlaying = false;
   }
 
   /**
-   * Stop animation and hide card
+   * Stop animation and restore cards to original positions
    */
   stopAnimation() {
-    debugLogger.log('animation', '⏹️ AnimationTester stopping animation', {
+    debugLogger.log('animation', '⏹️ AnimationTester stopping animation and restoring cards', {
       wasPlaying: this.isPlaying
     });
 
     this.isPlaying = false;
-    this.testCard3D = null;
+
+    // Restore all cards to their original states
+    this.allCards.forEach((card3D, index) => {
+      const original = this.originalStates[index];
+      card3D.x = original.x;
+      card3D.y = original.y;
+      card3D.z = original.z;
+      card3D.rotation = original.rotation;
+      card3D.scale = original.scale;
+      card3D.faceUp = original.faceUp;
+      card3D.targetFaceUp = original.faceUp;
+      card3D.opacity = original.opacity;
+      card3D.targetOpacity = original.opacity;
+    });
   }
 
   /**
@@ -267,57 +260,64 @@ export class AnimationTester {
     }
 
     debugLogger.log('animation', '▶️ AnimationTester starting animation', {
-      from: `(${Math.round(this.params.startX)}, ${Math.round(this.params.startY)}, ${Math.round(this.params.startZ)})`,
+      cardCount: this.allCards.length,
       to: `(${Math.round(this.params.endX)}, ${Math.round(this.params.endY)}, ${Math.round(this.params.endZ)})`,
       duration: `${this.params.duration}ms`,
       easing: this.params.easing,
-      rotation: `${this.params.startRotation} → ${this.params.endRotation}`,
-      scale: `${this.params.startScale} → ${this.params.endScale}`,
-      faceUp: `${this.params.startFaceUp} → ${this.params.endFaceUp}`,
-      opacity: `${this.params.startOpacity} → ${this.params.endOpacity}`
+      endRotation: this.params.endRotation,
+      endScale: this.params.endScale,
+      endFaceUp: this.params.endFaceUp,
+      endOpacity: this.params.endOpacity
     });
 
-    // Create/reset card to start position
-    this.resetCard();
-
-    // Start animation
-    this.testCard3D.tweenTo(
-      {
-        x: this.params.endX,
-        y: this.params.endY,
-        z: this.params.endZ,
-        rotation: this.params.endRotation,
-        scale: this.params.endScale,
-        faceUp: this.params.endFaceUp,
-      },
-      this.params.duration,
-      this.params.easing
-    );
-
-    // Set end opacity
-    this.testCard3D.targetOpacity = this.params.endOpacity;
+    // Reset cards to left pile first
+    this.stackCardsOnLeft();
 
     this.isPlaying = true;
     this.animationStartTime = Date.now();
 
-    // Set callback for when animation completes
-    this.testCard3D.onAnimationComplete = () => {
+    // Animate all cards to the right pile with stagger
+    this.allCards.forEach((card3D, index) => {
+      const delay = index * 30; // Stagger delay
+
+      setTimeout(() => {
+        // Calculate slight variation in end position for pile effect
+        const offset = index * 0.5;
+
+        card3D.tweenTo(
+          {
+            x: this.params.endX,
+            y: this.params.endY + offset,
+            z: this.params.endZ + index * 0.1,
+            rotation: this.params.endRotation,
+            scale: this.params.endScale,
+            faceUp: this.params.endFaceUp,
+          },
+          this.params.duration,
+          this.params.easing
+        );
+
+        card3D.targetOpacity = this.params.endOpacity;
+      }, delay);
+    });
+
+    // Mark as complete after all animations finish
+    const totalDuration = this.allCards.length * 30 + this.params.duration;
+    setTimeout(() => {
       debugLogger.log('animation', '✅ AnimationTester animation complete', {
         duration: `${Date.now() - this.animationStartTime}ms`
       });
       this.isPlaying = false;
-      // Hide the card after animation completes
-      this.testCard3D = null;
-    };
+    }, totalDuration);
   }
 
   /**
-   * Update the test card animation
+   * Update all cards
    */
   update(deltaTime) {
-    if (this.testCard3D) {
-      this.testCard3D.update(deltaTime);
-    }
+    this.allCards.forEach(card3D => {
+      card3D.update(deltaTime);
+    });
   }
 
   /**
@@ -331,64 +331,36 @@ export class AnimationTester {
 
     debugLogger.log('render', '🎨 AnimationTester rendering', {
       canvasSize: `${canvasWidth}x${canvasHeight}`,
-      hasCard: !!this.testCard3D,
-      isPlaying: this.isPlaying,
-      cardPosition: this.testCard3D ? `(${Math.round(this.testCard3D.x)}, ${Math.round(this.testCard3D.y)}, ${Math.round(this.testCard3D.z)})` : 'N/A'
+      cardCount: this.allCards.length,
+      isPlaying: this.isPlaying
     });
 
     ctx.save();
 
-    // Draw background
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-    debugLogger.log('render', '  └─ Background drawn', { color: '#1a1a2e' });
+    // Draw pile outlines
+    this.drawPileOutline(ctx, this.leftPileX, this.leftPileY, '#4ecdc4', 'START PILE');
+    this.drawPileOutline(ctx, this.params.endX, this.params.endY, '#ff6b6b', 'END PILE');
 
-    // Draw title
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 24px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Animation Tester', canvasWidth / 2, 40);
-    debugLogger.log('render', '  └─ Title drawn', null);
-
-    // Draw start outline
-    this.drawCardOutline(ctx, this.params.startX, this.params.startY, '#4ecdc4', 'START');
-    debugLogger.log('render', '  └─ START outline drawn', {
-      position: `(${Math.round(this.params.startX)}, ${Math.round(this.params.startY)})`
+    // Draw all cards
+    this.allCards.forEach(card3D => {
+      this.cardRenderer.drawCard3D(ctx, card3D, false);
     });
-
-    // Draw end outline
-    this.drawCardOutline(ctx, this.params.endX, this.params.endY, '#ff6b6b', 'END');
-    debugLogger.log('render', '  └─ END outline drawn', {
-      position: `(${Math.round(this.params.endX)}, ${Math.round(this.params.endY)})`
-    });
-
-    // Draw test card if it exists
-    if (this.testCard3D) {
-      this.cardRenderer.drawCard3D(ctx, this.testCard3D, false);
-      debugLogger.log('render', '  └─ Test card drawn', {
-        position: `(${Math.round(this.testCard3D.x)}, ${Math.round(this.testCard3D.y)}, ${Math.round(this.testCard3D.z)})`,
-        opacity: this.testCard3D.opacity,
-        scale: this.testCard3D.scale,
-        rotation: this.testCard3D.rotation
-      });
-    }
 
     // Draw animation status
     if (this.isPlaying) {
       ctx.fillStyle = '#4ecdc4';
-      ctx.font = '16px sans-serif';
+      ctx.font = 'bold 18px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('PLAYING...', canvasWidth / 2, canvasHeight - 20);
-      debugLogger.log('render', '  └─ Playing status drawn', null);
+      ctx.fillText('ANIMATING...', canvasWidth / 2, 40);
     }
 
     ctx.restore();
   }
 
   /**
-   * Draw a card outline at the specified position
+   * Draw a pile outline at the specified position
    */
-  drawCardOutline(ctx, x, y, color, label) {
+  drawPileOutline(ctx, x, y, color, label) {
     const width = 100;
     const height = 140;
 
@@ -408,7 +380,7 @@ export class AnimationTester {
     // Draw label
     ctx.setLineDash([]);
     ctx.fillStyle = color;
-    ctx.font = 'bold 14px sans-serif';
+    ctx.font = 'bold 12px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(label, x, y - height / 2 - 10);
 
@@ -477,10 +449,7 @@ export class AnimationTester {
     ];
 
     // Group parameters
-    lines.push('  // Position');
-    lines.push(`  startX: ${this.params.startX},`);
-    lines.push(`  startY: ${this.params.startY},`);
-    lines.push(`  startZ: ${this.params.startZ},`);
+    lines.push('  // End Position');
     lines.push(`  endX: ${this.params.endX},`);
     lines.push(`  endY: ${this.params.endY},`);
     lines.push(`  endZ: ${this.params.endZ},`);
@@ -492,13 +461,9 @@ export class AnimationTester {
     lines.push('');
 
     lines.push('  // Visual Properties');
-    lines.push(`  startRotation: ${this.params.startRotation},`);
     lines.push(`  endRotation: ${this.params.endRotation},`);
-    lines.push(`  startScale: ${this.params.startScale},`);
     lines.push(`  endScale: ${this.params.endScale},`);
-    lines.push(`  startFaceUp: ${this.params.startFaceUp},`);
     lines.push(`  endFaceUp: ${this.params.endFaceUp},`);
-    lines.push(`  startOpacity: ${this.params.startOpacity},`);
     lines.push(`  endOpacity: ${this.params.endOpacity},`);
     lines.push('}');
 
@@ -532,7 +497,7 @@ export class AnimationTester {
   }
 
   /**
-   * Deactivate test environment
+   * Deactivate test environment and restore cards
    */
   deactivate() {
     debugLogger.log('animation', '🛑 AnimationTester deactivating', {
@@ -541,6 +506,22 @@ export class AnimationTester {
     });
 
     this.isActive = false;
-    this.testCard3D = null;
+
+    // Restore all cards to their original states
+    this.allCards.forEach((card3D, index) => {
+      const original = this.originalStates[index];
+      card3D.x = original.x;
+      card3D.y = original.y;
+      card3D.z = original.z;
+      card3D.rotation = original.rotation;
+      card3D.scale = original.scale;
+      card3D.faceUp = original.faceUp;
+      card3D.targetFaceUp = original.faceUp;
+      card3D.opacity = original.opacity;
+      card3D.targetOpacity = original.opacity;
+    });
+
+    this.allCards = [];
+    this.originalStates = [];
   }
 }

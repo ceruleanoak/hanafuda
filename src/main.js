@@ -68,7 +68,7 @@ class Game {
     debugLogger.log('3dCards', '✨ Card3D system initialized on page load', null);
 
     // Initialize Animation Tester
-    this.animationTester = new AnimationTester(this.renderer.cardRenderer);
+    this.animationTester = new AnimationTester(this.renderer.cardRenderer, this.card3DManager);
     this.animationTesterActive = false;
 
     this.lastMessage = '';
@@ -1626,7 +1626,7 @@ class Game {
 
         setTimeout(() => {
           // Restore original face-up state based on zone
-          const originalFaceUp = card3D._showcaseOriginalZone === 'opponentHand' ? 0 : 1;
+          const originalFaceUp = (card3D._showcaseOriginalZone === 'opponentHand' || card3D._showcaseOriginalZone === 'deck') ? 0 : 1;
 
           card3D.tweenTo({
             x: card3D._showcaseOriginalX,
@@ -1696,26 +1696,6 @@ class Game {
       this.animationTester.stopAnimation();
     });
 
-    // Copy parameters button
-    document.getElementById('copy-params').addEventListener('click', () => {
-      const params = this.animationTester.getParametersAsString();
-      navigator.clipboard.writeText(params).then(() => {
-        alert('Parameters copied to clipboard!');
-      }).catch(err => {
-        console.error('Failed to copy:', err);
-      });
-    });
-
-    // Copy code button
-    document.getElementById('copy-code').addEventListener('click', () => {
-      const code = this.animationTester.getTweenCodeSnippet();
-      navigator.clipboard.writeText(code).then(() => {
-        alert('Code snippet copied to clipboard!');
-      }).catch(err => {
-        console.error('Failed to copy:', err);
-      });
-    });
-
     // Preset selector
     document.getElementById('animation-preset').addEventListener('change', (e) => {
       const presetName = e.target.value;
@@ -1725,10 +1705,7 @@ class Game {
       }
     });
 
-    // Position controls
-    this.setupRangeControl('startX');
-    this.setupRangeControl('startY');
-    this.setupRangeControl('startZ');
+    // End position controls
     this.setupRangeControl('endX');
     this.setupRangeControl('endY');
     this.setupRangeControl('endZ');
@@ -1740,19 +1717,13 @@ class Game {
     });
 
     // Rotation & Scale controls
-    this.setupRangeControl('startRotation', (value) => value * Math.PI / 180); // Convert to radians
-    this.setupRangeControl('endRotation', (value) => value * Math.PI / 180);
-    this.setupRangeControl('startScale');
+    this.setupRangeControl('endRotation', (value) => value * Math.PI / 180); // Convert to radians
     this.setupRangeControl('endScale');
 
     // Appearance controls
-    document.getElementById('startFaceUp').addEventListener('change', (e) => {
-      this.animationTester.updateParam('startFaceUp', e.target.checked ? 1 : 0);
-    });
     document.getElementById('endFaceUp').addEventListener('change', (e) => {
       this.animationTester.updateParam('endFaceUp', e.target.checked ? 1 : 0);
     });
-    this.setupRangeControl('startOpacity');
     this.setupRangeControl('endOpacity');
   }
 
@@ -1782,11 +1753,10 @@ class Game {
 
     // Update all range inputs and their value displays
     const rangeParams = [
-      'startX', 'startY', 'startZ',
       'endX', 'endY', 'endZ',
       'duration',
-      'startScale', 'endScale',
-      'startOpacity', 'endOpacity'
+      'endScale',
+      'endOpacity'
     ];
 
     rangeParams.forEach(param => {
@@ -1799,14 +1769,6 @@ class Game {
     });
 
     // Update rotation (convert from radians to degrees)
-    const startRotInput = document.getElementById('startRotation');
-    const startRotDisplay = document.getElementById('startRotation-value');
-    if (startRotInput && startRotDisplay) {
-      const degrees = Math.round(params.startRotation * 180 / Math.PI);
-      startRotInput.value = degrees;
-      startRotDisplay.textContent = degrees;
-    }
-
     const endRotInput = document.getElementById('endRotation');
     const endRotDisplay = document.getElementById('endRotation-value');
     if (endRotInput && endRotDisplay) {
@@ -1815,9 +1777,11 @@ class Game {
       endRotDisplay.textContent = degrees;
     }
 
-    // Update checkboxes
-    document.getElementById('startFaceUp').checked = params.startFaceUp === 1;
-    document.getElementById('endFaceUp').checked = params.endFaceUp === 1;
+    // Update checkbox
+    const endFaceUpCheckbox = document.getElementById('endFaceUp');
+    if (endFaceUpCheckbox) {
+      endFaceUpCheckbox.checked = params.endFaceUp === 1;
+    }
 
     // Update easing select
     document.getElementById('easing').value = params.easing;
