@@ -264,6 +264,57 @@ export class CardRenderer {
   }
 
   /**
+   * Draw card thickness effect (simulates 3D depth)
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} x - Card x position
+   * @param {number} y - Card y position
+   * @param {number} width - Card width
+   * @param {number} height - Card height
+   * @param {number} scale - Card scale
+   * @param {number} faceUp - Face up value (0-1)
+   */
+  drawCardThickness(ctx, x, y, width, height, scale, faceUp) {
+    // Thickness in pixels (scales with card size)
+    const baseThickness = 3;
+    const thickness = baseThickness * scale;
+
+    // During flip, show edge thickness more prominently
+    // When card is edge-on (faceUp near 0.5), show maximum thickness
+    const flipFactor = 1 - Math.abs(faceUp - 0.5) * 2; // 0 at face-up/down, 1 at edge-on
+    const edgeThickness = thickness + (flipFactor * thickness * 2);
+
+    // Draw thickness shadow on bottom and right edges
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+
+    // Bottom edge
+    ctx.beginPath();
+    ctx.moveTo(x, y + height);
+    ctx.lineTo(x + thickness, y + height + thickness);
+    ctx.lineTo(x + width + thickness, y + height + thickness);
+    ctx.lineTo(x + width, y + height);
+    ctx.closePath();
+    ctx.fill();
+
+    // Right edge
+    ctx.beginPath();
+    ctx.moveTo(x + width, y);
+    ctx.lineTo(x + width + thickness, y + thickness);
+    ctx.lineTo(x + width + thickness, y + height + thickness);
+    ctx.lineTo(x + width, y + height);
+    ctx.closePath();
+    ctx.fill();
+
+    // Draw side edge when card is flipping (more visible at edge-on view)
+    if (flipFactor > 0.3) {
+      ctx.fillStyle = 'rgba(50, 30, 20, 0.8)'; // Darker brown for card edge
+      const edgeWidth = edgeThickness * flipFactor;
+
+      // Draw visible card edge (vertical stripe in middle)
+      ctx.fillRect(x + width / 2 - edgeWidth / 2, y, edgeWidth, height);
+    }
+  }
+
+  /**
    * Draw a Card3D with scale and face-up/down blending
    * @param {CanvasRenderingContext2D} ctx
    * @param {Card3D} card3D - Card3D instance
@@ -287,11 +338,14 @@ export class CardRenderer {
     // Apply opacity
     ctx.globalAlpha = opacity;
 
+    // Draw card thickness effect (before flip transform)
+    const faceUp = card3D.faceUp;
+    this.drawCardThickness(ctx, x, y, scaledWidth, scaledHeight, scale, faceUp);
+
     // Handle face up/down blending
     // faceUp = 0 -> fully face down
     // faceUp = 1 -> fully face up
     // 0 < faceUp < 1 -> blend between the two
-    const faceUp = card3D.faceUp;
     const isFaceDown = faceUp < 0.5;
 
     // During flip transition, apply perspective skew effect

@@ -304,8 +304,8 @@ export class Card3D {
   updateFaceAnimation(deltaTime) {
     const diff = this.targetFaceUp - this.faceUp;
     if (Math.abs(diff) > 0.01) {
-      // Smooth transition using spring-like motion
-      this.faceUpVelocity += diff * 10 * deltaTime;
+      // Smooth transition using spring-like motion (8x faster than original)
+      this.faceUpVelocity += diff * 80 * deltaTime;
       this.faceUpVelocity *= 0.8; // Damping
       this.faceUp += this.faceUpVelocity * deltaTime;
 

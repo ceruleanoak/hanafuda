@@ -1056,7 +1056,9 @@ class Game {
    * Stage 1: Moving card → target card position
    * Stage 2: Match event fires
    * Stage 3: Brief delay
-   * Stage 4: Both cards → trick pile together
+   * Stage 4: Both cards snap together at center point
+   * Stage 5: Brief pause (for future snap sound effect)
+   * Stage 6: Both cards → trick pile together
    */
   createMatchSequence(movingCard, targetCard, capturedZone, player, isDrawnCardMatch = false) {
     const sequence = new AnimationSequence(`${player} Match`);
@@ -1074,6 +1076,13 @@ class Game {
 
     const pilePos = this.getZonePosition(capturedZone, this.game.getState());
 
+    // Calculate snap-together position (slightly offset for visual clarity)
+    const snapOffset = 15; // Small offset so cards are visibly separate before snapping
+    const snapPos = {
+      x: targetPos.x,
+      y: targetPos.y
+    };
+
     debugLogger.log('animation', `Creating match sequence`, {
       movingCard: movingCard.name,
       movingStart: `(${Math.round(movingStartPos.x)}, ${Math.round(movingStartPos.y)})`,
@@ -1083,14 +1092,14 @@ class Game {
       isDrawnCardMatch
     });
 
-    // Stage 1: Moving card animates to target card
+    // Stage 1: Moving card animates to near target card (slightly offset)
     // Use longer duration for drawn card to make it more visible
     const moveToMatchDuration = isDrawnCardMatch ? 500 : 400;
     sequence.addParallelStage([{
       card: movingCard,
       startX: movingStartPos.x,
       startY: movingStartPos.y,
-      endX: targetPos.x,
+      endX: targetPos.x - snapOffset,
       endY: targetPos.y,
       duration: moveToMatchDuration
     }], 'Card arrives at match');
@@ -1107,20 +1116,50 @@ class Game {
     const matchPauseDelay = isDrawnCardMatch ? 600 : 200;
     sequence.addDelay(matchPauseDelay);
 
-    // Stage 4: Both cards to pile together from the same position
+    // Stage 4: Both cards snap together at center point (quick animation)
     sequence.addParallelStage([
       {
         card: movingCard,
+        startX: targetPos.x - snapOffset,
+        startY: targetPos.y,
+        endX: snapPos.x,
+        endY: snapPos.y,
+        duration: 150 // Quick snap animation
+      },
+      {
+        card: targetCard,
         startX: targetPos.x,
         startY: targetPos.y,
+        endX: snapPos.x,
+        endY: snapPos.y,
+        duration: 150 // Quick snap animation
+      }
+    ], 'Cards snap together');
+
+    // Stage 5: Event for snap sound effect (future feature)
+    sequence.addEvent('card_snap', {
+      movingCard: movingCard.name,
+      targetCard: targetCard.name,
+      player: player
+    });
+
+    // Stage 6: Brief pause to show the snap
+    sequence.addDelay(100);
+
+    // Stage 7: Both cards to pile together
+    sequence.addParallelStage([
+      {
+        card: movingCard,
+        startX: snapPos.x,
+        startY: snapPos.y,
         endX: pilePos.x,
         endY: pilePos.y,
         duration: 500
       },
       {
         card: targetCard,
-        startX: targetPos.x,
-        startY: targetPos.y,
+        startX: snapPos.x,
+        startY: snapPos.y,
         endX: pilePos.x,
         endY: pilePos.y,
         duration: 500
