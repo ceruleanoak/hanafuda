@@ -352,7 +352,6 @@ class Game {
     document.getElementById('viewing-sake').value = options.viewingSakeMode;
     document.getElementById('moon-viewing-sake').value = options.moonViewingSakeMode;
     document.getElementById('animations-enabled').checked = options.animationsEnabled;
-    document.getElementById('experimental-3d-animations').checked = options.experimental3DAnimations;
 
     this.optionsModal.classList.add('show');
   }
@@ -375,17 +374,13 @@ class Game {
       bothPlayersScore: document.getElementById('both-players-score').checked,
       viewingSakeMode: document.getElementById('viewing-sake').value,
       moonViewingSakeMode: document.getElementById('moon-viewing-sake').value,
-      animationsEnabled: document.getElementById('animations-enabled').checked,
-      experimental3DAnimations: document.getElementById('experimental-3d-animations').checked
+      animationsEnabled: document.getElementById('animations-enabled').checked
     };
 
     this.gameOptions.update(newOptions);
 
     // Update game options
     this.game.updateOptions(this.gameOptions);
-
-    // Update 3D system flag
-    this.use3DSystem = newOptions.experimental3DAnimations;
 
     // Update Card3DManager animation settings
     if (this.card3DManager) {
@@ -410,8 +405,6 @@ class Game {
       this.game.updateOptions(this.gameOptions);
       // Update help mode
       this.helpMode = this.gameOptions.get('helpMode');
-      // Update 3D system flag
-      this.use3DSystem = this.gameOptions.get('experimental3DAnimations');
       // Update Card3DManager
       if (this.card3DManager) {
         this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
