@@ -34,6 +34,12 @@ export class AnimationTester {
       endY: 300,
       endZ: 0,
 
+      // Curve control point (for bezier path)
+      curveEnabled: false,
+      curveX: 400,
+      curveY: 200,
+      curveZ: 50,
+
       // Animation
       duration: 500,
       easing: 'easeInOutQuad',
@@ -43,6 +49,9 @@ export class AnimationTester {
       endScale: 1.0,
       endFaceUp: 1,
       endOpacity: 1.0,
+
+      // Flip timing (0 = flip early, 1 = flip late)
+      flipTiming: 0.5,
     };
 
     // Animation state
@@ -284,6 +293,13 @@ export class AnimationTester {
         // Calculate slight variation in end position for pile effect
         const offset = index * 0.5;
 
+        // Set up control point for curved path if enabled
+        const controlPoint = this.params.curveEnabled ? {
+          x: this.params.curveX,
+          y: this.params.curveY,
+          z: this.params.curveZ
+        } : null;
+
         card3D.tweenTo(
           {
             x: this.params.endX,
@@ -294,7 +310,9 @@ export class AnimationTester {
             faceUp: this.params.endFaceUp,
           },
           this.params.duration,
-          this.params.easing
+          this.params.easing,
+          controlPoint,
+          this.params.flipTiming
         );
 
         card3D.targetOpacity = this.params.endOpacity;
@@ -341,9 +359,14 @@ export class AnimationTester {
     this.drawPileOutline(ctx, this.leftPileX, this.leftPileY, '#4ecdc4', 'START PILE');
     this.drawPileOutline(ctx, this.params.endX, this.params.endY, '#ff6b6b', 'END PILE');
 
+    // Draw curved path visualization if enabled
+    if (this.params.curveEnabled) {
+      this.drawCurvePath(ctx);
+    }
+
     // Draw all cards
     this.allCards.forEach(card3D => {
-      this.cardRenderer.drawCard3D(ctx, card3D, false);
+      this.cardRenderer.drawCard3D(ctx, card3D, false, card3D.opacity);
     });
 
     // Draw animation status
@@ -383,6 +406,52 @@ export class AnimationTester {
     ctx.font = 'bold 12px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(label, x, y - height / 2 - 10);
+
+    ctx.restore();
+  }
+
+  /**
+   * Draw curved path visualization
+   */
+  drawCurvePath(ctx) {
+    ctx.save();
+
+    // Draw bezier curve
+    ctx.strokeStyle = '#ffa500';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+
+    ctx.beginPath();
+    ctx.moveTo(this.leftPileX, this.leftPileY);
+    ctx.quadraticCurveTo(
+      this.params.curveX,
+      this.params.curveY,
+      this.params.endX,
+      this.params.endY
+    );
+    ctx.stroke();
+
+    // Draw control point
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#ffa500';
+    ctx.beginPath();
+    ctx.arc(this.params.curveX, this.params.curveY, 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Draw control point lines
+    ctx.strokeStyle = 'rgba(255, 165, 0, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(this.leftPileX, this.leftPileY);
+    ctx.lineTo(this.params.curveX, this.params.curveY);
+    ctx.lineTo(this.params.endX, this.params.endY);
+    ctx.stroke();
+
+    // Draw control point label
+    ctx.fillStyle = '#ffa500';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('CURVE', this.params.curveX, this.params.curveY - 15);
 
     ctx.restore();
   }

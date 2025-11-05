@@ -1710,6 +1710,14 @@ class Game {
     this.setupRangeControl('endY');
     this.setupRangeControl('endZ');
 
+    // Curved path controls
+    document.getElementById('curveEnabled').addEventListener('change', (e) => {
+      this.animationTester.updateParam('curveEnabled', e.target.checked);
+    });
+    this.setupRangeControl('curveX');
+    this.setupRangeControl('curveY');
+    this.setupRangeControl('curveZ');
+
     // Animation controls
     this.setupRangeControl('duration');
     document.getElementById('easing').addEventListener('change', (e) => {
@@ -1724,6 +1732,7 @@ class Game {
     document.getElementById('endFaceUp').addEventListener('change', (e) => {
       this.animationTester.updateParam('endFaceUp', e.target.checked ? 1 : 0);
     });
+    this.setupRangeControl('flipTiming');
     this.setupRangeControl('endOpacity');
   }
 
@@ -1754,8 +1763,10 @@ class Game {
     // Update all range inputs and their value displays
     const rangeParams = [
       'endX', 'endY', 'endZ',
+      'curveX', 'curveY', 'curveZ',
       'duration',
       'endScale',
+      'flipTiming',
       'endOpacity'
     ];
 
@@ -1777,10 +1788,15 @@ class Game {
       endRotDisplay.textContent = degrees;
     }
 
-    // Update checkbox
+    // Update checkboxes
     const endFaceUpCheckbox = document.getElementById('endFaceUp');
     if (endFaceUpCheckbox) {
       endFaceUpCheckbox.checked = params.endFaceUp === 1;
+    }
+
+    const curveEnabledCheckbox = document.getElementById('curveEnabled');
+    if (curveEnabledCheckbox) {
+      curveEnabledCheckbox.checked = params.curveEnabled === true;
     }
 
     // Update easing select
