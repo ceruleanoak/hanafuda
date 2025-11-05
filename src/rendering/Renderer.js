@@ -344,12 +344,12 @@ export class Renderer {
         this.drawAllCardsGrid(gameState);
       }
 
-      // Trick pile hover - show tricks list
+      // Trick pile hover - show trick text list
       if (hoveredCard && hoveredCard.homeZone === 'playerTrick') {
-        this.drawTricksList(gameState.playerCaptured, 'Player Tricks');
+        this.drawTrickTextList(gameState.playerCaptured, 'Player Captured Cards');
       }
       if (hoveredCard && hoveredCard.homeZone === 'opponentTrick') {
-        this.drawTricksList(gameState.opponentCaptured, 'Opponent Tricks');
+        this.drawTrickTextList(gameState.opponentCaptured, 'Opponent Captured Cards');
       }
     }
   }
@@ -954,6 +954,65 @@ export class Renderer {
 
       this.cardRenderer.drawCard(this.ctx, card, cardX, cardY, false, false);
     });
+
+    this.ctx.restore();
+  }
+
+  /**
+   * Draw trick text list overlay (text-based list instead of card grid)
+   */
+  drawTrickTextList(capturedCards, title) {
+    const padding = 20;
+    const lineHeight = 20;
+    const maxWidth = 400;
+
+    // Calculate overlay dimensions
+    const overlayWidth = maxWidth;
+    const overlayHeight = Math.min(capturedCards.length * lineHeight + 80, this.displayHeight - 100);
+
+    const x = (this.displayWidth - overlayWidth) / 2;
+    const y = (this.displayHeight - overlayHeight) / 2;
+
+    this.ctx.save();
+
+    // Draw semi-transparent background
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.95)';
+    this.ctx.fillRect(x, y, overlayWidth, overlayHeight);
+
+    // Draw border
+    this.ctx.strokeStyle = '#4ecdc4';
+    this.ctx.lineWidth = 3;
+    this.ctx.strokeRect(x, y, overlayWidth, overlayHeight);
+
+    // Draw title
+    this.ctx.fillStyle = '#4ecdc4';
+    this.ctx.font = 'bold 18px monospace';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(title, x + overlayWidth / 2, y + 30);
+
+    // Draw count
+    this.ctx.fillStyle = '#fff';
+    this.ctx.font = '14px monospace';
+    this.ctx.fillText(`Total: ${capturedCards.length} cards`, x + overlayWidth / 2, y + 50);
+
+    // Draw card names in a scrollable list
+    this.ctx.font = '14px monospace';
+    this.ctx.textAlign = 'left';
+    const startY = y + 70;
+    const maxVisibleCards = Math.floor((overlayHeight - 90) / lineHeight);
+    const visibleCards = capturedCards.slice(0, maxVisibleCards);
+
+    visibleCards.forEach((card, index) => {
+      this.ctx.fillStyle = '#fff';
+      this.ctx.fillText(`• ${card.name}`, x + padding, startY + index * lineHeight);
+    });
+
+    // If there are more cards, show indicator
+    if (capturedCards.length > maxVisibleCards) {
+      this.ctx.fillStyle = '#888';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText(`... and ${capturedCards.length - maxVisibleCards} more`, x + overlayWidth / 2, startY + maxVisibleCards * lineHeight);
+    }
 
     this.ctx.restore();
   }

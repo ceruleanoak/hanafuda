@@ -156,16 +156,21 @@ export class Card3DManager {
    * Move a card to a new zone
    */
   moveCardToZone(card3D, newZone) {
+    const oldZone = card3D.homeZone;
+
     // Remove from old zone
-    if (card3D.homeZone) {
-      this.zoneCards[card3D.homeZone].delete(card3D);
-      this.dirtyZones.add(card3D.homeZone);
+    if (oldZone) {
+      this.zoneCards[oldZone].delete(card3D);
+      this.dirtyZones.add(oldZone);
     }
 
     // If moving to field zone, assign next available grid slot
     if (newZone === 'field' && card3D.gridSlot === undefined) {
       card3D.gridSlot = this.getNextAvailableFieldSlot();
     }
+
+    // Store previous zone for animation logic
+    card3D.previousZone = oldZone;
 
     // Add to new zone
     this.zoneCards[newZone].add(card3D);
@@ -174,6 +179,12 @@ export class Card3DManager {
 
     // Mark render queue dirty
     this.renderQueueDirty = true;
+
+    debugLogger.log('3dCards', `📦 Card zone change: ${oldZone} → ${newZone}`, {
+      card: card3D.cardData.name,
+      oldZone,
+      newZone
+    });
   }
 
   /**
@@ -250,13 +261,26 @@ export class Card3DManager {
       // Update face state
       if (config.faceUp !== undefined) {
         card3D.targetFaceUp = config.faceUp;
+
+        // If moving from deck to field/trick, flip face up during animation
+        if (card3D.previousZone === 'deck' && config.faceUp === 1 && animate) {
+          // Set target face up immediately so flip starts
+          card3D.setFaceUp(1);
+          // Clear previous zone tracking after using it
+          card3D.previousZone = null;
+        }
       }
 
       // Trigger animation if needed
       if (animate) {
         if (card3D.animationMode === 'idle') {
-          // Card was idle, trigger spring animation to new home
-          card3D.springToHome();
+          // Use tween for smooth, deterministic animation
+          const duration = this.getAnimationDuration(card3D, pos);
+          card3D.tweenTo(
+            { x: pos.x, y: pos.y, z: pos.z },
+            duration,
+            'easeInOutCubic'
+          );
         }
         // If card is already animating (tween or spring), let it continue
       } else {
@@ -266,6 +290,23 @@ export class Card3DManager {
     });
 
     this.renderQueueDirty = true;
+  }
+
+  /**
+   * Calculate animation duration based on distance
+   */
+  getAnimationDuration(card3D, targetPos) {
+    const dx = targetPos.x - card3D.x;
+    const dy = targetPos.y - card3D.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Base duration: 300-800ms depending on distance
+    const minDuration = 300;
+    const maxDuration = 800;
+    const maxDistance = 1000; // pixels
+
+    const normalizedDistance = Math.min(distance / maxDistance, 1);
+    return minDuration + (normalizedDistance * (maxDuration - minDuration));
   }
 
   /**
