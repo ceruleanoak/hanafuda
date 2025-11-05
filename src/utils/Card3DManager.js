@@ -14,6 +14,7 @@ export class Card3DManager {
     this.cards = new Map(); // cardId → Card3D
     this.zoneCards = {
       deck: new Set(),
+      drawnCard: new Set(), // Temporary zone for card drawn from deck
       field: new Set(),
       playerHand: new Set(),
       opponentHand: new Set(),
@@ -143,6 +144,12 @@ export class Card3DManager {
     };
 
     addCards(gameState.deck?.cards, 'deck');
+
+    // Handle single drawnCard (not an array)
+    if (gameState.drawnCard) {
+      mapping.set(gameState.drawnCard.id, 'drawnCard');
+    }
+
     addCards(gameState.field, 'field');
     addCards(gameState.playerHand, 'playerHand');
     addCards(gameState.opponentHand, 'opponentHand');
