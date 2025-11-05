@@ -1197,7 +1197,8 @@ class Game {
         try {
           this.animationTester.update(deltaTime);
           const ctx = this.canvas.getContext('2d');
-          this.animationTester.render(ctx, this.canvas.width, this.canvas.height);
+          // Use display dimensions for rendering
+          this.animationTester.render(ctx, this.renderer.displayWidth, this.renderer.displayHeight);
         } catch (err) {
           debugLogger.logError('Error in animation tester', err);
         }
@@ -1580,7 +1581,10 @@ class Game {
   showAnimationTester() {
     this.animationTesterPanel.classList.remove('hidden');
     this.animationTesterActive = true;
-    this.animationTester.initialize(this.canvas.width, this.canvas.height);
+    // Use display dimensions, not physical canvas dimensions
+    this.animationTester.initialize(this.renderer.displayWidth, this.renderer.displayHeight);
+    // Update controls to show the calculated default positions
+    this.updateAnimationTesterControls();
     debugLogger.log('animation', 'Animation tester opened', null);
   }
 
@@ -1610,7 +1614,7 @@ class Game {
 
     // Reset button
     document.getElementById('reset-animation').addEventListener('click', () => {
-      this.animationTester.resetCard();
+      this.animationTester.stopAnimation();
     });
 
     // Copy parameters button
