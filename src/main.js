@@ -1190,8 +1190,19 @@ class Game {
         try {
           this.animationTester.update(deltaTime);
           const ctx = this.canvas.getContext('2d');
+
+          // Reset canvas state and clear properly
+          ctx.save();
+          ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform to identity
+          ctx.clearRect(0, 0, this.canvas.width, this.canvas.height); // Clear the entire physical canvas
+
+          // Re-apply device pixel ratio scaling for proper rendering
+          const dpr = window.devicePixelRatio || 1;
+          ctx.scale(dpr, dpr);
+
           // Use display dimensions for rendering
           this.animationTester.render(ctx, this.renderer.displayWidth, this.renderer.displayHeight);
+          ctx.restore();
         } catch (err) {
           debugLogger.logError('Error in animation tester', err);
         }
