@@ -1043,7 +1043,7 @@ class Game {
    * Stage 3: Brief delay
    * Stage 4: Both cards → trick pile together
    */
-  createMatchSequence(movingCard, targetCard, capturedZone, player) {
+  createMatchSequence(movingCard, targetCard, capturedZone, player, isDrawnCardMatch = false) {
     const sequence = new AnimationSequence(`${player} Match`);
 
     // Use _renderX/Y which is set during last render (before cards moved to captured)
@@ -1064,17 +1064,20 @@ class Game {
       movingStart: `(${Math.round(movingStartPos.x)}, ${Math.round(movingStartPos.y)})`,
       targetCard: targetCard.name,
       targetPos: `(${Math.round(targetPos.x)}, ${Math.round(targetPos.y)})`,
-      pilePos: `(${Math.round(pilePos.x)}, ${Math.round(pilePos.y)})`
+      pilePos: `(${Math.round(pilePos.x)}, ${Math.round(pilePos.y)})`,
+      isDrawnCardMatch
     });
 
     // Stage 1: Moving card animates to target card
+    // Use longer duration for drawn card to make it more visible
+    const moveToMatchDuration = isDrawnCardMatch ? 500 : 400;
     sequence.addParallelStage([{
       card: movingCard,
       startX: movingStartPos.x,
       startY: movingStartPos.y,
       endX: targetPos.x,
       endY: targetPos.y,
-      duration: 400
+      duration: moveToMatchDuration
     }], 'Card arrives at match');
 
     // Stage 2: Fire match event
@@ -1084,8 +1087,10 @@ class Game {
       player: player
     });
 
-    // Stage 3: Brief delay to show the match
-    sequence.addDelay(200);
+    // Stage 3: Delay to show the match
+    // Use longer delay for drawn card to make the match more understandable
+    const matchPauseDelay = isDrawnCardMatch ? 600 : 200;
+    sequence.addDelay(matchPauseDelay);
 
     // Stage 4: Both cards to pile together from the same position
     sequence.addParallelStage([
@@ -1366,26 +1371,46 @@ class Game {
       const sequence = this.createFourOfAKindSequence(cards, month, capturedZone, player);
       this.playSequence(sequence);
     } else if (cards.length === 2) {
-      // Normal match - determine which card came from hand and which from field
-      // The card from hand/opponent hand should move TO the field card
-      const fieldCard = cards.find(c => c._owner === 'field');
-      const handCard = cards.find(c => c._owner === 'player' || c._owner === 'opponent');
+      // Normal match - determine which card came from hand/drawnCard and which from field
 
-      // If we can't determine by owner, use Y position (hand cards are higher/lower than field)
+      // Check if either card came from drawnCard zone
+      const card3D_0 = this.card3DManager.cards.get(cards[0].id);
+      const card3D_1 = this.card3DManager.cards.get(cards[1].id);
+
+      const drawnCard = (card3D_0?.previousZone === 'drawnCard') ? cards[0] :
+                       (card3D_1?.previousZone === 'drawnCard') ? cards[1] : null;
+
       let movingCard, targetCard;
-      if (fieldCard && handCard) {
-        movingCard = handCard;  // Hand card moves to field card
-        targetCard = fieldCard;
+
+      if (drawnCard) {
+        // One card came from drawnCard zone - it should move to the other card
+        movingCard = drawnCard;
+        targetCard = (drawnCard === cards[0]) ? cards[1] : cards[0];
+
+        debugLogger.log('animation', `Detected drawn card match`, {
+          drawnCard: movingCard.name,
+          fieldCard: targetCard.name
+        });
       } else {
-        // Fallback: use the card with higher/lower Y as hand card
-        // Field is in center, player hand is at bottom, opponent hand is at top
-        const centerY = this.renderer.displayHeight / 2;
-        if (Math.abs((cards[0]._renderY || 0) - centerY) > Math.abs((cards[1]._renderY || 0) - centerY)) {
-          movingCard = cards[0];  // Card farther from center (hand)
-          targetCard = cards[1];  // Card closer to center (field)
+        // Normal hand/field match
+        const fieldCard = cards.find(c => c._owner === 'field');
+        const handCard = cards.find(c => c._owner === 'player' || c._owner === 'opponent');
+
+        // If we can't determine by owner, use Y position (hand cards are higher/lower than field)
+        if (fieldCard && handCard) {
+          movingCard = handCard;  // Hand card moves to field card
+          targetCard = fieldCard;
         } else {
-          movingCard = cards[1];
-          targetCard = cards[0];
+          // Fallback: use the card with higher/lower Y as hand card
+          // Field is in center, player hand is at bottom, opponent hand is at top
+          const centerY = this.renderer.displayHeight / 2;
+          if (Math.abs((cards[0]._renderY || 0) - centerY) > Math.abs((cards[1]._renderY || 0) - centerY)) {
+            movingCard = cards[0];  // Card farther from center (hand)
+            targetCard = cards[1];  // Card closer to center (field)
+          } else {
+            movingCard = cards[1];
+            targetCard = cards[0];
+          }
         }
       }
 
@@ -1394,7 +1419,9 @@ class Game {
         targetCard: `${targetCard.name} (owner: ${targetCard._owner})`
       });
 
-      const sequence = this.createMatchSequence(movingCard, targetCard, capturedZone, player);
+      // Use longer delays for drawn card matches to make the sequence more understandable
+      const isDrawnCardMatch = (drawnCard !== null);
+      const sequence = this.createMatchSequence(movingCard, targetCard, capturedZone, player, isDrawnCardMatch);
       this.playSequence(sequence);
     } else {
       // Unexpected count, use fallback
