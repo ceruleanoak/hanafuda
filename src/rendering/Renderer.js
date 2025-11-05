@@ -14,8 +14,17 @@ export class Renderer {
     this.cardRenderer = new CardRenderer();
     this.backgroundImage = null;
     this.backgroundColor = '#000';
+    this.onResizeCallback = null;
 
     this.setupCanvas();
+  }
+
+  /**
+   * Set callback to be notified when viewport resizes
+   * @param {Function} callback - Called with (width, height) when resize occurs
+   */
+  setOnResizeCallback(callback) {
+    this.onResizeCallback = callback;
   }
 
   setupCanvas() {
@@ -51,6 +60,11 @@ export class Renderer {
 
     this.displayWidth = width;
     this.displayHeight = height;
+
+    // Notify listeners of resize
+    if (this.onResizeCallback) {
+      this.onResizeCallback(width, height);
+    }
   }
 
   /**

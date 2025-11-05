@@ -46,6 +46,21 @@ class Game {
       this.renderer.displayHeight
     );
 
+    // Set up resize callback to update Card3D viewport dimensions
+    this.renderer.setOnResizeCallback((width, height) => {
+      this.card3DManager.setViewportDimensions(width, height);
+
+      // Also update animation tester if it's active
+      if (this.animationTesterActive) {
+        this.animationTester.initialize(width, height);
+      }
+
+      debugLogger.log('gameState', 'Viewport resized - Card3D updated', {
+        width,
+        height
+      });
+    });
+
     // Initialize Card3D system from initial game state
     this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
     this.card3DManager.initializeFromGameState(this.game.getState());
