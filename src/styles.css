@@ -51,6 +51,8 @@ h1 {
 #help-btn,
 #variations-btn,
 #options-btn,
+#test-3d-btn,
+#animation-tester-btn,
 #new-game-btn {
   padding: 0.5rem 1.5rem;
   background: #4ecdc4;
@@ -71,6 +73,8 @@ h1 {
 #help-btn:hover,
 #variations-btn:hover,
 #options-btn:hover,
+#test-3d-btn:hover,
+#animation-tester-btn:hover,
 #new-game-btn:hover {
   background: #45b8b0;
 }
@@ -751,6 +755,213 @@ footer {
   50% {
     transform: translateY(-10px);
   }
+}
+
+/* Animation Tester Panel */
+.animation-tester-panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.95);
+  z-index: 2000;
+  display: flex;
+  padding: 2rem;
+  gap: 2rem;
+}
+
+.animation-tester-panel.hidden {
+  display: none;
+}
+
+.animation-tester-controls {
+  width: 400px;
+  background: linear-gradient(135deg, #1e1e1e 0%, #2a2a2a 100%);
+  border: 3px solid #4ecdc4;
+  border-radius: 12px;
+  padding: 1.5rem;
+  overflow-y: auto;
+  max-height: 100%;
+}
+
+.tester-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #333;
+}
+
+.tester-header h3 {
+  color: #4ecdc4;
+  font-size: 1.5rem;
+  margin: 0;
+}
+
+.close-btn {
+  background: #ff6b6b;
+  color: #fff;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  line-height: 1;
+}
+
+.close-btn:hover {
+  background: #ff5252;
+  transform: rotate(90deg);
+}
+
+.tester-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.primary-btn {
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, #4ecdc4 0%, #44a09b 100%);
+  color: #000;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.95rem;
+  grid-column: span 2;
+}
+
+.primary-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(78, 205, 196, 0.5);
+}
+
+.secondary-btn {
+  padding: 0.6rem 0.75rem;
+  background: #333;
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.85rem;
+}
+
+.secondary-btn:hover {
+  background: #444;
+  border-color: #4ecdc4;
+}
+
+.tester-section {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  border: 1px solid #333;
+}
+
+.tester-section h4 {
+  color: #ff6b6b;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+}
+
+.control-group {
+  margin-bottom: 1rem;
+}
+
+.control-group:last-child {
+  margin-bottom: 0;
+}
+
+.control-group label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  color: #ccc;
+}
+
+.control-group label span {
+  color: #4ecdc4;
+  font-weight: bold;
+  font-size: 0.95rem;
+}
+
+.control-group input[type="range"] {
+  width: 100%;
+  height: 6px;
+  background: #333;
+  border-radius: 3px;
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.control-group input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: #4ecdc4;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.control-group input[type="range"]::-webkit-slider-thumb:hover {
+  background: #5effd6;
+  transform: scale(1.2);
+}
+
+.control-group input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: #4ecdc4;
+  cursor: pointer;
+  border-radius: 50%;
+  border: none;
+  transition: all 0.2s;
+}
+
+.control-group input[type="range"]::-moz-range-thumb:hover {
+  background: #5effd6;
+  transform: scale(1.2);
+}
+
+.control-group input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #4ecdc4;
+  margin-right: 0.5rem;
+}
+
+.control-group select {
+  width: 100%;
+  padding: 0.6rem;
+  background: #1e1e1e;
+  border: 2px solid #4ecdc4;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.control-group select:focus {
+  outline: none;
+  border-color: #5effd6;
 }
 
 /* Responsive */

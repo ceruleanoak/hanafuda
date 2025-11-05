@@ -175,6 +175,7 @@ export class KoiKoi {
       opponentYakuProgress: opponentProgress,
       playerScore: this.playerScore,
       opponentScore: this.opponentScore,
+      deck: this.deck,
       deckCount: this.deck.count,
       currentPlayer: this.currentPlayer,
       selectedCards: this.selectedCards,

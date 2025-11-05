@@ -55,16 +55,9 @@ export class LayoutManager {
   layoutRow(cards, config, useAnimations) {
     const { anchorPoint, spacing = 115, centerX } = config;
 
-    let startX;
-    if (useAnimations) {
-      // Fixed anchor point for animations
-      startX = anchorPoint.x;
-    } else {
-      // Centered layout for better aesthetics
-      const totalWidth = cards.length * spacing;
-      startX = (centerX || anchorPoint.x) - totalWidth / 2;
-    }
-
+    // Always center the layout for consistent positioning
+    const totalWidth = cards.length * spacing;
+    const startX = (centerX || anchorPoint.x) - totalWidth / 2;
     const y = anchorPoint.y;
 
     return cards.map((card, i) => ({
@@ -83,11 +76,9 @@ export class LayoutManager {
 
     let startX;
     if (useFixedPositions) {
-      // Always use fixed grid positions (8 slots)
+      // Always use fixed grid positions (8 slots) - consistent regardless of animation state
       const totalWidth = maxPerRow * spacing;
       startX = (config.centerX || anchorPoint.x) - totalWidth / 2;
-    } else if (useAnimations) {
-      startX = anchorPoint.x;
     } else {
       // Center based on actual card count in first row
       const firstRowCount = Math.min(cards.length, maxPerRow);
@@ -162,15 +153,8 @@ export class LayoutManager {
     const totalArcLength = (cards.length - 1) * spacing;
     const angleSpan = totalArcLength / arcRadius; // radians
 
-    let startX;
-    if (useAnimations) {
-      // Start from anchor point
-      startX = anchorPoint.x;
-    } else {
-      // Center the arc
-      startX = (centerX || anchorPoint.x) - arcSpan / 2;
-    }
-
+    // Always center the arc for consistent positioning
+    const startX = (centerX || anchorPoint.x) - arcSpan / 2;
     const startY = anchorPoint.y;
 
     return cards.map((card, i) => {

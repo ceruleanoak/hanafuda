@@ -177,24 +177,28 @@ export class Renderer {
     // Draw yaku information
     this.draw3DYakuInfo(gameState, card3DManager);
 
-    // Draw drawn card if present (during drawing phases)
-    if (gameState.drawnCard && (
-      gameState.phase === 'select_drawn_match' ||
-      gameState.phase === 'show_drawn' ||
-      gameState.phase === 'drawing' ||
-      gameState.phase === 'opponent_drawing' ||
-      gameState.phase === 'opponent_drawn'
-    )) {
-      const centerX = this.displayWidth / 2;
-      const drawnCardY = 30 + 60; // Top of screen
-      this.drawDrawnCardHover(gameState.drawnCard, centerX, drawnCardY, gameState.phase);
-    }
+    // Only show drawn/played card popups when 3D animations are disabled
+    // When 3D animations are ON, cards are rendered in the 3D system instead
+    if (!card3DManager.useAnimations) {
+      // Draw drawn card if present (during drawing phases)
+      if (gameState.drawnCard && (
+        gameState.phase === 'select_drawn_match' ||
+        gameState.phase === 'show_drawn' ||
+        gameState.phase === 'drawing' ||
+        gameState.phase === 'opponent_drawing' ||
+        gameState.phase === 'opponent_drawn'
+      )) {
+        const centerX = this.displayWidth / 2;
+        const drawnCardY = 30 + 60; // Top of screen
+        this.drawDrawnCardHover(gameState.drawnCard, centerX, drawnCardY, gameState.phase);
+      }
 
-    // Draw opponent played card if present
-    if (gameState.opponentPlayedCard && gameState.phase === 'opponent_playing') {
-      const centerX = this.displayWidth / 2;
-      const playedCardY = 30 + 60; // Top of screen
-      this.drawOpponentPlayedCardHover(gameState.opponentPlayedCard, centerX, playedCardY);
+      // Draw opponent played card if present
+      if (gameState.opponentPlayedCard && gameState.phase === 'opponent_playing') {
+        const centerX = this.displayWidth / 2;
+        const playedCardY = 30 + 60; // Top of screen
+        this.drawOpponentPlayedCardHover(gameState.opponentPlayedCard, centerX, playedCardY);
+      }
     }
 
     // Show help mode highlighting

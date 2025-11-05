@@ -20,6 +20,7 @@
         <button id="variations-btn" title="Toggle game variations">💣</button>
         <button id="options-btn" title="Game options and rules">Options</button>
         <button id="test-3d-btn" title="Test 3D wave animation">🌊 Wave</button>
+        <button id="animation-tester-btn" title="Animation Testing Environment">🎬 Animator</button>
         <button id="new-game-btn">New Game</button>
       </div>
     </header>
@@ -114,17 +115,9 @@
               <div class="option-row">
                 <label for="animations-enabled">
                   <input type="checkbox" id="animations-enabled" checked>
-                  Enable Card Animations
+                  Enable 3D Animations
                 </label>
-                <span class="option-description">Show animated card movements</span>
-              </div>
-
-              <div class="option-row">
-                <label for="experimental-3d-animations">
-                  <input type="checkbox" id="experimental-3d-animations">
-                  🧪 Enable 3D Animations (Experimental)
-                </label>
-                <span class="option-description">Use new 3D animation system with physics-based movements</span>
+                <span class="option-description">Show animated card movements with 3D physics-based system</span>
               </div>
             </div>
           </div>
@@ -243,6 +236,130 @@
 
           <div class="modal-buttons">
             <button id="continue-next-round" class="primary-btn">Continue to Next Round</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Animation Tester Panel -->
+      <div id="animation-tester-panel" class="animation-tester-panel hidden">
+        <div class="animation-tester-controls">
+          <div class="tester-header">
+            <h3>Animation Tester</h3>
+            <button id="close-animation-tester" class="close-btn">✕</button>
+          </div>
+
+          <div class="tester-actions">
+            <button id="play-animation" class="primary-btn">▶ Play Animation</button>
+            <button id="reset-animation" class="secondary-btn">↺ Reset</button>
+            <button id="copy-params" class="secondary-btn">📋 Copy Parameters</button>
+            <button id="copy-code" class="secondary-btn">💾 Copy Code</button>
+          </div>
+
+          <div class="tester-section">
+            <h4>Preset Animations</h4>
+            <select id="animation-preset">
+              <option value="">-- Select Preset --</option>
+              <option value="Simple Slide">Simple Slide</option>
+              <option value="Flip While Moving">Flip While Moving</option>
+              <option value="Arc Jump">Arc Jump</option>
+              <option value="Spin and Grow">Spin and Grow</option>
+              <option value="Fade Out">Fade Out</option>
+              <option value="Bounce In (Back Easing)">Bounce In (Back Easing)</option>
+              <option value="Victory Spin">Victory Spin</option>
+              <option value="Flip and Fade">Flip and Fade</option>
+            </select>
+          </div>
+
+          <div class="tester-section">
+            <h4>Position</h4>
+            <div class="control-group">
+              <label>Start X: <span id="startX-value">200</span></label>
+              <input type="range" id="startX" min="0" max="800" value="200" step="10">
+            </div>
+            <div class="control-group">
+              <label>Start Y: <span id="startY-value">300</span></label>
+              <input type="range" id="startY" min="0" max="600" value="300" step="10">
+            </div>
+            <div class="control-group">
+              <label>Start Z: <span id="startZ-value">0</span></label>
+              <input type="range" id="startZ" min="0" max="200" value="0" step="5">
+            </div>
+            <div class="control-group">
+              <label>End X: <span id="endX-value">600</span></label>
+              <input type="range" id="endX" min="0" max="800" value="600" step="10">
+            </div>
+            <div class="control-group">
+              <label>End Y: <span id="endY-value">300</span></label>
+              <input type="range" id="endY" min="0" max="600" value="300" step="10">
+            </div>
+            <div class="control-group">
+              <label>End Z: <span id="endZ-value">0</span></label>
+              <input type="range" id="endZ" min="0" max="200" value="0" step="5">
+            </div>
+          </div>
+
+          <div class="tester-section">
+            <h4>Animation</h4>
+            <div class="control-group">
+              <label>Duration (ms): <span id="duration-value">500</span></label>
+              <input type="range" id="duration" min="100" max="3000" value="500" step="50">
+            </div>
+            <div class="control-group">
+              <label>Easing:</label>
+              <select id="easing">
+                <option value="linear">Linear</option>
+                <option value="easeInQuad">Ease In Quad</option>
+                <option value="easeOutQuad">Ease Out Quad</option>
+                <option value="easeInOutQuad" selected>Ease In Out Quad</option>
+                <option value="easeOutCubic">Ease Out Cubic</option>
+                <option value="easeInOutCubic">Ease In Out Cubic</option>
+                <option value="easeOutBack">Ease Out Back (Bounce)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="tester-section">
+            <h4>Rotation & Scale</h4>
+            <div class="control-group">
+              <label>Start Rotation (°): <span id="startRotation-value">0</span></label>
+              <input type="range" id="startRotation" min="0" max="360" value="0" step="15">
+            </div>
+            <div class="control-group">
+              <label>End Rotation (°): <span id="endRotation-value">0</span></label>
+              <input type="range" id="endRotation" min="0" max="1440" value="0" step="15">
+            </div>
+            <div class="control-group">
+              <label>Start Scale: <span id="startScale-value">1.0</span></label>
+              <input type="range" id="startScale" min="0.1" max="3.0" value="1.0" step="0.1">
+            </div>
+            <div class="control-group">
+              <label>End Scale: <span id="endScale-value">1.0</span></label>
+              <input type="range" id="endScale" min="0.1" max="3.0" value="1.0" step="0.1">
+            </div>
+          </div>
+
+          <div class="tester-section">
+            <h4>Appearance</h4>
+            <div class="control-group">
+              <label>
+                <input type="checkbox" id="startFaceUp" checked>
+                Start Face Up
+              </label>
+            </div>
+            <div class="control-group">
+              <label>
+                <input type="checkbox" id="endFaceUp" checked>
+                End Face Up
+              </label>
+            </div>
+            <div class="control-group">
+              <label>Start Opacity: <span id="startOpacity-value">1.0</span></label>
+              <input type="range" id="startOpacity" min="0" max="1" value="1" step="0.1">
+            </div>
+            <div class="control-group">
+              <label>End Opacity: <span id="endOpacity-value">1.0</span></label>
+              <input type="range" id="endOpacity" min="0" max="1" value="1" step="0.1">
+            </div>
           </div>
         </div>
       </div>
