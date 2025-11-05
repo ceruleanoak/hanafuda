@@ -2,6 +2,8 @@
  * CardRenderer - Handles rendering individual cards with PNG images or placeholder boxes
  */
 
+import { versionedUrl } from '../utils/version.js';
+
 export class CardRenderer {
   constructor() {
     this.cardWidth = 100;
@@ -56,7 +58,8 @@ export class CardRenderer {
         this.failedImages.add(imagePath);
         reject(new Error(`Failed to load image: ${imagePath}`));
       };
-      img.src = imagePath;
+      // Apply version parameter for cache busting
+      img.src = versionedUrl(imagePath);
     });
   }
 

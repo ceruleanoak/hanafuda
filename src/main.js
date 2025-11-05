@@ -8,6 +8,7 @@ import { debugLogger } from './utils/DebugLogger.js';
 import { GameOptions } from './game/GameOptions.js';
 import { Card3DManager } from './utils/Card3DManager.js';
 import { AnimationTester } from './utils/AnimationTester.js';
+import { APP_VERSION } from './utils/version.js';
 
 class Game {
   constructor() {
@@ -1745,5 +1746,5 @@ document.addEventListener('DOMContentLoaded', () => {
   // Example: Load background if available
   // game.loadBackground('./assets/backgrounds/texture.jpg');
 
-  console.log('Hanafuda Koi-Koi initialized');
+  console.log(`Hanafuda Koi-Koi initialized (v${APP_VERSION})`);
 });
