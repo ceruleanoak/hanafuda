@@ -32,7 +32,9 @@ export class KoiKoi {
       shobuCaller: null,   // Who called shobu to end the round
       resumeAction: null,  // What action to resume after decision ('drawPhase', 'endTurn', 'opponentDrawPhase')
       playerScoreAtKoikoi: 0,    // Player's score when they called koi-koi
-      opponentScoreAtKoikoi: 0   // Opponent's score when they called koi-koi
+      opponentScoreAtKoikoi: 0,   // Opponent's score when they called koi-koi
+      playerGetsMultiplier: false,  // Player gets 2× multiplier (scored after opponent's koi-koi)
+      opponentGetsMultiplier: false // Opponent gets 2× multiplier (scored after player's koi-koi)
     };
 
     // Track previous yaku to detect new yaku
@@ -117,7 +119,9 @@ export class KoiKoi {
       shobuCaller: null,
       resumeAction: null,
       playerScoreAtKoikoi: 0,
-      opponentScoreAtKoikoi: 0
+      opponentScoreAtKoikoi: 0,
+      playerGetsMultiplier: false,
+      opponentGetsMultiplier: false
     };
 
     // Reset turn start yaku tracking
@@ -936,17 +940,33 @@ export class KoiKoi {
       this.message = `Yaku! ${yakuNames} (${displayScore} points)`;
     }
 
-    // Check if someone already called koi-koi and we're in 2x mode
+    // Check if someone already called koi-koi
     const multiplierMode = this.gameOptions.get('multiplierMode');
-    const alreadyCalledKoikoi = this.koikoiState.playerCalled || this.koikoiState.opponentCalled;
 
-    if (alreadyCalledKoikoi && multiplierMode === '2x') {
-      // In 2x mode, round ends automatically after the next score
+    // Check if this player or opponent called koi-koi
+    const thisPlayerCalledKoikoi = (player === 'player' && this.koikoiState.playerCalled) ||
+                                   (player === 'opponent' && this.koikoiState.opponentCalled);
+    const opponentCalledKoikoi = (player === 'player' && this.koikoiState.opponentCalled) ||
+                                 (player === 'opponent' && this.koikoiState.playerCalled);
+
+    if ((thisPlayerCalledKoikoi || opponentCalledKoikoi) && multiplierMode === '2x') {
+      // Someone called koi-koi and this player just scored - round ends automatically
       this.koikoiState.roundWinner = player;
+
+      // Track who gets the multiplier bonus (only if opponent called koi-koi, not self)
+      if (opponentCalledKoikoi) {
+        // This player scored after opponent called koi-koi - gets 2× multiplier
+        if (player === 'player') {
+          this.koikoiState.playerGetsMultiplier = true;
+        } else {
+          this.koikoiState.opponentGetsMultiplier = true;
+        }
+      }
+
       this.message = player === 'player' ?
         `Yaku! ${yakuNames} (${displayScore} points) - Round ends!` :
         `Opponent scored ${yakuNames} (${displayScore} points) - Round ends!`;
-      console.log(`[KOIKOI] Round ending immediately - ${player} scored after opponent koi-koi`);
+      console.log(`[KOIKOI] Round ending - ${player} scored after koi-koi (self: ${thisPlayerCalledKoikoi}, opponent: ${opponentCalledKoikoi})`);
       this.endRound();
       return; // Stop execution here
     } else {
@@ -1411,34 +1431,43 @@ export class KoiKoi {
     // Winner-take-all logic (traditional koi-koi)
     if (this.gameOptions && !this.gameOptions.get('bothPlayersScore')) {
       // Determine round winner
-      let roundWinner = this.koikoiState.roundWinner;
+      let roundWinner = this.koikoiState.roundWinner || this.koikoiState.shobuCaller;
 
-      // If no explicit winner (from 2x mode auto-win), determine by yaku scores
+      // IMPORTANT: In koi-koi, there is NO score comparison to determine winner!
+      // Winner is only determined by:
+      // 1. Who called shobu (ends round immediately and wins)
+      // 2. Who scored after someone called koi-koi (auto-end in 2x mode)
+      // 3. If deck runs out with no winner: only players with yaku score
+      //    (if both have yaku, it's like "both players score" even in winner-take-all mode)
+
       if (!roundWinner) {
-        if (playerRoundScore > opponentRoundScore) {
+        // Deck ran out with no explicit winner
+        // Both players with yaku score their points (exception to winner-take-all)
+        if (playerRoundScore > 0 && opponentRoundScore > 0) {
+          console.log(`[SCORING] Deck exhausted - both players have yaku, both score`);
+          // Don't set a winner - both score
+        } else if (playerRoundScore > 0) {
           roundWinner = 'player';
-        } else if (opponentRoundScore > playerRoundScore) {
+        } else if (opponentRoundScore > 0) {
           roundWinner = 'opponent';
         }
-        // If tied or both have 0, no one wins (both get 0)
+        // If neither has yaku, both get 0
       }
 
-      console.log(`[SCORING] Round winner: ${roundWinner || 'none (tie)'}`);
+      console.log(`[SCORING] Round winner: ${roundWinner || 'both (deck exhausted with both having yaku)'}`);
 
-      // Apply winner-take-all: only winner gets points
+      // Apply winner-take-all: only winner gets points (unless both have yaku on deck exhaustion)
       if (roundWinner === 'player') {
         opponentRoundScore = 0;
         opponentScoreBreakdown.finalScore = 0;
       } else if (roundWinner === 'opponent') {
         playerRoundScore = 0;
         playerScoreBreakdown.finalScore = 0;
-      } else {
-        // Tie or no yaku - both get 0
-        playerRoundScore = 0;
-        opponentRoundScore = 0;
-        playerScoreBreakdown.finalScore = 0;
-        opponentScoreBreakdown.finalScore = 0;
+      } else if (playerRoundScore === 0 && opponentRoundScore === 0) {
+        // No winner and no yaku - both get 0
+        console.log(`[SCORING] No winner and no yaku - both get 0`);
       }
+      // else: both have yaku from deck exhaustion, both keep their scores
     }
 
     console.log(`[SCORING] Final round scores - Player: ${playerRoundScore}, Opponent: ${opponentRoundScore}`);
@@ -1546,62 +1575,43 @@ export class KoiKoi {
     }
 
     // Apply koi-koi multipliers
-    // Rule: Only the player who ends the round after opponent called koi-koi gets the bonus
-    // Determine who ended the round (who "went out")
-    let roundEnder = this.koikoiState.shobuCaller || this.koikoiState.roundWinner;
-
-    // If no explicit round ender, determine by score
-    if (!roundEnder) {
-      const playerYaku = Yaku.checkYaku(this.playerCaptured, this.gameOptions);
-      const opponentYaku = Yaku.checkYaku(this.opponentCaptured, this.gameOptions);
-      const playerScore = Yaku.calculateScore(playerYaku);
-      const opponentScore = Yaku.calculateScore(opponentYaku);
-
-      if (playerScore > opponentScore) {
-        roundEnder = 'player';
-      } else if (opponentScore > playerScore) {
-        roundEnder = 'opponent';
-      }
-      // If tied, no one gets bonus
-    }
+    // IMPORTANT: Only the player who scored AFTER OPPONENT called koi-koi gets the 2× bonus
+    // If you call koi-koi yourself and then score, you DO NOT get a multiplier
+    // (but you win the round and avoid the penalty)
 
     const multiplierMode = this.gameOptions.get('multiplierMode');
 
     if (player === 'player') {
-      // Player only gets multiplier if:
-      // 1. Opponent called koi-koi AND
-      // 2. Player ended the round (called shobu or had higher score)
-      if (this.koikoiState.opponentCalled && roundEnder === 'player') {
+      // Player only gets multiplier if opponent called koi-koi and player scored after
+      if (this.koikoiState.playerGetsMultiplier) {
         if (multiplierMode === 'cumulative') {
           const multiplier = Math.min(this.koikoiState.opponentCount + 1, 4);
           finalScore *= multiplier;
           breakdown.koikoiMultiplier = multiplier;
-          console.log(`[MULTIPLIER] Player gets ${multiplier}x bonus (opponent called koi-koi, player ended round)`);
+          console.log(`[MULTIPLIER] Player gets ${multiplier}x bonus (scored after opponent's koi-koi)`);
         } else if (multiplierMode === '2x') {
           finalScore *= 2;
           breakdown.koikoiMultiplier = 2;
-          console.log(`[MULTIPLIER] Player gets 2x bonus (opponent called koi-koi, player ended round)`);
+          console.log(`[MULTIPLIER] Player gets 2x bonus (scored after opponent's koi-koi)`);
         }
-      } else if (this.koikoiState.opponentCalled && roundEnder !== 'player') {
-        console.log(`[MULTIPLIER] Player does NOT get bonus (opponent called koi-koi but ${roundEnder || 'no one'} ended round)`);
+      } else if (this.koikoiState.playerCalled && this.koikoiState.roundWinner === 'player') {
+        console.log(`[MULTIPLIER] Player does NOT get bonus (scored after own koi-koi call)`);
       }
     } else {
-      // Opponent only gets multiplier if:
-      // 1. Player called koi-koi AND
-      // 2. Opponent ended the round (called shobu or had higher score)
-      if (this.koikoiState.playerCalled && roundEnder === 'opponent') {
+      // Opponent only gets multiplier if player called koi-koi and opponent scored after
+      if (this.koikoiState.opponentGetsMultiplier) {
         if (multiplierMode === 'cumulative') {
           const multiplier = Math.min(this.koikoiState.playerCount + 1, 4);
           finalScore *= multiplier;
           breakdown.koikoiMultiplier = multiplier;
-          console.log(`[MULTIPLIER] Opponent gets ${multiplier}x bonus (player called koi-koi, opponent ended round)`);
+          console.log(`[MULTIPLIER] Opponent gets ${multiplier}x bonus (scored after player's koi-koi)`);
         } else if (multiplierMode === '2x') {
           finalScore *= 2;
           breakdown.koikoiMultiplier = 2;
-          console.log(`[MULTIPLIER] Opponent gets 2x bonus (player called koi-koi, opponent ended round)`);
+          console.log(`[MULTIPLIER] Opponent gets 2x bonus (scored after player's koi-koi)`);
         }
-      } else if (this.koikoiState.playerCalled && roundEnder !== 'opponent') {
-        console.log(`[MULTIPLIER] Opponent does NOT get bonus (player called koi-koi but ${roundEnder || 'no one'} ended round)`);
+      } else if (this.koikoiState.opponentCalled && this.koikoiState.roundWinner === 'opponent') {
+        console.log(`[MULTIPLIER] Opponent does NOT get bonus (scored after own koi-koi call)`);
       }
     }
 

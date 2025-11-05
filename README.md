@@ -98,9 +98,29 @@ The deployment workflow is defined in `.github/workflows/deploy.yml`
    - Otherwise, it's placed on the field
 4. **Scoring**: Form yaku (combinations) to earn points
 5. **Koi-Koi Decision**: When you form a yaku, choose:
-   - **Shobu** - End the round and keep your points (safe)
-   - **Koi-Koi** - Continue playing to score more, but risk opponent doubling their points!
+   - **Shobu** - End the round immediately and win with your points (safe)
+   - **Koi-Koi** - Continue playing to improve your score (risky!)
 6. **Round End**: The round ends when all cards are played or someone calls Shobu
+
+### Koi-Koi Scoring Rules
+
+**Winner Determination** (Winner-Take-All Mode):
+- Scoring is like a **footrace** - only ONE player scores per round
+- Round winner is determined by:
+  1. **Shobu caller**: If you call shobu, you win immediately with your points
+  2. **Koi-koi success**: If you call koi-koi and then capture more cards to improve your yaku, you win
+  3. **Punish opponent's koi-koi**: If opponent calls koi-koi and you capture cards to form/improve a yaku, you win with 2× multiplier
+  4. **Deck exhaustion**: If the deck runs out, the player with yaku wins (or both score if both have yaku)
+- **NEVER score comparison**: The winner is determined by who ends the round, not by comparing yaku scores
+
+**2× Multiplier Bonus**:
+- You get the 2× multiplier ONLY if:
+  - Opponent calls koi-koi
+  - You capture a new card that improves your yaku
+- You do NOT get the 2× multiplier if you call koi-koi yourself (even if you improve)
+
+**Koi-Koi Risk**:
+- If you call koi-koi but don't improve your score (via new captures), you lose all your points for that round
 
 ## Game Options
 

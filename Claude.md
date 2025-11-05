@@ -72,7 +72,25 @@ The 3D system uses **fixed grid positions**:
 - **Field**: Center 8 cards available for matching
 - **Yaku**: Scoring combinations (like poker hands)
 - **Koi-Koi**: "Continue" - player chooses to keep playing for more points
+- **Shobu**: "Stop" - player ends the round and wins with their current points
 - **Bomb card**: Special rule - 4 of same month in hand
+
+### Koi-Koi Rules (IMPORTANT)
+**Winner Determination** (Winner-Take-All):
+- Only ONE player scores per round (unless "both players score" is enabled)
+- Winner is determined by who ends the round:
+  1. Shobu caller wins immediately
+  2. Player who calls koi-koi and improves wins (no multiplier)
+  3. Player who scores after opponent's koi-koi wins (with 2× multiplier)
+  4. Deck exhaustion: player with yaku wins (or both score if both have yaku)
+- **NEVER compare scores** to determine winner!
+
+**2× Multiplier**:
+- Only applies if OPPONENT called koi-koi and YOU scored after
+- Does NOT apply if you call koi-koi yourself
+
+**Koi-Koi Penalty**:
+- If you call koi-koi but don't improve (via new captures), you lose all points
 
 ### Game Phases
 - `select_hand`: Player choosing card from hand
