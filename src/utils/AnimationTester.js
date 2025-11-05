@@ -46,17 +46,34 @@ export class AnimationTester {
 
       // Visual properties
       endRotation: 0,
-      endScale: 1.0,
+      peakScale: 0.2, // Scale increase amount at peak (added to base scale of 1.0)
       endFaceUp: 1,
       endOpacity: 1.0,
 
       // Flip timing (0 = flip early, 1 = flip late)
       flipTiming: 0.5,
+
+      // Variance for scattering effect
+      varianceEnabled: false,
+      rotationVariance: 0, // +/- radians
+      positionXVariance: 0,
+      positionYVariance: 0,
+      positionZVariance: 0,
     };
 
     // Animation state
     this.isPlaying = false;
     this.animationStartTime = 0;
+
+    // Mouse interaction state
+    this.isDraggingCurve = false;
+    this.curveNodeRadius = 10; // Clickable radius for curve control point
+    this.canvas = null; // Will be set during initialization
+
+    // Card animation tracking
+    this.nextCardIndex = 0; // Index of next card to animate
+    this.leftPileWidth = 100;
+    this.leftPileHeight = 140;
 
     // Available options
     this.easingOptions = [
@@ -149,11 +166,15 @@ export class AnimationTester {
   /**
    * Initialize the test environment
    */
-  initialize(canvasWidth, canvasHeight) {
+  initialize(canvasWidth, canvasHeight, canvas) {
     debugLogger.log('animation', '🎬 AnimationTester initializing', {
       canvasWidth,
       canvasHeight
     });
+
+    // Store canvas reference for mouse interaction
+    this.canvas = canvas;
+    this.setupMouseListeners();
 
     // Calculate pile positions
     const centerY = canvasHeight / 2;
@@ -165,6 +186,10 @@ export class AnimationTester {
     // Set default end position to right pile
     this.params.endX = this.rightPileX;
     this.params.endY = this.rightPileY;
+
+    // Set default curve control point to midpoint
+    this.params.curveX = (this.leftPileX + this.rightPileX) / 2;
+    this.params.curveY = (this.leftPileY + this.rightPileY) / 2 - 100;
 
     // Collect all cards from the game
     this.allCards = [];
@@ -218,6 +243,9 @@ export class AnimationTester {
       card3D.targetOpacity = 1.0;
     });
 
+    // Reset animation index
+    this.nextCardIndex = 0;
+
     debugLogger.log('animation', '📚 Stacked cards on left pile', {
       count: this.allCards.length,
       position: `(${Math.round(this.leftPileX)}, ${Math.round(this.leftPileY)})`
@@ -260,6 +288,77 @@ export class AnimationTester {
   }
 
   /**
+   * Animate a single card (helper method)
+   */
+  animateSingleCard(index, delayOverride = null) {
+    if (index >= this.allCards.length) return;
+
+    const card3D = this.allCards[index];
+    const delay = delayOverride !== null ? delayOverride : index * 30; // Stagger delay
+
+    setTimeout(() => {
+      // Calculate slight variation in end position for pile effect
+      const offset = index * 0.5;
+
+      // Apply variance if enabled
+      let endX = this.params.endX;
+      let endY = this.params.endY + offset;
+      let endZ = this.params.endZ + index * 0.1;
+      let endRotation = this.params.endRotation;
+
+      if (this.params.varianceEnabled) {
+        // Add random variance to position and rotation
+        endX += (Math.random() * 2 - 1) * this.params.positionXVariance;
+        endY += (Math.random() * 2 - 1) * this.params.positionYVariance;
+        endZ += (Math.random() * 2 - 1) * this.params.positionZVariance;
+        endRotation += (Math.random() * 2 - 1) * this.params.rotationVariance;
+      }
+
+      // Set up control point for curved path if enabled
+      const controlPoint = this.params.curveEnabled ? {
+        x: this.params.curveX,
+        y: this.params.curveY,
+        z: this.params.curveZ
+      } : null;
+
+      card3D.tweenTo(
+        {
+          x: endX,
+          y: endY,
+          z: endZ,
+          rotation: endRotation,
+          faceUp: this.params.endFaceUp,
+        },
+        this.params.duration,
+        this.params.easing,
+        controlPoint,
+        this.params.flipTiming,
+        this.params.peakScale
+      );
+
+      card3D.targetOpacity = this.params.endOpacity;
+    }, delay);
+  }
+
+  /**
+   * Animate next card in deck
+   */
+  animateNextCard() {
+    if (this.nextCardIndex >= this.allCards.length) {
+      debugLogger.log('animation', '⚠️ All cards already animated', null);
+      return;
+    }
+
+    debugLogger.log('animation', '▶️ Animating single card', {
+      index: this.nextCardIndex,
+      remaining: this.allCards.length - this.nextCardIndex
+    });
+
+    this.animateSingleCard(this.nextCardIndex, 0);
+    this.nextCardIndex++;
+  }
+
+  /**
    * Play the animation with current parameters
    */
   playAnimation() {
@@ -268,59 +367,39 @@ export class AnimationTester {
       return; // Already playing
     }
 
+    // If some cards are already animated, only animate the remaining ones
+    const startIndex = this.nextCardIndex;
+    const remainingCards = this.allCards.length - startIndex;
+
+    if (remainingCards === 0) {
+      debugLogger.log('animation', '⚠️ All cards already animated', null);
+      // Reset everything
+      this.stackCardsOnLeft();
+      return;
+    }
+
     debugLogger.log('animation', '▶️ AnimationTester starting animation', {
-      cardCount: this.allCards.length,
+      startIndex,
+      remainingCards,
       to: `(${Math.round(this.params.endX)}, ${Math.round(this.params.endY)}, ${Math.round(this.params.endZ)})`,
       duration: `${this.params.duration}ms`,
-      easing: this.params.easing,
-      endRotation: this.params.endRotation,
-      endScale: this.params.endScale,
-      endFaceUp: this.params.endFaceUp,
-      endOpacity: this.params.endOpacity
+      easing: this.params.easing
     });
-
-    // Reset cards to left pile first
-    this.stackCardsOnLeft();
 
     this.isPlaying = true;
     this.animationStartTime = Date.now();
 
-    // Animate all cards to the right pile with stagger
-    this.allCards.forEach((card3D, index) => {
-      const delay = index * 30; // Stagger delay
+    // Animate remaining cards to the right pile with stagger
+    for (let i = startIndex; i < this.allCards.length; i++) {
+      const relativeIndex = i - startIndex;
+      this.animateSingleCard(i, relativeIndex * 30);
+    }
 
-      setTimeout(() => {
-        // Calculate slight variation in end position for pile effect
-        const offset = index * 0.5;
-
-        // Set up control point for curved path if enabled
-        const controlPoint = this.params.curveEnabled ? {
-          x: this.params.curveX,
-          y: this.params.curveY,
-          z: this.params.curveZ
-        } : null;
-
-        card3D.tweenTo(
-          {
-            x: this.params.endX,
-            y: this.params.endY + offset,
-            z: this.params.endZ + index * 0.1,
-            rotation: this.params.endRotation,
-            scale: this.params.endScale,
-            faceUp: this.params.endFaceUp,
-          },
-          this.params.duration,
-          this.params.easing,
-          controlPoint,
-          this.params.flipTiming
-        );
-
-        card3D.targetOpacity = this.params.endOpacity;
-      }, delay);
-    });
+    // Update next card index
+    this.nextCardIndex = this.allCards.length;
 
     // Mark as complete after all animations finish
-    const totalDuration = this.allCards.length * 30 + this.params.duration;
+    const totalDuration = remainingCards * 30 + this.params.duration;
     setTimeout(() => {
       debugLogger.log('animation', '✅ AnimationTester animation complete', {
         duration: `${Date.now() - this.animationStartTime}ms`
@@ -576,6 +655,11 @@ export class AnimationTester {
 
     this.isActive = false;
 
+    // Remove mouse listeners
+    if (this.canvas) {
+      this.removeMouseListeners();
+    }
+
     // Restore all cards to their original states
     this.allCards.forEach((card3D, index) => {
       const original = this.originalStates[index];
@@ -592,5 +676,136 @@ export class AnimationTester {
 
     this.allCards = [];
     this.originalStates = [];
+  }
+
+  /**
+   * Setup mouse event listeners for curve node dragging
+   */
+  setupMouseListeners() {
+    if (!this.canvas) return;
+
+    this.onMouseDown = (e) => this.handleMouseDown(e);
+    this.onMouseMove = (e) => this.handleMouseMove(e);
+    this.onMouseUp = (e) => this.handleMouseUp(e);
+
+    this.canvas.addEventListener('mousedown', this.onMouseDown);
+    this.canvas.addEventListener('mousemove', this.onMouseMove);
+    this.canvas.addEventListener('mouseup', this.onMouseUp);
+  }
+
+  /**
+   * Remove mouse event listeners
+   */
+  removeMouseListeners() {
+    if (!this.canvas) return;
+
+    this.canvas.removeEventListener('mousedown', this.onMouseDown);
+    this.canvas.removeEventListener('mousemove', this.onMouseMove);
+    this.canvas.removeEventListener('mouseup', this.onMouseUp);
+  }
+
+  /**
+   * Check if mouse position is over the curve control point
+   */
+  isMouseOverCurveNode(mouseX, mouseY) {
+    if (!this.params.curveEnabled) return false;
+
+    const dx = mouseX - this.params.curveX;
+    const dy = mouseY - this.params.curveY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    return distance <= this.curveNodeRadius;
+  }
+
+  /**
+   * Check if mouse position is over the left pile (deck)
+   */
+  isMouseOverLeftPile(mouseX, mouseY) {
+    const left = this.leftPileX - this.leftPileWidth / 2;
+    const right = this.leftPileX + this.leftPileWidth / 2;
+    const top = this.leftPileY - this.leftPileHeight / 2;
+    const bottom = this.leftPileY + this.leftPileHeight / 2;
+
+    return mouseX >= left && mouseX <= right && mouseY >= top && mouseY <= bottom;
+  }
+
+  /**
+   * Handle mouse down event
+   */
+  handleMouseDown(e) {
+    if (!this.isActive) return;
+
+    const rect = this.canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    // Check if clicking on curve control point
+    if (this.isMouseOverCurveNode(mouseX, mouseY)) {
+      this.isDraggingCurve = true;
+      this.canvas.style.cursor = 'grabbing';
+      e.preventDefault();
+      return;
+    }
+
+    // Check if clicking on left pile to animate next card
+    if (this.isMouseOverLeftPile(mouseX, mouseY)) {
+      this.animateNextCard();
+      e.preventDefault();
+      return;
+    }
+  }
+
+  /**
+   * Handle mouse move event
+   */
+  handleMouseMove(e) {
+    if (!this.isActive) return;
+
+    const rect = this.canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    // Update cursor based on hover state
+    if (!this.isDraggingCurve) {
+      if (this.isMouseOverCurveNode(mouseX, mouseY)) {
+        this.canvas.style.cursor = 'grab';
+      } else {
+        this.canvas.style.cursor = 'default';
+      }
+    }
+
+    // Drag curve control point
+    if (this.isDraggingCurve) {
+      this.params.curveX = mouseX;
+      this.params.curveY = mouseY;
+
+      // Update UI controls (if available)
+      const curveXInput = document.getElementById('curveX');
+      const curveYInput = document.getElementById('curveY');
+      const curveXDisplay = document.getElementById('curveX-value');
+      const curveYDisplay = document.getElementById('curveY-value');
+
+      if (curveXInput && curveXDisplay) {
+        curveXInput.value = Math.round(mouseX);
+        curveXDisplay.textContent = Math.round(mouseX);
+      }
+      if (curveYInput && curveYDisplay) {
+        curveYInput.value = Math.round(mouseY);
+        curveYDisplay.textContent = Math.round(mouseY);
+      }
+
+      e.preventDefault();
+    }
+  }
+
+  /**
+   * Handle mouse up event
+   */
+  handleMouseUp(e) {
+    if (this.isDraggingCurve) {
+      this.isDraggingCurve = false;
+      this.canvas.style.cursor = 'default';
+      e.preventDefault();
+    }
   }
 }
