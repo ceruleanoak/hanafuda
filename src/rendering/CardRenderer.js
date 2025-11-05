@@ -204,7 +204,7 @@ export class CardRenderer {
     let currentY = y + 20;
 
     // Month (first 3 letters)
-    const monthShort = card.month.substring(0, 3);
+    const monthShort = (typeof card.month === 'string') ? card.month.substring(0, 3) : 'N/A';
     ctx.fillText(monthShort, centerX, currentY);
 
     currentY += 15;
@@ -399,7 +399,7 @@ export class CardRenderer {
     let currentY = y + 20 * scale;
 
     // Month (first 3 letters)
-    const monthShort = card.month.substring(0, 3);
+    const monthShort = (typeof card.month === 'string') ? card.month.substring(0, 3) : 'N/A';
     ctx.fillText(monthShort, centerX, currentY);
 
     currentY += 15 * scale;
