@@ -7,6 +7,7 @@ import { Renderer } from './rendering/Renderer.js';
 import { debugLogger } from './utils/DebugLogger.js';
 import { GameOptions } from './game/GameOptions.js';
 import { Card3DManager } from './utils/Card3DManager.js';
+import { AnimationTester } from './utils/AnimationTester.js';
 
 class Game {
   constructor() {
@@ -20,12 +21,14 @@ class Game {
     this.variationsButton = document.getElementById('variations-btn');
     this.optionsButton = document.getElementById('options-btn');
     this.test3DButton = document.getElementById('test-3d-btn');
+    this.animationTesterButton = document.getElementById('animation-tester-btn');
     this.roundModal = document.getElementById('round-modal');
     this.variationsModal = document.getElementById('variations-modal');
     this.optionsModal = document.getElementById('options-modal');
     this.koikoiModal = document.getElementById('koikoi-modal');
     this.roundSummaryModal = document.getElementById('round-summary-modal');
     this.tutorialBubble = document.getElementById('tutorial-bubble');
+    this.animationTesterPanel = document.getElementById('animation-tester-panel');
 
     // Initialize game options
     this.gameOptions = new GameOptions();
@@ -41,6 +44,10 @@ class Game {
       this.renderer.displayWidth,
       this.renderer.displayHeight
     );
+
+    // Initialize Animation Tester
+    this.animationTester = new AnimationTester(this.renderer.cardRenderer);
+    this.animationTesterActive = false;
 
     this.lastMessage = '';
     this.lastGameOverMessage = '';
@@ -116,6 +123,9 @@ class Game {
     // Test 3D animation button
     this.test3DButton.addEventListener('click', () => this.startWaveAnimation());
 
+    // Animation tester button
+    this.animationTesterButton.addEventListener('click', () => this.showAnimationTester());
+
     // Round selection buttons
     document.querySelectorAll('.round-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -159,6 +169,9 @@ class Game {
         this.updateVariationsButtonState();
       }
     });
+
+    // Animation tester controls
+    this.setupAnimationTesterControls();
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
@@ -1174,42 +1187,53 @@ class Game {
   gameLoop() {
     try {
       const now = performance.now();
-      const deltaTime = this.lastTime ? now - this.lastTime : 0;
+      const deltaTime = this.lastTime ? (now - this.lastTime) / 1000 : 0; // Convert to seconds
       this.lastTime = now;
 
       const state = this.game.getState();
 
-      // Update Card3D system
-      try {
-        // Update physics and animations
-        this.card3DManager.update(now);
+      // If animation tester is active, render it instead of the game
+      if (this.animationTesterActive) {
+        try {
+          this.animationTester.update(deltaTime);
+          const ctx = this.canvas.getContext('2d');
+          this.animationTester.render(ctx, this.canvas.width, this.canvas.height);
+        } catch (err) {
+          debugLogger.logError('Error in animation tester', err);
+        }
+      } else {
+        // Update Card3D system
+        try {
+          // Update physics and animations
+          this.card3DManager.update(now);
 
-        // Synchronize with game state (detects card movements between zones)
-        this.card3DManager.synchronize(state);
-      } catch (err) {
-        debugLogger.logError('Error in Card3D system update', err);
-      }
+          // Synchronize with game state (detects card movements between zones)
+          this.card3DManager.synchronize(state);
+        } catch (err) {
+          debugLogger.logError('Error in Card3D system update', err);
+        }
 
-      // Render
-      try {
-        const renderOptions = {
-          helpMode: this.helpMode,
-          hoverX: this.hoverX,
-          hoverY: this.hoverY,
-          isModalVisible: this.koikoiModal.classList.contains('show'),
-          card3DManager: this.card3DManager
-        };
+        // Render
+        try {
+          const renderOptions = {
+            helpMode: this.helpMode,
+            hoverX: this.hoverX,
+            hoverY: this.hoverY,
+            isModalVisible: this.koikoiModal.classList.contains('show'),
+            card3DManager: this.card3DManager
+          };
 
-        this.renderer.render(state, [], renderOptions);
-      } catch (err) {
-        debugLogger.logError('Error in render', err);
-      }
+          this.renderer.render(state, [], renderOptions);
+        } catch (err) {
+          debugLogger.logError('Error in render', err);
+        }
 
-      // Update UI
-      try {
-        this.updateUI();
-      } catch (err) {
-        debugLogger.logError('Error in updateUI', err);
+        // Update UI
+        try {
+          this.updateUI();
+        } catch (err) {
+          debugLogger.logError('Error in updateUI', err);
+        }
       }
 
       // Log game loop status periodically (every 300 frames ~5 seconds at 60fps)
@@ -1548,6 +1572,172 @@ class Game {
     } catch (error) {
       console.warn('Failed to load background:', error);
     }
+  }
+
+  /**
+   * Show animation tester
+   */
+  showAnimationTester() {
+    this.animationTesterPanel.classList.remove('hidden');
+    this.animationTesterActive = true;
+    this.animationTester.initialize(this.canvas.width, this.canvas.height);
+    debugLogger.log('animation', 'Animation tester opened', null);
+  }
+
+  /**
+   * Hide animation tester
+   */
+  hideAnimationTester() {
+    this.animationTesterPanel.classList.add('hidden');
+    this.animationTesterActive = false;
+    this.animationTester.deactivate();
+    debugLogger.log('animation', 'Animation tester closed', null);
+  }
+
+  /**
+   * Setup animation tester controls
+   */
+  setupAnimationTesterControls() {
+    // Close button
+    document.getElementById('close-animation-tester').addEventListener('click', () => {
+      this.hideAnimationTester();
+    });
+
+    // Play button
+    document.getElementById('play-animation').addEventListener('click', () => {
+      this.animationTester.playAnimation();
+    });
+
+    // Reset button
+    document.getElementById('reset-animation').addEventListener('click', () => {
+      this.animationTester.resetCard();
+    });
+
+    // Copy parameters button
+    document.getElementById('copy-params').addEventListener('click', () => {
+      const params = this.animationTester.getParametersAsString();
+      navigator.clipboard.writeText(params).then(() => {
+        alert('Parameters copied to clipboard!');
+      }).catch(err => {
+        console.error('Failed to copy:', err);
+      });
+    });
+
+    // Copy code button
+    document.getElementById('copy-code').addEventListener('click', () => {
+      const code = this.animationTester.getTweenCodeSnippet();
+      navigator.clipboard.writeText(code).then(() => {
+        alert('Code snippet copied to clipboard!');
+      }).catch(err => {
+        console.error('Failed to copy:', err);
+      });
+    });
+
+    // Preset selector
+    document.getElementById('animation-preset').addEventListener('change', (e) => {
+      const presetName = e.target.value;
+      if (presetName) {
+        this.animationTester.loadPreset(presetName);
+        this.updateAnimationTesterControls();
+      }
+    });
+
+    // Position controls
+    this.setupRangeControl('startX');
+    this.setupRangeControl('startY');
+    this.setupRangeControl('startZ');
+    this.setupRangeControl('endX');
+    this.setupRangeControl('endY');
+    this.setupRangeControl('endZ');
+
+    // Animation controls
+    this.setupRangeControl('duration');
+    document.getElementById('easing').addEventListener('change', (e) => {
+      this.animationTester.updateParam('easing', e.target.value);
+    });
+
+    // Rotation & Scale controls
+    this.setupRangeControl('startRotation', (value) => value * Math.PI / 180); // Convert to radians
+    this.setupRangeControl('endRotation', (value) => value * Math.PI / 180);
+    this.setupRangeControl('startScale');
+    this.setupRangeControl('endScale');
+
+    // Appearance controls
+    document.getElementById('startFaceUp').addEventListener('change', (e) => {
+      this.animationTester.updateParam('startFaceUp', e.target.checked ? 1 : 0);
+    });
+    document.getElementById('endFaceUp').addEventListener('change', (e) => {
+      this.animationTester.updateParam('endFaceUp', e.target.checked ? 1 : 0);
+    });
+    this.setupRangeControl('startOpacity');
+    this.setupRangeControl('endOpacity');
+  }
+
+  /**
+   * Setup a range control with value display
+   */
+  setupRangeControl(paramName, valueTransform = null) {
+    const input = document.getElementById(paramName);
+    const valueDisplay = document.getElementById(`${paramName}-value`);
+
+    if (!input || !valueDisplay) return;
+
+    input.addEventListener('input', (e) => {
+      const displayValue = parseFloat(e.target.value);
+      const actualValue = valueTransform ? valueTransform(displayValue) : displayValue;
+
+      valueDisplay.textContent = displayValue;
+      this.animationTester.updateParam(paramName, actualValue);
+    });
+  }
+
+  /**
+   * Update animation tester controls to reflect current values
+   */
+  updateAnimationTesterControls() {
+    const params = this.animationTester.params;
+
+    // Update all range inputs and their value displays
+    const rangeParams = [
+      'startX', 'startY', 'startZ',
+      'endX', 'endY', 'endZ',
+      'duration',
+      'startScale', 'endScale',
+      'startOpacity', 'endOpacity'
+    ];
+
+    rangeParams.forEach(param => {
+      const input = document.getElementById(param);
+      const valueDisplay = document.getElementById(`${param}-value`);
+      if (input && valueDisplay) {
+        input.value = params[param];
+        valueDisplay.textContent = params[param];
+      }
+    });
+
+    // Update rotation (convert from radians to degrees)
+    const startRotInput = document.getElementById('startRotation');
+    const startRotDisplay = document.getElementById('startRotation-value');
+    if (startRotInput && startRotDisplay) {
+      const degrees = Math.round(params.startRotation * 180 / Math.PI);
+      startRotInput.value = degrees;
+      startRotDisplay.textContent = degrees;
+    }
+
+    const endRotInput = document.getElementById('endRotation');
+    const endRotDisplay = document.getElementById('endRotation-value');
+    if (endRotInput && endRotDisplay) {
+      const degrees = Math.round(params.endRotation * 180 / Math.PI);
+      endRotInput.value = degrees;
+      endRotDisplay.textContent = degrees;
+    }
+
+    // Update checkboxes
+    document.getElementById('startFaceUp').checked = params.startFaceUp === 1;
+    document.getElementById('endFaceUp').checked = params.endFaceUp === 1;
+
+    // Update easing select
+    document.getElementById('easing').value = params.easing;
   }
 }
 
