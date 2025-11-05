@@ -189,7 +189,7 @@ export class AnimationTester {
       id: 'test-card',
       suit: 'pine',
       type: 'bright',
-      month: 1,
+      month: 'January',
       image: './images/cards/01-pine-bright.png',
       points: 20
     };
