@@ -1,0 +1,481 @@
+/**
+ * Enhanced Card3D - Full 3D card representation with multiple animation modes
+ * Designed for real-time rendering where all cards exist as 3D objects
+ */
+
+/**
+ * Easing functions for tween animations
+ */
+const Easing = {
+  linear: (t) => t,
+  easeInQuad: (t) => t * t,
+  easeOutQuad: (t) => t * (2 - t),
+  easeInOutQuad: (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
+  easeOutCubic: (t) => (--t) * t * t + 1,
+  easeInOutCubic: (t) => t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1,
+  easeOutBack: (t) => {
+    const c1 = 1.70158;
+    const c3 = c1 + 1;
+    return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+  }
+};
+
+/**
+ * Enhanced Card3D with full animation support
+ */
+export class Card3D {
+  constructor(cardData, x = 0, y = 0, z = 0) {
+    // ===== IDENTITY & DATA =====
+    this.cardData = cardData;
+    this.id = cardData.id;
+
+    // ===== SPATIAL STATE =====
+    this.x = x;
+    this.y = y;
+    this.z = Math.max(0, z); // Z never less than 0
+
+    this.vx = 0; // Velocity
+    this.vy = 0;
+    this.vz = 0;
+
+    this.ax = 0; // Acceleration
+    this.ay = 0;
+    this.az = 0;
+
+    this.rotation = 0; // Rotation angle (radians, around Z-axis)
+    this.rotationVelocity = 0;
+
+    this.scale = 1.0; // Uniform scale multiplier
+    this.scaleVelocity = 0;
+
+    // ===== PRESENTATION STATE =====
+    this.faceUp = 0; // Face orientation (0 = face down, 1 = face up)
+    this.targetFaceUp = 0;
+    this.faceUpVelocity = 0;
+
+    this.opacity = 1.0; // Visual opacity (0-1)
+    this.targetOpacity = 1.0;
+
+    // ===== LAYOUT & HOME POSITION =====
+    this.homeZone = null; // Zone ID ('deck', 'field', 'playerHand', etc.)
+    this.homePosition = { x, y, z }; // Where this card "lives" when at rest
+    this.homeIndex = 0; // Index within zone for layout ordering
+
+    // ===== ANIMATION STATE =====
+    this.animationMode = 'idle'; // 'physics', 'tween', 'spring', 'idle'
+
+    // Tween mode properties
+    this.tweenTarget = null; // {x, y, z, rotation, scale, faceUp}
+    this.tweenStart = null; // Starting values
+    this.tweenDuration = 0; // ms
+    this.tweenProgress = 0; // 0-1
+    this.tweenEasing = 'easeInOutQuad';
+
+    // Spring mode properties
+    this.springStrength = 8.0; // Spring force coefficient
+    this.springDamping = 0.85; // Damping coefficient (0-1)
+
+    // Physics mode properties
+    this.physicsDamping = 0.95; // Velocity damping per second
+
+    // ===== RENDERING & CULLING =====
+    this.screenAABB = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    this.isVisible = true;
+    this.renderLayer = 3; // Rendering priority (higher = drawn later)
+
+    // ===== STATE TRACKING =====
+    this.isAtHome = true;
+    this.isDragging = false;
+
+    // ===== LIFECYCLE =====
+    this.isActive = true;
+    this.pooled = false;
+
+    // ===== CALLBACKS =====
+    this.onAnimationComplete = null;
+    this.onArriveAtHome = null;
+    this.onFlipComplete = null;
+  }
+
+  /**
+   * Update card state based on current animation mode
+   * @param {number} deltaTime - Time elapsed in seconds
+   */
+  update(deltaTime) {
+    switch (this.animationMode) {
+      case 'physics':
+        this.updatePhysics(deltaTime);
+        break;
+      case 'tween':
+        this.updateTween(deltaTime);
+        break;
+      case 'spring':
+        this.updateSpring(deltaTime);
+        break;
+      case 'idle':
+        // No updates needed
+        break;
+    }
+
+    // Always update face-up animation (independent of main animation mode)
+    this.updateFaceAnimation(deltaTime);
+
+    // Always update opacity
+    this.updateOpacity(deltaTime);
+  }
+
+  /**
+   * Physics mode: velocity-based movement with acceleration and damping
+   */
+  updatePhysics(deltaTime) {
+    // Update velocities based on acceleration
+    this.vx += this.ax * deltaTime;
+    this.vy += this.ay * deltaTime;
+    this.vz += this.az * deltaTime;
+
+    // Apply damping
+    const dampFactor = Math.pow(this.physicsDamping, deltaTime);
+    this.vx *= dampFactor;
+    this.vy *= dampFactor;
+    this.vz *= dampFactor;
+
+    // Update positions
+    this.x += this.vx * deltaTime;
+    this.y += this.vy * deltaTime;
+    this.z += this.vz * deltaTime;
+
+    // Ensure Z never goes below 0
+    if (this.z < 0) {
+      this.z = 0;
+      this.vz = 0;
+      this.az = 0;
+    }
+
+    // Update rotation
+    this.rotation += this.rotationVelocity * deltaTime;
+
+    // Check if settled (very low velocity)
+    const velocityThreshold = 1.0;
+    if (Math.abs(this.vx) < velocityThreshold &&
+        Math.abs(this.vy) < velocityThreshold &&
+        Math.abs(this.vz) < velocityThreshold) {
+      this.animationMode = 'idle';
+      this.stop();
+      if (this.onAnimationComplete) {
+        this.onAnimationComplete();
+        this.onAnimationComplete = null;
+      }
+    }
+  }
+
+  /**
+   * Tween mode: deterministic interpolation to target
+   */
+  updateTween(deltaTime) {
+    if (!this.tweenTarget || !this.tweenStart) return;
+
+    // Update progress
+    this.tweenProgress += (deltaTime * 1000) / this.tweenDuration; // Convert deltaTime to ms
+
+    if (this.tweenProgress >= 1.0) {
+      // Tween complete - snap to exact target
+      this.tweenProgress = 1.0;
+      if (this.tweenTarget.x !== undefined) this.x = this.tweenTarget.x;
+      if (this.tweenTarget.y !== undefined) this.y = this.tweenTarget.y;
+      if (this.tweenTarget.z !== undefined) this.z = Math.max(0, this.tweenTarget.z);
+      if (this.tweenTarget.rotation !== undefined) this.rotation = this.tweenTarget.rotation;
+      if (this.tweenTarget.scale !== undefined) this.scale = this.tweenTarget.scale;
+      if (this.tweenTarget.faceUp !== undefined) this.targetFaceUp = this.tweenTarget.faceUp;
+
+      // Complete
+      this.animationMode = 'idle';
+      this.tweenTarget = null;
+      this.tweenStart = null;
+
+      // Check if at home
+      this.checkIfAtHome();
+
+      if (this.onAnimationComplete) {
+        this.onAnimationComplete();
+        this.onAnimationComplete = null;
+      }
+    } else {
+      // Interpolate
+      const easingFunc = Easing[this.tweenEasing] || Easing.easeInOutQuad;
+      const t = easingFunc(this.tweenProgress);
+
+      if (this.tweenTarget.x !== undefined) {
+        this.x = this.tweenStart.x + (this.tweenTarget.x - this.tweenStart.x) * t;
+      }
+      if (this.tweenTarget.y !== undefined) {
+        this.y = this.tweenStart.y + (this.tweenTarget.y - this.tweenStart.y) * t;
+      }
+      if (this.tweenTarget.z !== undefined) {
+        this.z = Math.max(0, this.tweenStart.z + (this.tweenTarget.z - this.tweenStart.z) * t);
+      }
+      if (this.tweenTarget.rotation !== undefined) {
+        this.rotation = this.tweenStart.rotation + (this.tweenTarget.rotation - this.tweenStart.rotation) * t;
+      }
+      if (this.tweenTarget.scale !== undefined) {
+        this.scale = this.tweenStart.scale + (this.tweenTarget.scale - this.tweenStart.scale) * t;
+      }
+      if (this.tweenTarget.faceUp !== undefined) {
+        this.targetFaceUp = this.tweenStart.faceUp + (this.tweenTarget.faceUp - this.tweenStart.faceUp) * t;
+      }
+    }
+  }
+
+  /**
+   * Spring mode: pulled toward home position with spring physics
+   */
+  updateSpring(deltaTime) {
+    if (!this.homePosition) {
+      this.animationMode = 'idle';
+      return;
+    }
+
+    // Calculate displacement from home
+    const dx = this.homePosition.x - this.x;
+    const dy = this.homePosition.y - this.y;
+    const dz = (this.homePosition.z || 0) - this.z;
+
+    // Apply spring force (Hooke's law)
+    const forceX = dx * this.springStrength;
+    const forceY = dy * this.springStrength;
+    const forceZ = dz * this.springStrength;
+
+    // Update velocity
+    this.vx += forceX * deltaTime;
+    this.vy += forceY * deltaTime;
+    this.vz += forceZ * deltaTime;
+
+    // Apply damping
+    this.vx *= this.springDamping;
+    this.vy *= this.springDamping;
+    this.vz *= this.springDamping;
+
+    // Update position
+    this.x += this.vx * deltaTime;
+    this.y += this.vy * deltaTime;
+    this.z += this.vz * deltaTime;
+
+    // Ensure Z never goes below 0
+    if (this.z < 0) {
+      this.z = 0;
+      this.vz = 0;
+    }
+
+    // Check if arrived at home (within threshold and low velocity)
+    const distanceThreshold = 2.0;
+    const velocityThreshold = 5.0;
+    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const velocity = Math.sqrt(this.vx * this.vx + this.vy * this.vy + this.vz * this.vz);
+
+    if (distance < distanceThreshold && velocity < velocityThreshold) {
+      // Snap to home
+      this.x = this.homePosition.x;
+      this.y = this.homePosition.y;
+      this.z = this.homePosition.z || 0;
+      this.vx = 0;
+      this.vy = 0;
+      this.vz = 0;
+      this.animationMode = 'idle';
+      this.isAtHome = true;
+
+      if (this.onArriveAtHome) {
+        this.onArriveAtHome();
+        this.onArriveAtHome = null;
+      }
+    }
+  }
+
+  /**
+   * Update face-up/down animation (smooth flip)
+   */
+  updateFaceAnimation(deltaTime) {
+    const diff = this.targetFaceUp - this.faceUp;
+    if (Math.abs(diff) > 0.01) {
+      // Smooth transition using spring-like motion
+      this.faceUpVelocity += diff * 10 * deltaTime;
+      this.faceUpVelocity *= 0.8; // Damping
+      this.faceUp += this.faceUpVelocity * deltaTime;
+
+      // Clamp to valid range
+      this.faceUp = Math.max(0, Math.min(1, this.faceUp));
+    } else {
+      this.faceUp = this.targetFaceUp;
+      this.faceUpVelocity = 0;
+
+      if (this.onFlipComplete && Math.abs(diff) < 0.01) {
+        this.onFlipComplete();
+        this.onFlipComplete = null;
+      }
+    }
+  }
+
+  /**
+   * Update opacity (fade in/out)
+   */
+  updateOpacity(deltaTime) {
+    const diff = this.targetOpacity - this.opacity;
+    if (Math.abs(diff) > 0.01) {
+      this.opacity += diff * 5 * deltaTime; // Fade speed
+      this.opacity = Math.max(0, Math.min(1, this.opacity));
+    } else {
+      this.opacity = this.targetOpacity;
+    }
+  }
+
+  /**
+   * Start tween animation to target
+   * @param {Object} target - {x, y, z, rotation, scale, faceUp}
+   * @param {number} duration - Duration in milliseconds
+   * @param {string} easing - Easing function name
+   */
+  tweenTo(target, duration = 500, easing = 'easeInOutQuad') {
+    this.animationMode = 'tween';
+    this.tweenTarget = { ...target };
+    this.tweenStart = {
+      x: this.x,
+      y: this.y,
+      z: this.z,
+      rotation: this.rotation,
+      scale: this.scale,
+      faceUp: this.faceUp
+    };
+    this.tweenDuration = duration;
+    this.tweenProgress = 0;
+    this.tweenEasing = easing;
+    this.isAtHome = false;
+  }
+
+  /**
+   * Start spring animation to home position
+   */
+  springToHome() {
+    this.animationMode = 'spring';
+    this.isAtHome = false;
+  }
+
+  /**
+   * Apply an impulse (instant velocity change) for physics mode
+   */
+  applyImpulse(vx, vy, vz) {
+    this.vx += vx;
+    this.vy += vy;
+    this.vz += vz;
+  }
+
+  /**
+   * Set acceleration for physics mode
+   */
+  setAcceleration(ax, ay, az) {
+    this.ax = ax;
+    this.ay = ay;
+    this.az = az;
+  }
+
+  /**
+   * Stop all movement
+   */
+  stop() {
+    this.vx = 0;
+    this.vy = 0;
+    this.vz = 0;
+    this.ax = 0;
+    this.ay = 0;
+    this.az = 0;
+    this.rotationVelocity = 0;
+  }
+
+  /**
+   * Set face up state
+   */
+  setFaceUp(faceUp) {
+    this.targetFaceUp = Math.max(0, Math.min(1, faceUp));
+  }
+
+  /**
+   * Get scale factor based on Z position
+   */
+  getScale() {
+    // Z affects scale: higher Z = larger scale (closer to camera)
+    const zScaleFactor = 1.0 + (this.z / 200);
+    return this.scale * zScaleFactor;
+  }
+
+  /**
+   * Check if card is animating
+   */
+  isAnimating() {
+    if (this.animationMode !== 'idle') return true;
+    if (Math.abs(this.targetFaceUp - this.faceUp) > 0.01) return true;
+    if (Math.abs(this.targetOpacity - this.opacity) > 0.01) return true;
+    return false;
+  }
+
+  /**
+   * Check if card is at home position
+   */
+  checkIfAtHome() {
+    if (!this.homePosition) {
+      this.isAtHome = false;
+      return;
+    }
+
+    const threshold = 1.0;
+    const dx = Math.abs(this.x - this.homePosition.x);
+    const dy = Math.abs(this.y - this.homePosition.y);
+    const dz = Math.abs(this.z - (this.homePosition.z || 0));
+
+    this.isAtHome = dx < threshold && dy < threshold && dz < threshold;
+  }
+
+  /**
+   * Snap to home position immediately
+   */
+  snapToHome() {
+    if (this.homePosition) {
+      this.x = this.homePosition.x;
+      this.y = this.homePosition.y;
+      this.z = this.homePosition.z || 0;
+      this.stop();
+      this.animationMode = 'idle';
+      this.isAtHome = true;
+    }
+  }
+
+  /**
+   * Reset card to initial state (for pooling)
+   */
+  reset(cardData) {
+    this.cardData = cardData;
+    this.id = cardData.id;
+    this.x = 0;
+    this.y = 0;
+    this.z = 0;
+    this.vx = 0;
+    this.vy = 0;
+    this.vz = 0;
+    this.ax = 0;
+    this.ay = 0;
+    this.az = 0;
+    this.rotation = 0;
+    this.rotationVelocity = 0;
+    this.scale = 1.0;
+    this.faceUp = 0;
+    this.targetFaceUp = 0;
+    this.opacity = 1.0;
+    this.targetOpacity = 1.0;
+    this.homeZone = null;
+    this.homePosition = { x: 0, y: 0, z: 0 };
+    this.homeIndex = 0;
+    this.animationMode = 'idle';
+    this.isAtHome = true;
+    this.isDragging = false;
+    this.isActive = true;
+    this.onAnimationComplete = null;
+    this.onArriveAtHome = null;
+    this.onFlipComplete = null;
+  }
+}

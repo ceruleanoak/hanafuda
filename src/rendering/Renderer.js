@@ -104,11 +104,19 @@ export class Renderer {
   /**
    * Main render function
    * @param {Object} gameState - Current game state
-   * @param {Array} animatingCards - Array of cards currently animating
-   * @param {Object} options - Render options (helpMode, hoverX, hoverY)
+   * @param {Array} animatingCards - Array of cards currently animating (legacy 2D system)
+   * @param {Object} options - Render options (helpMode, hoverX, hoverY, isModalVisible, card3DManager)
    */
   render(gameState, animatingCards = [], options = {}) {
-    const { helpMode = false, hoverX = -1, hoverY = -1, isModalVisible = false, animation3DManager = null } = options;
+    const { helpMode = false, hoverX = -1, hoverY = -1, isModalVisible = false, animation3DManager = null, card3DManager = null } = options;
+
+    // If Card3DManager is provided, use new 3D rendering path
+    if (card3DManager) {
+      this.render3D(gameState, card3DManager, { helpMode, hoverX, hoverY, isModalVisible });
+      return;
+    }
+
+    // Otherwise, use legacy 2D rendering path
 
     this.clear();
     this.drawBackground();
@@ -259,6 +267,236 @@ export class Renderer {
         }
       }
     }
+  }
+
+  /**
+   * 3D rendering path using Card3DManager
+   * @param {Object} gameState - Current game state
+   * @param {Card3DManager} card3DManager - Card3D manager instance
+   * @param {Object} options - Render options
+   */
+  render3D(gameState, card3DManager, options = {}) {
+    const { helpMode = false, hoverX = -1, hoverY = -1, isModalVisible = false } = options;
+
+    this.clear();
+    this.drawBackground();
+
+    // Get all visible cards sorted by render order
+    const visibleCards = card3DManager.getVisibleCards();
+
+    // Draw all visible cards
+    visibleCards.forEach(card3D => {
+      this.cardRenderer.drawCard3D(this.ctx, card3D, false, card3D.opacity);
+    });
+
+    // Draw deck counter
+    if (gameState.deckCount > 0) {
+      const deckCards = card3DManager.getCardsInZone('deck');
+      if (deckCards.length > 0) {
+        // Draw count on top card
+        const topCard = deckCards[deckCards.length - 1];
+        this.drawDeckCount(topCard.x, topCard.y, gameState.deckCount);
+      }
+    }
+
+    // Draw trick pile labels
+    const playerTrickCards = card3DManager.getCardsInZone('playerTrick');
+    if (playerTrickCards.length > 0) {
+      const topCard = playerTrickCards[playerTrickCards.length - 1];
+      this.drawTrickLabel(topCard.x, topCard.y, `Player: ${playerTrickCards.length}`, false);
+    }
+
+    const opponentTrickCards = card3DManager.getCardsInZone('opponentTrick');
+    if (opponentTrickCards.length > 0) {
+      const topCard = opponentTrickCards[opponentTrickCards.length - 1];
+      this.drawTrickLabel(topCard.x, topCard.y, `Opponent: ${opponentTrickCards.length}`, true);
+    }
+
+    // Draw yaku information
+    this.draw3DYakuInfo(gameState, card3DManager);
+
+    // Show help mode highlighting
+    if (helpMode && gameState.phase === 'select_hand') {
+      this.highlight3DMatchableCards(gameState, card3DManager);
+    }
+
+    // Hover interactions (only if no modal is visible)
+    if (hoverX >= 0 && hoverY >= 0 && !isModalVisible) {
+      const hoveredCard = card3DManager.getCardAtPosition(hoverX, hoverY);
+
+      // Deck hover - show all cards grid
+      if (hoveredCard && hoveredCard.homeZone === 'deck') {
+        this.drawAllCardsGrid(gameState);
+      }
+
+      // Trick pile hover - show tricks list
+      if (hoveredCard && hoveredCard.homeZone === 'playerTrick') {
+        this.drawTricksList(gameState.playerCaptured, 'Player Tricks');
+      }
+      if (hoveredCard && hoveredCard.homeZone === 'opponentTrick') {
+        this.drawTricksList(gameState.opponentCaptured, 'Opponent Tricks');
+      }
+    }
+  }
+
+  /**
+   * Draw deck card count
+   */
+  drawDeckCount(x, y, count) {
+    this.ctx.save();
+    this.ctx.fillStyle = '#fff';
+    this.ctx.font = 'bold 16px monospace';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.strokeStyle = '#000';
+    this.ctx.lineWidth = 3;
+    this.ctx.strokeText(`${count}`, x + 50, y + 70);
+    this.ctx.fillText(`${count}`, x + 50, y + 70);
+    this.ctx.restore();
+  }
+
+  /**
+   * Draw trick pile label
+   */
+  drawTrickLabel(x, y, label, isOpponent) {
+    this.ctx.save();
+    this.ctx.fillStyle = '#fff';
+    this.ctx.font = 'bold 11px monospace';
+    this.ctx.textAlign = 'center';
+
+    if (isOpponent) {
+      this.ctx.fillText(label, x + 50, y + 160);
+    } else {
+      this.ctx.fillText(label, x + 50, y - 10);
+    }
+    this.ctx.restore();
+  }
+
+  /**
+   * Draw yaku info for 3D rendering
+   */
+  draw3DYakuInfo(gameState, card3DManager) {
+    // Find trick pile positions
+    const playerTrickCards = card3DManager.getCardsInZone('playerTrick');
+    const opponentTrickCards = card3DManager.getCardsInZone('opponentTrick');
+
+    if (playerTrickCards.length > 0) {
+      const topCard = playerTrickCards[playerTrickCards.length - 1];
+      this.drawYakuList(
+        topCard.x,
+        topCard.y - 50,
+        gameState.playerYaku || [],
+        gameState.playerYakuProgress || [],
+        false
+      );
+    }
+
+    if (opponentTrickCards.length > 0) {
+      const topCard = opponentTrickCards[opponentTrickCards.length - 1];
+      this.drawYakuList(
+        topCard.x,
+        topCard.y + 180,
+        gameState.opponentYaku || [],
+        gameState.opponentYakuProgress || [],
+        true
+      );
+    }
+  }
+
+  /**
+   * Draw yaku list at position
+   */
+  drawYakuList(x, y, yaku, yakuProgress, isOpponent) {
+    this.ctx.save();
+    let offsetY = 0;
+
+    // Draw completed yaku
+    if (yaku && yaku.length > 0) {
+      this.ctx.fillStyle = '#4ecdc4';
+      this.ctx.font = 'bold 11px monospace';
+      this.ctx.textAlign = 'right';
+
+      const displayYaku = isOpponent ? yaku.slice(0, 5) : yaku.slice(-5);
+      displayYaku.forEach(yakuItem => {
+        this.ctx.fillText(`${yakuItem.name} (${yakuItem.points})`, x + 100, y + offsetY);
+        offsetY += isOpponent ? 14 : -14;
+      });
+
+      if (yaku.length > 5) {
+        this.ctx.fillStyle = '#888';
+        this.ctx.fillText(`+${yaku.length - 5} more...`, x + 100, y + offsetY);
+        offsetY += isOpponent ? 14 : -14;
+      }
+    }
+
+    // Draw yaku progress
+    if (yakuProgress && yakuProgress.length > 0) {
+      this.ctx.font = '11px monospace';
+      this.ctx.textAlign = 'right';
+
+      yakuProgress.slice(0, 3).forEach(prog => {
+        this.ctx.fillStyle = prog.isPossible === false ? '#ff6b6b' : '#ffeb3b';
+        this.ctx.fillText(`${prog.name} ${prog.current}/${prog.needed}`, x + 100, y + offsetY);
+        offsetY += isOpponent ? 14 : -14;
+      });
+    }
+
+    this.ctx.restore();
+  }
+
+  /**
+   * Highlight matchable cards in 3D mode
+   */
+  highlight3DMatchableCards(gameState, card3DManager) {
+    const matchableHandCards = new Set();
+    const matchableFieldCards = new Set();
+
+    gameState.playerHand.forEach(handCard => {
+      const matches = gameState.field.filter(fieldCard =>
+        fieldCard.month === handCard.month
+      );
+      if (matches.length > 0) {
+        matchableHandCards.add(handCard.id);
+        matches.forEach(m => matchableFieldCards.add(m.id));
+      }
+    });
+
+    this.ctx.save();
+
+    // Highlight matchable hand cards
+    card3DManager.getCardsInZone('playerHand').forEach(card3D => {
+      if (matchableHandCards.has(card3D.id)) {
+        this.drawCardHighlight(card3D, '#ffeb3b');
+      }
+    });
+
+    // Highlight matchable field cards
+    card3DManager.getCardsInZone('field').forEach(card3D => {
+      if (matchableFieldCards.has(card3D.id)) {
+        this.drawCardHighlight(card3D, '#4ecdc4');
+      }
+    });
+
+    this.ctx.restore();
+  }
+
+  /**
+   * Draw highlight around a Card3D
+   */
+  drawCardHighlight(card3D, color) {
+    const scale = card3D.getScale();
+    const w = this.cardRenderer.cardWidth * scale;
+    const h = this.cardRenderer.cardHeight * scale;
+
+    this.ctx.strokeStyle = color;
+    this.ctx.lineWidth = 4;
+    this.ctx.strokeRect(card3D.x - w / 2 - 2, card3D.y - h / 2 - 2, w + 4, h + 4);
+
+    // Add glow
+    this.ctx.shadowColor = color;
+    this.ctx.shadowBlur = 15;
+    this.ctx.strokeRect(card3D.x - w / 2 - 2, card3D.y - h / 2 - 2, w + 4, h + 4);
+    this.ctx.shadowBlur = 0;
   }
 
   // Need to define these constants at the class level for use in hover detection

@@ -8,6 +8,7 @@ import { debugLogger } from './utils/DebugLogger.js';
 import { AnimationSequence } from './utils/AnimationSequence.js';
 import { GameOptions } from './game/GameOptions.js';
 import { Animation3DManager } from './utils/Animation3D.js';
+import { Card3DManager } from './utils/Card3DManager.js';
 
 class Game {
   constructor() {
@@ -37,9 +38,17 @@ class Game {
     this.game.setOpponentKoikoiCallback(() => this.showOpponentKoikoiNotification());
     this.renderer = new Renderer(this.canvas);
 
-    // Initialize 3D animation system
+    // Initialize 3D animation system (old wave demo)
     this.animation3DManager = new Animation3DManager();
     this.is3DAnimationActive = false; // Track if 3D animation demo is running
+
+    // Initialize new Card3D system (real-time 3D rendering)
+    this.card3DManager = new Card3DManager(
+      this.renderer.displayWidth,
+      this.renderer.displayHeight
+    );
+    // Read experimental 3D setting from options
+    this.use3DSystem = this.gameOptions.get('experimental3DAnimations');
 
     this.animatingCards = [];
     this.currentSequence = null;  // Current animation sequence playing
@@ -185,6 +194,13 @@ class Game {
     this.game.startNewGame(rounds);
     this.updateUI();
     this.statusElement.classList.remove('show');
+
+    // Initialize Card3D system from game state
+    if (this.use3DSystem) {
+      this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
+      this.card3DManager.initializeFromGameState(this.game.getState());
+      debugLogger.log('3dCards', '✨ Card3D system initialized for new game', null);
+    }
   }
 
   handleClick(event) {
@@ -199,7 +215,25 @@ class Game {
     const y = event.clientY - rect.top;
 
     const gameState = this.game.getState();
-    const result = this.renderer.getCardAtPosition(x, y, gameState);
+
+    // Use 3D hit detection if 3D system is enabled
+    let result = null;
+    if (this.use3DSystem && this.card3DManager) {
+      const card3D = this.card3DManager.getCardAtPosition(x, y);
+      if (card3D) {
+        // Map zone back to owner
+        const zoneToOwnerMap = {
+          'playerHand': 'player',
+          'field': 'field',
+          'opponentHand': 'opponent'
+        };
+        const owner = zoneToOwnerMap[card3D.homeZone] || 'field';
+        result = { card: card3D.cardData, owner };
+      }
+    } else {
+      // Legacy 2D hit detection
+      result = this.renderer.getCardAtPosition(x, y, gameState);
+    }
 
     if (result) {
       const { card, owner } = result;
@@ -402,6 +436,7 @@ class Game {
     document.getElementById('viewing-sake').value = options.viewingSakeMode;
     document.getElementById('moon-viewing-sake').value = options.moonViewingSakeMode;
     document.getElementById('animations-enabled').checked = options.animationsEnabled;
+    document.getElementById('experimental-3d-animations').checked = options.experimental3DAnimations;
 
     this.optionsModal.classList.add('show');
   }
@@ -424,13 +459,22 @@ class Game {
       bothPlayersScore: document.getElementById('both-players-score').checked,
       viewingSakeMode: document.getElementById('viewing-sake').value,
       moonViewingSakeMode: document.getElementById('moon-viewing-sake').value,
-      animationsEnabled: document.getElementById('animations-enabled').checked
+      animationsEnabled: document.getElementById('animations-enabled').checked,
+      experimental3DAnimations: document.getElementById('experimental-3d-animations').checked
     };
 
     this.gameOptions.update(newOptions);
 
     // Update game options
     this.game.updateOptions(this.gameOptions);
+
+    // Update 3D system flag
+    this.use3DSystem = newOptions.experimental3DAnimations;
+
+    // Update Card3DManager animation settings
+    if (this.card3DManager) {
+      this.card3DManager.setAnimationsEnabled(newOptions.animationsEnabled);
+    }
 
     this.hideOptionsModal();
 
@@ -450,6 +494,12 @@ class Game {
       this.game.updateOptions(this.gameOptions);
       // Update help mode
       this.helpMode = this.gameOptions.get('helpMode');
+      // Update 3D system flag
+      this.use3DSystem = this.gameOptions.get('experimental3DAnimations');
+      // Update Card3DManager
+      if (this.card3DManager) {
+        this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
+      }
       // Reload the form
       this.showOptionsModal();
     }
@@ -1226,19 +1276,34 @@ class Game {
 
       const state = this.game.getState();
 
+      // Update Card3D system
+      if (this.use3DSystem && this.card3DManager) {
+        try {
+          // Update physics and animations
+          this.card3DManager.update(now);
+
+          // Synchronize with game state (detects card movements between zones)
+          this.card3DManager.synchronize(state);
+        } catch (err) {
+          debugLogger.logError('Error in Card3D system update', err);
+        }
+      }
+
       // Check for state changes and trigger animations (only when not already animating)
-      if (!this.isAnimating) {
+      if (!this.isAnimating && !this.use3DSystem) {
         this.checkForStateChanges(state);
       }
 
-      // Update animations
-      try {
-        this.updateAnimations(deltaTime);
-      } catch (err) {
-        debugLogger.logError('Error in updateAnimations', err);
+      // Update legacy 2D animations
+      if (!this.use3DSystem) {
+        try {
+          this.updateAnimations(deltaTime);
+        } catch (err) {
+          debugLogger.logError('Error in updateAnimations', err);
+        }
       }
 
-      // Update 3D animations
+      // Update 3D wave demo animations (old system)
       if (this.is3DAnimationActive) {
         try {
           this.animation3DManager.update(now);
@@ -1249,13 +1314,22 @@ class Game {
 
       // Render
       try {
-        this.renderer.render(state, this.animatingCards, {
+        const renderOptions = {
           helpMode: this.helpMode,
           hoverX: this.hoverX,
           hoverY: this.hoverY,
           isModalVisible: this.koikoiModal.classList.contains('show'),
-          animation3DManager: this.is3DAnimationActive ? this.animation3DManager : null
-        });
+          animation3DManager: this.is3DAnimationActive ? this.animation3DManager : null,
+          card3DManager: this.use3DSystem ? this.card3DManager : null
+        };
+
+        if (this.use3DSystem) {
+          // Use 3D rendering path
+          this.renderer.render(state, [], renderOptions);
+        } else {
+          // Use legacy 2D rendering path
+          this.renderer.render(state, this.animatingCards, renderOptions);
+        }
       } catch (err) {
         debugLogger.logError('Error in render', err);
       }

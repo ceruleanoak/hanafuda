@@ -22,7 +22,10 @@ export class GameOptions {
       // UI Settings
       helpMode: false,                    // Help highlighting
       tutorialShown: false,               // Has user seen tutorial bubble?
-      animationsEnabled: true             // Enable/disable card animations
+      animationsEnabled: true,            // Enable/disable card animations
+
+      // Experimental Features
+      experimental3DAnimations: false     // Enable experimental 3D animation system
     };
 
     this.options = this.load();
