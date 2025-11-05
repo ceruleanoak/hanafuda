@@ -61,6 +61,11 @@ class Game {
       });
     });
 
+    // Initialize Card3D system from initial game state
+    this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
+    this.card3DManager.initializeFromGameState(this.game.getState());
+    debugLogger.log('3dCards', '✨ Card3D system initialized on page load', null);
+
     // Initialize Animation Tester
     this.animationTester = new AnimationTester(this.renderer.cardRenderer);
     this.animationTesterActive = false;
