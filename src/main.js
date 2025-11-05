@@ -81,6 +81,14 @@ class Game {
     this.hoverY = -1;             // Mouse hover Y position
     this.hoveredCard3D = null;    // Currently hovered Card3D object
 
+    // Drag and drop state
+    this.draggedCard3D = null;    // Card being dragged
+    this.draggedCardData = null;  // Card data of dragged card
+    this.dragStartX = -1;         // Drag start X position
+    this.dragStartY = -1;         // Drag start Y position
+    this.isDragging = false;      // Whether a drag is in progress
+    this.dropTargetCard3D = null; // Valid drop target card (matching card on field)
+
     // Track state for change detection
     this.lastStateLengths = {
       playerCaptured: 0,
@@ -198,16 +206,20 @@ class Game {
   }
 
   setupEventListeners() {
-    // Canvas click
-    this.canvas.addEventListener('click', (e) => this.handleClick(e));
-    // Canvas double-click for auto-match
-    this.canvas.addEventListener('dblclick', (e) => this.handleDoubleClick(e));
-    // Canvas mouse move for hover detection
+    // Canvas mouse events for drag and drop
+    this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
     this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
-    // Canvas mouse leave to clear hover
+    this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
+    // Canvas double-click for auto-match (still supported)
+    this.canvas.addEventListener('dblclick', (e) => this.handleDoubleClick(e));
+    // Canvas mouse leave to clear hover and cancel drag
     this.canvas.addEventListener('mouseleave', () => {
       this.hoverX = -1;
       this.hoverY = -1;
+      // Cancel any drag in progress
+      if (this.isDragging) {
+        this.cancelDrag();
+      }
     });
 
     // New game button
@@ -305,37 +317,32 @@ class Game {
     debugLogger.log('3dCards', '✨ Card3D system initialized for new game', null);
   }
 
-  handleClick(event) {
+  handleMouseDown(event) {
     const rect = this.canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
 
     const gameState = this.game.getState();
 
-    // Use 3D hit detection
-    let result = null;
-    const card3D = this.card3DManager.getCardAtPosition(x, y);
-    if (card3D) {
-      // Map zone back to owner
-      const zoneToOwnerMap = {
-        'playerHand': 'player',
-        'field': 'field',
-        'opponentHand': 'opponent'
-      };
-      const owner = zoneToOwnerMap[card3D.homeZone] || 'field';
-      result = { card: card3D.cardData, owner };
+    // Only allow dragging from player's hand during 'select_hand' phase
+    if (gameState.phase !== 'select_hand') {
+      return;
     }
 
-    if (result) {
-      const { card, owner } = result;
+    // Use 3D hit detection
+    const card3D = this.card3DManager.getCardAtPosition(x, y);
+    if (card3D && card3D.homeZone === 'playerHand') {
+      // Start dragging this card
+      this.draggedCard3D = card3D;
+      this.draggedCardData = card3D.cardData;
+      this.dragStartX = x;
+      this.dragStartY = y;
+      this.isDragging = false; // Will become true once mouse moves
+      card3D.isDragging = true;
 
-      debugLogger.log('gameState', `Card clicked: ${card.name}`, { owner });
-
-      const success = this.game.selectCard(card, owner);
-
-      if (success) {
-        this.updateUI();
-      }
+      debugLogger.log('gameState', `Card grabbed: ${card3D.cardData.name}`, {
+        x, y
+      });
     }
   }
 
@@ -368,6 +375,169 @@ class Game {
     const rect = this.canvas.getBoundingClientRect();
     this.hoverX = event.clientX - rect.left;
     this.hoverY = event.clientY - rect.top;
+
+    // Handle dragging
+    if (this.draggedCard3D) {
+      const dragThreshold = 5; // Minimum pixels to move before considering it a drag
+      const dx = this.hoverX - this.dragStartX;
+      const dy = this.hoverY - this.dragStartY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (!this.isDragging && distance > dragThreshold) {
+        // Start dragging
+        this.isDragging = true;
+        debugLogger.log('gameState', `Started dragging: ${this.draggedCardData.name}`, null);
+      }
+
+      if (this.isDragging) {
+        // Update card position to follow mouse
+        this.draggedCard3D.x = this.hoverX;
+        this.draggedCard3D.y = this.hoverY;
+        this.draggedCard3D.z = 50; // Raise card above others
+
+        // Check for valid drop target (matching card on field)
+        this.updateDropTarget();
+      }
+    }
+  }
+
+  handleMouseUp(event) {
+    if (!this.draggedCard3D) {
+      return;
+    }
+
+    const rect = this.canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    // If this was a drag (not just a click)
+    if (this.isDragging) {
+      // Check if we're dropping on a valid target
+      if (this.dropTargetCard3D) {
+        // Valid drop - play the card
+        debugLogger.log('gameState', `Card dropped on match: ${this.draggedCardData.name} → ${this.dropTargetCard3D.cardData.name}`, null);
+
+        // Clear drop target highlight
+        if (this.dropTargetCard3D) {
+          this.dropTargetCard3D.targetScale = this.dropTargetCard3D.baseScale;
+        }
+
+        // Execute the card play
+        const success = this.game.selectCard(this.draggedCardData, 'player');
+        if (success) {
+          // Then select the field card
+          this.game.selectCard(this.dropTargetCard3D.cardData, 'field');
+          this.updateUI();
+        }
+
+        // Reset drag state
+        this.draggedCard3D.isDragging = false;
+        this.draggedCard3D = null;
+        this.draggedCardData = null;
+        this.isDragging = false;
+        this.dropTargetCard3D = null;
+      } else {
+        // Invalid drop - return card to hand
+        this.cancelDrag();
+      }
+    } else {
+      // This was just a click (no drag), treat it as a regular card selection
+      debugLogger.log('gameState', `Card clicked (no drag): ${this.draggedCardData.name}`, null);
+
+      const success = this.game.selectCard(this.draggedCardData, 'player');
+      if (success) {
+        this.updateUI();
+      }
+
+      // Reset drag state
+      this.draggedCard3D.isDragging = false;
+      this.draggedCard3D = null;
+      this.draggedCardData = null;
+    }
+  }
+
+  /**
+   * Cancel drag and return card to hand
+   */
+  cancelDrag() {
+    if (!this.draggedCard3D) {
+      return;
+    }
+
+    debugLogger.log('gameState', `Drag cancelled, returning card to hand`, null);
+
+    // Clear drop target highlight
+    if (this.dropTargetCard3D) {
+      this.dropTargetCard3D.targetScale = this.dropTargetCard3D.baseScale;
+      this.dropTargetCard3D = null;
+    }
+
+    // Animate card back to home position
+    this.draggedCard3D.tweenTo({
+      x: this.draggedCard3D.homePosition.x,
+      y: this.draggedCard3D.homePosition.y,
+      z: 0
+    }, 300, 'easeOutCubic');
+
+    this.draggedCard3D.isDragging = false;
+    this.draggedCard3D = null;
+    this.draggedCardData = null;
+    this.isDragging = false;
+  }
+
+  /**
+   * Update drop target based on current mouse position
+   */
+  updateDropTarget() {
+    if (!this.draggedCard3D || !this.isDragging) {
+      return;
+    }
+
+    // Get all field cards and check if we're hovering over a matching one
+    const gameState = this.game.getState();
+    let newDropTarget = null;
+
+    // Check each field card
+    for (const fieldCard of gameState.field) {
+      // Check if cards match (same month)
+      if (this.cardsMatch(this.draggedCardData, fieldCard)) {
+        // Get the Card3D for this field card
+        const fieldCard3D = this.card3DManager.cards.get(fieldCard.id);
+        if (fieldCard3D) {
+          // Check if mouse is near this card
+          const dx = this.hoverX - fieldCard3D.x;
+          const dy = this.hoverY - fieldCard3D.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          const threshold = 80; // Distance threshold for "hovering over"
+
+          if (distance < threshold) {
+            newDropTarget = fieldCard3D;
+            break;
+          }
+        }
+      }
+    }
+
+    // Update drop target highlighting
+    if (newDropTarget !== this.dropTargetCard3D) {
+      // Clear old target
+      if (this.dropTargetCard3D) {
+        this.dropTargetCard3D.targetScale = this.dropTargetCard3D.baseScale;
+      }
+
+      // Set new target
+      this.dropTargetCard3D = newDropTarget;
+      if (this.dropTargetCard3D) {
+        this.dropTargetCard3D.targetScale = this.dropTargetCard3D.baseScale * 1.2;
+      }
+    }
+  }
+
+  /**
+   * Check if two cards match (same month)
+   */
+  cardsMatch(card1, card2) {
+    return card1.month === card2.month;
   }
 
   /**
