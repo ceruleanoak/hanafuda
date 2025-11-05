@@ -8,6 +8,7 @@ import { debugLogger } from './utils/DebugLogger.js';
 import { GameOptions } from './game/GameOptions.js';
 import { Card3DManager } from './utils/Card3DManager.js';
 import { AnimationTester } from './utils/AnimationTester.js';
+import { InitializationManager } from './utils/InitializationManager.js';
 import { APP_VERSION } from './utils/version.js';
 
 class Game {
@@ -91,30 +92,109 @@ class Game {
       opponent: []
     };
 
-    debugLogger.log('gameState', 'Game initializing...', {
+    debugLogger.log('gameState', 'Game constructor complete', {
       canvasSize: `${this.canvas.width}x${this.canvas.height}`,
       displaySize: `${this.renderer.displayWidth}x${this.renderer.displayHeight}`
     });
 
-    this.setupEventListeners();
+    // Note: setupEventListeners and gameLoop are now called after async initialization
+  }
 
-    // Initialize help button state
-    if (this.helpMode) {
-      this.helpButton.classList.add('active');
+  /**
+   * Async initialization - loads assets and validates systems
+   * @returns {Promise<void>}
+   */
+  async initialize() {
+    debugLogger.log('init', '🎮 Starting async initialization', null);
+
+    // Get loading screen elements
+    const loadingScreen = document.getElementById('loading-screen');
+    const loadingPhase = document.getElementById('loading-phase');
+    const loadingMessage = document.getElementById('loading-message');
+    const loadingProgressBar = document.getElementById('loading-progress-bar');
+    const loadingErrors = document.getElementById('loading-errors');
+
+    // Create initialization manager
+    const initManager = new InitializationManager();
+
+    // Set up progress callbacks
+    initManager.setOnPhaseChange((phase, data) => {
+      const phaseNames = {
+        'loading_assets': 'Loading Assets',
+        'validating_systems': 'Validating Systems',
+        'final_validation': 'Final Validation',
+        'ready': 'Ready',
+        'error': 'Error'
+      };
+      loadingPhase.textContent = phaseNames[phase] || phase;
+    });
+
+    initManager.setOnProgress((phase, loaded, total, message) => {
+      loadingMessage.textContent = message;
+      const progress = total > 0 ? (loaded / total) * 100 : 0;
+      loadingProgressBar.style.width = `${progress}%`;
+    });
+
+    try {
+      // Run initialization
+      const result = await initManager.initialize(
+        this.renderer.cardRenderer,
+        this.card3DManager,
+        this.game.getState()
+      );
+
+      if (!result.success) {
+        throw new Error('Initialization failed: ' + result.errors.join(', '));
+      }
+
+      // Show any non-fatal errors
+      if (result.errors.length > 0) {
+        debugLogger.log('init', '⚠️ Initialization completed with warnings', result.errors);
+      }
+
+      // Initialization successful - set up event listeners and start game loop
+      this.setupEventListeners();
+
+      // Initialize help button state
+      if (this.helpMode) {
+        this.helpButton.classList.add('active');
+      }
+
+      // Initialize variations button state
+      this.updateVariationsButtonState();
+
+      // Hide loading screen with fade out
+      loadingScreen.classList.add('fade-out');
+      setTimeout(() => {
+        loadingScreen.classList.add('hidden');
+      }, 500);
+
+      // Show tutorial bubble if first time user
+      if (this.gameOptions.isFirstTime()) {
+        setTimeout(() => this.showTutorial(), 1000);
+      }
+
+      // Show round modal and start game loop
+      this.showRoundModal();
+      this.gameLoop();
+
+      debugLogger.log('gameState', '✅ Game initialized successfully', null);
+
+    } catch (error) {
+      debugLogger.logError('❌ Fatal initialization error', error);
+
+      // Show error on loading screen
+      loadingPhase.textContent = 'Initialization Failed';
+      loadingMessage.textContent = 'An error occurred while loading the game';
+      loadingErrors.innerHTML = `
+        <h3>Error Details:</h3>
+        <p>${error.message}</p>
+        <p style="margin-top: 1rem;">Please refresh the page to try again.</p>
+      `;
+      loadingErrors.classList.remove('hidden');
+      loadingProgressBar.style.width = '0%';
+      loadingProgressBar.style.background = '#ff6b6b';
     }
-
-    // Initialize variations button state
-    this.updateVariationsButtonState();
-
-    // Show tutorial bubble if first time user
-    if (this.gameOptions.isFirstTime()) {
-      setTimeout(() => this.showTutorial(), 1000);
-    }
-
-    this.showRoundModal(); // Show modal on startup
-    this.gameLoop();
-
-    debugLogger.log('gameState', 'Game initialized successfully', null);
   }
 
   setupEventListeners() {
@@ -1883,11 +1963,16 @@ class Game {
 }
 
 // Initialize game when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  console.log(`Hanafuda Koi-Koi starting (v${APP_VERSION})`);
+
   const game = new Game();
+
+  // Run async initialization with loading screen
+  await game.initialize();
 
   // Example: Load background if available
   // game.loadBackground('./assets/backgrounds/texture.jpg');
 
-  console.log(`Hanafuda Koi-Koi initialized (v${APP_VERSION})`);
+  console.log(`Hanafuda Koi-Koi ready (v${APP_VERSION})`);
 });
