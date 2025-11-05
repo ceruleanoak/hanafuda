@@ -184,24 +184,24 @@ export class AnimationTester {
       points: 20
     };
 
-    // Calculate default positions (left and right sides of screen)
+    // Calculate default positions (left and right sides of screen, clearly visible)
     const centerY = canvasHeight / 2;
-    const leftX = canvasWidth * 0.25;
-    const rightX = canvasWidth * 0.75;
+    const leftX = canvasWidth * 0.3;
+    const rightX = canvasWidth * 0.7;
 
     this.params.startX = leftX;
     this.params.startY = centerY;
     this.params.endX = rightX;
     this.params.endY = centerY;
 
-    // Create Card3D instance
-    this.resetCard();
+    // Don't create the card yet - only show outlines initially
+    this.testCard3D = null;
 
     this.isActive = true;
   }
 
   /**
-   * Reset the test card to start position
+   * Reset the test card to start position (only called internally by playAnimation)
    */
   resetCard() {
     this.testCard3D = new Card3D(
@@ -222,6 +222,14 @@ export class AnimationTester {
   }
 
   /**
+   * Stop animation and hide card
+   */
+  stopAnimation() {
+    this.isPlaying = false;
+    this.testCard3D = null;
+  }
+
+  /**
    * Play the animation with current parameters
    */
   playAnimation() {
@@ -229,7 +237,7 @@ export class AnimationTester {
       return; // Already playing
     }
 
-    // Reset card to start position
+    // Create/reset card to start position
     this.resetCard();
 
     // Start animation
@@ -255,6 +263,8 @@ export class AnimationTester {
     // Set callback for when animation completes
     this.testCard3D.onAnimationComplete = () => {
       this.isPlaying = false;
+      // Hide the card after animation completes
+      this.testCard3D = null;
     };
   }
 
@@ -344,10 +354,8 @@ export class AnimationTester {
     if (key in this.params) {
       this.params[key] = value;
 
-      // If not playing, update the card immediately to show the change
-      if (!this.isPlaying) {
-        this.resetCard();
-      }
+      // Don't create/update card when adjusting parameters
+      // The outlines will update automatically in the render method
     }
   }
 
@@ -365,8 +373,8 @@ export class AnimationTester {
         }
       }
 
-      // Reset the card to show the changes
-      this.resetCard();
+      // Don't show card, just update parameters
+      // Card will only show when Play is pressed
 
       return true;
     }
