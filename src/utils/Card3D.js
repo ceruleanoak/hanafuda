@@ -73,6 +73,8 @@ export class Card3D {
     // Tween mode properties
     this.tweenTarget = null; // {x, y, z, rotation, scale, faceUp}
     this.tweenStart = null; // Starting values
+    this.tweenControlPoint = null; // {x, y, z} for curved paths (optional)
+    this.tweenFlipTiming = 0.5; // 0-1: controls when flip occurs (0=early, 0.5=linear, 1=late)
     this.tweenDuration = 0; // ms
     this.tweenProgress = 0; // 0-1
     this.tweenEasing = 'easeInOutQuad';
@@ -213,23 +215,64 @@ export class Card3D {
       const easingFunc = Easing[this.tweenEasing] || Easing.easeInOutQuad;
       const t = easingFunc(this.tweenProgress);
 
-      if (this.tweenTarget.x !== undefined) {
-        this.x = this.tweenStart.x + (this.tweenTarget.x - this.tweenStart.x) * t;
+      // Use bezier curve for position if control point is provided
+      if (this.tweenControlPoint) {
+        // Quadratic bezier curve: B(t) = (1-t)^2 * P0 + 2(1-t)t * P1 + t^2 * P2
+        const t1 = 1 - t;
+        const t1Sq = t1 * t1;
+        const tSq = t * t;
+        const t1t2 = 2 * t1 * t;
+
+        if (this.tweenTarget.x !== undefined) {
+          this.x = t1Sq * this.tweenStart.x + t1t2 * this.tweenControlPoint.x + tSq * this.tweenTarget.x;
+        }
+        if (this.tweenTarget.y !== undefined) {
+          this.y = t1Sq * this.tweenStart.y + t1t2 * this.tweenControlPoint.y + tSq * this.tweenTarget.y;
+        }
+        if (this.tweenTarget.z !== undefined) {
+          const controlZ = this.tweenControlPoint.z !== undefined ? this.tweenControlPoint.z : this.tweenStart.z;
+          this.z = Math.max(0, t1Sq * this.tweenStart.z + t1t2 * controlZ + tSq * this.tweenTarget.z);
+        }
+      } else {
+        // Linear interpolation for position
+        if (this.tweenTarget.x !== undefined) {
+          this.x = this.tweenStart.x + (this.tweenTarget.x - this.tweenStart.x) * t;
+        }
+        if (this.tweenTarget.y !== undefined) {
+          this.y = this.tweenStart.y + (this.tweenTarget.y - this.tweenStart.y) * t;
+        }
+        if (this.tweenTarget.z !== undefined) {
+          this.z = Math.max(0, this.tweenStart.z + (this.tweenTarget.z - this.tweenStart.z) * t);
+        }
       }
-      if (this.tweenTarget.y !== undefined) {
-        this.y = this.tweenStart.y + (this.tweenTarget.y - this.tweenStart.y) * t;
-      }
-      if (this.tweenTarget.z !== undefined) {
-        this.z = Math.max(0, this.tweenStart.z + (this.tweenTarget.z - this.tweenStart.z) * t);
-      }
+
+      // Always use linear interpolation for rotation and scale
       if (this.tweenTarget.rotation !== undefined) {
         this.rotation = this.tweenStart.rotation + (this.tweenTarget.rotation - this.tweenStart.rotation) * t;
       }
       if (this.tweenTarget.scale !== undefined) {
         this.scale = this.tweenStart.scale + (this.tweenTarget.scale - this.tweenStart.scale) * t;
       }
+
+      // Use custom timing curve for faceUp based on flipTiming parameter
       if (this.tweenTarget.faceUp !== undefined) {
-        this.targetFaceUp = this.tweenStart.faceUp + (this.tweenTarget.faceUp - this.tweenStart.faceUp) * t;
+        let flipT = t;
+
+        // Apply flip timing adjustment
+        // flipTiming = 0: flip early (ease-out curve)
+        // flipTiming = 0.5: linear flip (default)
+        // flipTiming = 1: flip late (ease-in curve)
+        if (this.tweenFlipTiming < 0.5) {
+          // Early flip: use ease-out curve
+          const strength = (0.5 - this.tweenFlipTiming) * 2; // 0 to 1
+          flipT = 1 - Math.pow(1 - t, 1 + strength * 2);
+        } else if (this.tweenFlipTiming > 0.5) {
+          // Late flip: use ease-in curve
+          const strength = (this.tweenFlipTiming - 0.5) * 2; // 0 to 1
+          flipT = Math.pow(t, 1 + strength * 2);
+        }
+
+        this.targetFaceUp = this.tweenStart.faceUp + (this.tweenTarget.faceUp - this.tweenStart.faceUp) * flipT;
       }
     }
   }
@@ -359,8 +402,10 @@ export class Card3D {
    * @param {Object} target - {x, y, z, rotation, scale, faceUp}
    * @param {number} duration - Duration in milliseconds
    * @param {string} easing - Easing function name
+   * @param {Object} controlPoint - Optional {x, y, z} for curved path
+   * @param {number} flipTiming - Optional 0-1 value controlling flip timing (0=early, 0.5=linear, 1=late)
    */
-  tweenTo(target, duration = 500, easing = 'easeInOutQuad') {
+  tweenTo(target, duration = 500, easing = 'easeInOutQuad', controlPoint = null, flipTiming = 0.5) {
     this.animationMode = 'tween';
     this.tweenTarget = { ...target };
     this.tweenStart = {
@@ -371,6 +416,8 @@ export class Card3D {
       scale: this.scale,
       faceUp: this.faceUp
     };
+    this.tweenControlPoint = controlPoint ? { ...controlPoint } : null;
+    this.tweenFlipTiming = flipTiming;
     this.tweenDuration = duration;
     this.tweenProgress = 0;
     this.tweenEasing = easing;

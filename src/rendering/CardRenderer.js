@@ -335,6 +335,13 @@ export class CardRenderer {
     const x = card3D.x - scaledWidth / 2;
     const y = card3D.y - scaledHeight / 2;
 
+    // Apply rotation around the card's center
+    if (card3D.rotation !== 0) {
+      ctx.translate(card3D.x, card3D.y);
+      ctx.rotate(card3D.rotation);
+      ctx.translate(-card3D.x, -card3D.y);
+    }
+
     // Apply opacity
     ctx.globalAlpha = opacity;
 

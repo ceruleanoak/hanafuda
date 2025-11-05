@@ -311,6 +311,28 @@
           </div>
 
           <div class="tester-section">
+            <h4>Curved Path:</h4>
+            <div class="control-group">
+              <label>
+                <input type="checkbox" id="curveEnabled">
+                Enable Curve
+              </label>
+            </div>
+            <div class="control-group">
+              <label>Control X: <span id="curveX-value">400</span></label>
+              <input type="range" id="curveX" min="0" max="2000" value="400" step="10">
+            </div>
+            <div class="control-group">
+              <label>Control Y: <span id="curveY-value">200</span></label>
+              <input type="range" id="curveY" min="0" max="1200" value="200" step="10">
+            </div>
+            <div class="control-group">
+              <label>Control Z: <span id="curveZ-value">50</span></label>
+              <input type="range" id="curveZ" min="0" max="200" value="50" step="5">
+            </div>
+          </div>
+
+          <div class="tester-section">
             <h4>Rotation:</h4>
             <div class="control-group">
               <label>End (°): <span id="endRotation-value">0</span></label>
@@ -333,6 +355,11 @@
                 <input type="checkbox" id="endFaceUp" checked>
                 End Face Up
               </label>
+            </div>
+            <div class="control-group">
+              <label>Flip Timing: <span id="flipTiming-value">0.5</span></label>
+              <input type="range" id="flipTiming" min="0" max="1" value="0.5" step="0.05">
+              <small style="display:block;color:#888;margin-top:2px;">0 = early, 1 = late</small>
             </div>
             <div class="control-group">
               <label>End Opacity: <span id="endOpacity-value">1.0</span></label>
