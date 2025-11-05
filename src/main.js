@@ -1193,12 +1193,25 @@ class Game {
 
           // Reset canvas state and clear properly
           ctx.save();
+          const beforeTransform = ctx.getTransform();
+          debugLogger.log('render', '🔧 AnimationTester canvas state before reset', {
+            transform: `[${beforeTransform.a}, ${beforeTransform.b}, ${beforeTransform.c}, ${beforeTransform.d}, ${beforeTransform.e}, ${beforeTransform.f}]`,
+            canvasSize: `${this.canvas.width}x${this.canvas.height}`,
+            displaySize: `${this.renderer.displayWidth}x${this.renderer.displayHeight}`
+          });
+
           ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform to identity
           ctx.clearRect(0, 0, this.canvas.width, this.canvas.height); // Clear the entire physical canvas
 
           // Re-apply device pixel ratio scaling for proper rendering
           const dpr = window.devicePixelRatio || 1;
           ctx.scale(dpr, dpr);
+
+          const afterTransform = ctx.getTransform();
+          debugLogger.log('render', '🔧 AnimationTester canvas state after reset', {
+            transform: `[${afterTransform.a}, ${afterTransform.b}, ${afterTransform.c}, ${afterTransform.d}, ${afterTransform.e}, ${afterTransform.f}]`,
+            dpr
+          });
 
           // Use display dimensions for rendering
           this.animationTester.render(ctx, this.renderer.displayWidth, this.renderer.displayHeight);
