@@ -4,11 +4,16 @@
  */
 
 import { Card3D } from './Card3D.js';
+import { debugLogger } from './DebugLogger.js';
 
 export class AnimationTester {
   constructor(cardRenderer) {
     this.cardRenderer = cardRenderer;
     this.isActive = false;
+
+    debugLogger.log('animation', '🎬 AnimationTester constructed', {
+      cardRenderer: !!cardRenderer
+    });
 
     // Test card - using a simple dummy card
     this.testCard = null;
@@ -174,6 +179,11 @@ export class AnimationTester {
    * Initialize the test environment
    */
   initialize(canvasWidth, canvasHeight) {
+    debugLogger.log('animation', '🎬 AnimationTester initializing', {
+      canvasWidth,
+      canvasHeight
+    });
+
     // Create a dummy card for testing
     this.testCard = {
       id: 'test-card',
@@ -198,12 +208,25 @@ export class AnimationTester {
     this.testCard3D = null;
 
     this.isActive = true;
+
+    debugLogger.log('animation', '✅ AnimationTester initialized', {
+      startPos: `(${Math.round(leftX)}, ${Math.round(centerY)})`,
+      endPos: `(${Math.round(rightX)}, ${Math.round(centerY)})`
+    });
   }
 
   /**
    * Reset the test card to start position (only called internally by playAnimation)
    */
   resetCard() {
+    debugLogger.log('animation', '🔄 AnimationTester resetting card', {
+      startPos: `(${Math.round(this.params.startX)}, ${Math.round(this.params.startY)}, ${Math.round(this.params.startZ)})`,
+      startRotation: this.params.startRotation,
+      startScale: this.params.startScale,
+      startFaceUp: this.params.startFaceUp,
+      startOpacity: this.params.startOpacity
+    });
+
     this.testCard3D = new Card3D(
       this.testCard,
       this.params.startX,
@@ -225,6 +248,10 @@ export class AnimationTester {
    * Stop animation and hide card
    */
   stopAnimation() {
+    debugLogger.log('animation', '⏹️ AnimationTester stopping animation', {
+      wasPlaying: this.isPlaying
+    });
+
     this.isPlaying = false;
     this.testCard3D = null;
   }
@@ -234,8 +261,20 @@ export class AnimationTester {
    */
   playAnimation() {
     if (this.isPlaying) {
+      debugLogger.log('animation', '⚠️ AnimationTester already playing', null);
       return; // Already playing
     }
+
+    debugLogger.log('animation', '▶️ AnimationTester starting animation', {
+      from: `(${Math.round(this.params.startX)}, ${Math.round(this.params.startY)}, ${Math.round(this.params.startZ)})`,
+      to: `(${Math.round(this.params.endX)}, ${Math.round(this.params.endY)}, ${Math.round(this.params.endZ)})`,
+      duration: `${this.params.duration}ms`,
+      easing: this.params.easing,
+      rotation: `${this.params.startRotation} → ${this.params.endRotation}`,
+      scale: `${this.params.startScale} → ${this.params.endScale}`,
+      faceUp: `${this.params.startFaceUp} → ${this.params.endFaceUp}`,
+      opacity: `${this.params.startOpacity} → ${this.params.endOpacity}`
+    });
 
     // Create/reset card to start position
     this.resetCard();
@@ -262,6 +301,9 @@ export class AnimationTester {
 
     // Set callback for when animation completes
     this.testCard3D.onAnimationComplete = () => {
+      debugLogger.log('animation', '✅ AnimationTester animation complete', {
+        duration: `${Date.now() - this.animationStartTime}ms`
+      });
       this.isPlaying = false;
       // Hide the card after animation completes
       this.testCard3D = null;
@@ -281,29 +323,53 @@ export class AnimationTester {
    * Render the test environment
    */
   render(ctx, canvasWidth, canvasHeight) {
-    if (!this.isActive) return;
+    if (!this.isActive) {
+      debugLogger.log('render', 'AnimationTester render skipped - not active', null);
+      return;
+    }
+
+    debugLogger.log('render', '🎨 AnimationTester rendering', {
+      canvasSize: `${canvasWidth}x${canvasHeight}`,
+      hasCard: !!this.testCard3D,
+      isPlaying: this.isPlaying,
+      cardPosition: this.testCard3D ? `(${Math.round(this.testCard3D.x)}, ${Math.round(this.testCard3D.y)}, ${Math.round(this.testCard3D.z)})` : 'N/A'
+    });
 
     ctx.save();
 
     // Draw background
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    debugLogger.log('render', '  └─ Background drawn', { color: '#1a1a2e' });
 
     // Draw title
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 24px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('Animation Tester', canvasWidth / 2, 40);
+    debugLogger.log('render', '  └─ Title drawn', null);
 
     // Draw start outline
     this.drawCardOutline(ctx, this.params.startX, this.params.startY, '#4ecdc4', 'START');
+    debugLogger.log('render', '  └─ START outline drawn', {
+      position: `(${Math.round(this.params.startX)}, ${Math.round(this.params.startY)})`
+    });
 
     // Draw end outline
     this.drawCardOutline(ctx, this.params.endX, this.params.endY, '#ff6b6b', 'END');
+    debugLogger.log('render', '  └─ END outline drawn', {
+      position: `(${Math.round(this.params.endX)}, ${Math.round(this.params.endY)})`
+    });
 
     // Draw test card if it exists
     if (this.testCard3D) {
       this.cardRenderer.drawCard3D(ctx, this.testCard3D, false);
+      debugLogger.log('render', '  └─ Test card drawn', {
+        position: `(${Math.round(this.testCard3D.x)}, ${Math.round(this.testCard3D.y)}, ${Math.round(this.testCard3D.z)})`,
+        opacity: this.testCard3D.opacity,
+        scale: this.testCard3D.scale,
+        rotation: this.testCard3D.rotation
+      });
     }
 
     // Draw animation status
@@ -312,6 +378,7 @@ export class AnimationTester {
       ctx.font = '16px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('PLAYING...', canvasWidth / 2, canvasHeight - 20);
+      debugLogger.log('render', '  └─ Playing status drawn', null);
     }
 
     ctx.restore();
@@ -352,10 +419,18 @@ export class AnimationTester {
    */
   updateParam(key, value) {
     if (key in this.params) {
+      const oldValue = this.params[key];
       this.params[key] = value;
+
+      debugLogger.log('animation', `🔧 AnimationTester param updated: ${key}`, {
+        oldValue,
+        newValue: value
+      });
 
       // Don't create/update card when adjusting parameters
       // The outlines will update automatically in the render method
+    } else {
+      debugLogger.log('animation', `⚠️ AnimationTester unknown param: ${key}`, { value });
     }
   }
 
@@ -364,19 +439,29 @@ export class AnimationTester {
    */
   loadPreset(presetName) {
     if (presetName in this.presets) {
+      debugLogger.log('animation', `📋 AnimationTester loading preset: ${presetName}`, null);
+
       const preset = this.presets[presetName];
+      const updatedParams = [];
 
       // Update params with preset values
       for (const key in preset) {
         if (key in this.params) {
           this.params[key] = preset[key];
+          updatedParams.push(key);
         }
       }
+
+      debugLogger.log('animation', `✅ Preset loaded: ${presetName}`, {
+        updatedParams: updatedParams.join(', ')
+      });
 
       // Don't show card, just update parameters
       // Card will only show when Play is pressed
 
       return true;
+    } else {
+      debugLogger.log('animation', `⚠️ AnimationTester unknown preset: ${presetName}`, null);
     }
     return false;
   }
@@ -449,6 +534,11 @@ export class AnimationTester {
    * Deactivate test environment
    */
   deactivate() {
+    debugLogger.log('animation', '🛑 AnimationTester deactivating', {
+      wasActive: this.isActive,
+      wasPlaying: this.isPlaying
+    });
+
     this.isActive = false;
     this.testCard3D = null;
   }
