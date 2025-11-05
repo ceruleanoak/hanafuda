@@ -53,7 +53,7 @@ class Game {
 
       // Also update animation tester if it's active
       if (this.animationTesterActive) {
-        this.animationTester.initialize(width, height);
+        this.animationTester.initialize(width, height, this.canvas);
       }
 
       debugLogger.log('gameState', 'Viewport resized - Card3D updated', {
@@ -1661,7 +1661,7 @@ class Game {
     this.animationTesterPanel.classList.remove('hidden');
     this.animationTesterActive = true;
     // Use display dimensions, not physical canvas dimensions
-    this.animationTester.initialize(this.renderer.displayWidth, this.renderer.displayHeight);
+    this.animationTester.initialize(this.renderer.displayWidth, this.renderer.displayHeight, this.canvas);
     // Update controls to show the calculated default positions
     this.updateAnimationTesterControls();
     debugLogger.log('animation', 'Animation tester opened', null);
@@ -1726,7 +1726,16 @@ class Game {
 
     // Rotation & Scale controls
     this.setupRangeControl('endRotation', (value) => value * Math.PI / 180); // Convert to radians
-    this.setupRangeControl('endScale');
+    this.setupRangeControl('peakScale');
+
+    // Variance controls
+    document.getElementById('varianceEnabled').addEventListener('change', (e) => {
+      this.animationTester.updateParam('varianceEnabled', e.target.checked);
+    });
+    this.setupRangeControl('rotationVariance', (value) => value * Math.PI / 180); // Convert to radians
+    this.setupRangeControl('positionXVariance');
+    this.setupRangeControl('positionYVariance');
+    this.setupRangeControl('positionZVariance');
 
     // Appearance controls
     document.getElementById('endFaceUp').addEventListener('change', (e) => {
@@ -1765,9 +1774,10 @@ class Game {
       'endX', 'endY', 'endZ',
       'curveX', 'curveY', 'curveZ',
       'duration',
-      'endScale',
+      'peakScale',
       'flipTiming',
-      'endOpacity'
+      'endOpacity',
+      'positionXVariance', 'positionYVariance', 'positionZVariance'
     ];
 
     rangeParams.forEach(param => {
@@ -1788,6 +1798,15 @@ class Game {
       endRotDisplay.textContent = degrees;
     }
 
+    // Update rotation variance (convert from radians to degrees)
+    const rotVarianceInput = document.getElementById('rotationVariance');
+    const rotVarianceDisplay = document.getElementById('rotationVariance-value');
+    if (rotVarianceInput && rotVarianceDisplay) {
+      const degrees = Math.round(params.rotationVariance * 180 / Math.PI);
+      rotVarianceInput.value = degrees;
+      rotVarianceDisplay.textContent = degrees;
+    }
+
     // Update checkboxes
     const endFaceUpCheckbox = document.getElementById('endFaceUp');
     if (endFaceUpCheckbox) {
@@ -1797,6 +1816,11 @@ class Game {
     const curveEnabledCheckbox = document.getElementById('curveEnabled');
     if (curveEnabledCheckbox) {
       curveEnabledCheckbox.checked = params.curveEnabled === true;
+    }
+
+    const varianceEnabledCheckbox = document.getElementById('varianceEnabled');
+    if (varianceEnabledCheckbox) {
+      varianceEnabledCheckbox.checked = params.varianceEnabled === true;
     }
 
     // Update easing select

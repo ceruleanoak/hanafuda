@@ -75,6 +75,7 @@ export class Card3D {
     this.tweenStart = null; // Starting values
     this.tweenControlPoint = null; // {x, y, z} for curved paths (optional)
     this.tweenFlipTiming = 0.5; // 0-1: controls when flip occurs (0=early, 0.5=linear, 1=late)
+    this.tweenPeakScale = null; // If set, scale peaks at midpoint instead of linear tween
     this.tweenDuration = 0; // ms
     this.tweenProgress = 0; // 0-1
     this.tweenEasing = 'easeInOutQuad';
@@ -246,11 +247,19 @@ export class Card3D {
         }
       }
 
-      // Always use linear interpolation for rotation and scale
+      // Always use linear interpolation for rotation
       if (this.tweenTarget.rotation !== undefined) {
         this.rotation = this.tweenStart.rotation + (this.tweenTarget.rotation - this.tweenStart.rotation) * t;
       }
-      if (this.tweenTarget.scale !== undefined) {
+
+      // Scale: if peakScale is set, use parabolic curve; otherwise linear
+      if (this.tweenPeakScale !== null) {
+        // Parabolic curve: peaks at t=0.5
+        // scale = start + peakAmount * (1 - (2*t - 1)^2)
+        const parabolaT = 2 * t - 1; // Convert t from [0,1] to [-1,1]
+        const scaleFactor = 1 - (parabolaT * parabolaT); // Parabola: 1 at t=0.5, 0 at t=0 and t=1
+        this.scale = this.tweenStart.scale + this.tweenPeakScale * scaleFactor;
+      } else if (this.tweenTarget.scale !== undefined) {
         this.scale = this.tweenStart.scale + (this.tweenTarget.scale - this.tweenStart.scale) * t;
       }
 
@@ -272,7 +281,10 @@ export class Card3D {
           flipT = Math.pow(t, 1 + strength * 2);
         }
 
-        this.targetFaceUp = this.tweenStart.faceUp + (this.tweenTarget.faceUp - this.tweenStart.faceUp) * flipT;
+        // Set faceUp directly during tween (bypass spring animation for precise timing)
+        this.faceUp = this.tweenStart.faceUp + (this.tweenTarget.faceUp - this.tweenStart.faceUp) * flipT;
+        this.targetFaceUp = this.faceUp;
+        this.faceUpVelocity = 0;
       }
     }
   }
@@ -404,8 +416,9 @@ export class Card3D {
    * @param {string} easing - Easing function name
    * @param {Object} controlPoint - Optional {x, y, z} for curved path
    * @param {number} flipTiming - Optional 0-1 value controlling flip timing (0=early, 0.5=linear, 1=late)
+   * @param {number} peakScale - Optional scale increase amount at animation midpoint (instead of linear scale tween)
    */
-  tweenTo(target, duration = 500, easing = 'easeInOutQuad', controlPoint = null, flipTiming = 0.5) {
+  tweenTo(target, duration = 500, easing = 'easeInOutQuad', controlPoint = null, flipTiming = 0.5, peakScale = null) {
     this.animationMode = 'tween';
     this.tweenTarget = { ...target };
     this.tweenStart = {
@@ -418,6 +431,7 @@ export class Card3D {
     };
     this.tweenControlPoint = controlPoint ? { ...controlPoint } : null;
     this.tweenFlipTiming = flipTiming;
+    this.tweenPeakScale = peakScale;
     this.tweenDuration = duration;
     this.tweenProgress = 0;
     this.tweenEasing = easing;
