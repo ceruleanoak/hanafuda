@@ -488,11 +488,15 @@ class Game {
 
             let success;
             if (isAlreadySelected) {
-              // Card already selected, try to place it
+              // Card already selected, just need to place it (one call)
               success = this.game.selectCard(this.draggedCardData, 'player');
             } else {
-              // Select the card first (this will place it since no matches)
+              // Select the card first
               success = this.game.selectCard(this.draggedCardData, 'player');
+              // Then place it on the field (second call)
+              if (success) {
+                success = this.game.selectCard(this.draggedCardData, 'player');
+              }
             }
 
             if (success) {
