@@ -464,8 +464,59 @@ class Game {
           this.selectedCard3D = null;
         }
       } else {
-        // Invalid drop - return card to hand
-        this.cancelDrag();
+        // Not dropping on a card - check if we can place on field
+        // Only allow placing from player hand
+        if (this.draggedCard3D.homeZone === 'playerHand') {
+          const gameState = this.game.getState();
+          const isAlreadySelected = gameState.phase === 'select_field' &&
+            gameState.selectedCards.length > 0 &&
+            gameState.selectedCards[0].id === this.draggedCardData.id;
+
+          // Check if card has matches
+          const handCard = gameState.playerHand.find(c => c.id === this.draggedCardData.id);
+          const matches = handCard ? gameState.field.filter(fc =>
+            this.game.cardsMatch(handCard, fc)
+          ) : [];
+
+          if (matches.length > 0) {
+            // Has matches - cannot place on field, must match
+            debugLogger.log('gameState', `Drag to field failed - matches available`, null);
+            this.cancelDrag();
+          } else {
+            // No matches - allow placing on field
+            debugLogger.log('gameState', `Card dragged to field: ${this.draggedCardData.name}`, null);
+
+            let success;
+            if (isAlreadySelected) {
+              // Card already selected, try to place it
+              success = this.game.selectCard(this.draggedCardData, 'player');
+            } else {
+              // Select the card first (this will place it since no matches)
+              success = this.game.selectCard(this.draggedCardData, 'player');
+            }
+
+            if (success) {
+              // Clear selection
+              if (this.selectedCard3D) {
+                this.selectedCard3D.z = 0;
+                this.selectedCard3D = null;
+              }
+              this.updateUI();
+            } else {
+              this.cancelDrag();
+            }
+
+            // Reset drag state
+            this.draggedCard3D.isDragging = false;
+            this.draggedCard3D = null;
+            this.draggedCardData = null;
+            this.isDragging = false;
+            this.dropTargetCard3D = null;
+          }
+        } else {
+          // Invalid drop - return card to hand
+          this.cancelDrag();
+        }
       }
     } else {
       // This was just a click (no drag), treat it as a regular card selection
