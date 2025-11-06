@@ -9,6 +9,7 @@ import { GameOptions } from './game/GameOptions.js';
 import { Card3DManager } from './utils/Card3DManager.js';
 import { AnimationTester } from './utils/AnimationTester.js';
 import { InitializationManager } from './utils/InitializationManager.js';
+import { AudioManager } from './utils/AudioManager.js';
 import { APP_VERSION } from './utils/version.js';
 
 class Game {
@@ -66,6 +67,12 @@ class Game {
     this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
     this.card3DManager.initializeFromGameState(this.game.getState());
     debugLogger.log('3dCards', '✨ Card3D system initialized on page load', null);
+
+    // Initialize Audio Manager
+    this.audioManager = new AudioManager();
+    this.audioManager.setEnabled(this.gameOptions.get('audioEnabled', true));
+    this.audioManager.loadAudio();
+    debugLogger.log('audio', '🎵 Audio Manager initialized', null);
 
     // Initialize Animation Tester
     this.animationTester = new AnimationTester(this.renderer.cardRenderer, this.card3DManager);
@@ -816,6 +823,7 @@ class Game {
     document.getElementById('viewing-sake').value = options.viewingSakeMode;
     document.getElementById('moon-viewing-sake').value = options.moonViewingSakeMode;
     document.getElementById('animations-enabled').checked = options.animationsEnabled;
+    document.getElementById('audio-enabled').checked = options.audioEnabled;
 
     this.optionsModal.classList.add('show');
   }
@@ -838,7 +846,8 @@ class Game {
       bothPlayersScore: document.getElementById('both-players-score').checked,
       viewingSakeMode: document.getElementById('viewing-sake').value,
       moonViewingSakeMode: document.getElementById('moon-viewing-sake').value,
-      animationsEnabled: document.getElementById('animations-enabled').checked
+      animationsEnabled: document.getElementById('animations-enabled').checked,
+      audioEnabled: document.getElementById('audio-enabled').checked
     };
 
     this.gameOptions.update(newOptions);
@@ -849,6 +858,11 @@ class Game {
     // Update Card3DManager animation settings
     if (this.card3DManager) {
       this.card3DManager.setAnimationsEnabled(newOptions.animationsEnabled);
+    }
+
+    // Update AudioManager settings
+    if (this.audioManager) {
+      this.audioManager.setEnabled(newOptions.audioEnabled);
     }
 
     this.hideOptionsModal();
@@ -872,6 +886,10 @@ class Game {
       // Update Card3DManager
       if (this.card3DManager) {
         this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
+      }
+      // Update AudioManager
+      if (this.audioManager) {
+        this.audioManager.setEnabled(this.gameOptions.get('audioEnabled'));
       }
       // Reload the form
       this.showOptionsModal();
@@ -916,15 +934,17 @@ class Game {
   showRoundSummary(data) {
     // If game over, play animation first, then show modal after delay
     if (data.isGameOver) {
-      // Play appropriate animation based on outcome
+      // Play appropriate animation and music based on outcome
       if (data.playerTotalScore > data.opponentTotalScore) {
-        // Player wins - play random showcase animation
+        // Player wins - play random showcase animation and win music
         this.playRandomShowcaseAnimation();
+        this.audioManager.playWinMusic();
       } else if (data.playerTotalScore < data.opponentTotalScore) {
-        // Player loses - play losing animation
+        // Player loses - play losing animation and lose music
         this.playLosingAnimation();
+        this.audioManager.playLoseMusic();
       } else {
-        // Tie - play random showcase animation
+        // Tie - play random showcase animation (no music)
         this.playRandomShowcaseAnimation();
       }
 
@@ -1422,21 +1442,53 @@ class Game {
     }
 
     let completedCount = 0;
+    const hasRotationAnims = configs.some(config => config.rotation !== undefined);
+
     configs.forEach(config => {
-      const anim = this.animateCard(
-        config.card,
-        config.startX,
-        config.startY,
-        config.endX,
-        config.endY,
-        config.duration || 500,
-        () => {
+      // Check if this animation includes rotation (requires Card3D tweenTo)
+      if (config.rotation !== undefined) {
+        // Use Card3D tweenTo for animations with rotation
+        const card3D = this.card3DManager.cards.get(config.card.id);
+        if (card3D) {
+          card3D.tweenTo({
+            x: config.endX,
+            y: config.endY,
+            z: config.endZ || 0,
+            rotation: config.rotation,
+            faceUp: config.faceUp !== undefined ? config.faceUp : 1
+          }, config.duration || 500, 'easeInOutQuad');
+
+          // Use setTimeout to track completion since tweenTo doesn't have callback
+          setTimeout(() => {
+            completedCount++;
+            if (completedCount === configs.length) {
+              onComplete();
+            }
+          }, config.duration || 500);
+        } else {
+          // Fallback if Card3D not found
           completedCount++;
           if (completedCount === configs.length) {
             onComplete();
           }
         }
-      );
+      } else {
+        // Use simple animation for non-rotating cards
+        const anim = this.animateCard(
+          config.card,
+          config.startX,
+          config.startY,
+          config.endX,
+          config.endY,
+          config.duration || 500,
+          () => {
+            completedCount++;
+            if (completedCount === configs.length) {
+              onComplete();
+            }
+          }
+        );
+      }
     });
   }
 
@@ -1615,7 +1667,7 @@ class Game {
 
     const pilePos = this.getZonePosition(capturedZone, this.game.getState());
 
-    // Stage 1: All cards fly to celebration positions simultaneously
+    // Stage 1: All cards fly to celebration positions simultaneously with spin animation
     sequence.addParallelStage(cards.map((card, index) => {
       const startX = card._renderX !== undefined ? card._renderX : celebrationPositions[index].x;
       const startY = card._renderY !== undefined ? card._renderY : celebrationPositions[index].y;
@@ -1626,12 +1678,16 @@ class Game {
         end: `(${Math.round(celebrationPositions[index].x)}, ${Math.round(celebrationPositions[index].y)})`
       });
 
+      // Add ease-in-out spin animation (1 full rotation per card)
       return {
         card: card,
         startX: startX,
         startY: startY,
         endX: celebrationPositions[index].x,
         endY: celebrationPositions[index].y,
+        endZ: 20,
+        rotation: Math.PI * 2, // One full 360° spin with ease-in-out
+        faceUp: 1,
         duration: 600
       };
     }), 'Cards to celebration area');
@@ -1654,6 +1710,9 @@ class Game {
       startY: celebrationPositions[index].y,
       endX: mergeX + (index * cardWidth / 4), // Compress together
       endY: celebrationY,
+      endZ: 0,
+      rotation: 0, // Reset rotation back to normal
+      faceUp: 1,
       duration: 400
     })), 'Cards merge together');
 
@@ -1667,6 +1726,9 @@ class Game {
       startY: celebrationY,
       endX: pilePos.x,
       endY: pilePos.y,
+      endZ: 0,
+      rotation: 0, // Ensure rotation stays at 0
+      faceUp: 1,
       duration: 500
     })), 'All cards to pile');
 

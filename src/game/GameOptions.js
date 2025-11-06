@@ -22,7 +22,8 @@ export class GameOptions {
       // UI Settings
       helpMode: false,                    // Help highlighting
       tutorialShown: false,               // Has user seen tutorial bubble?
-      animationsEnabled: true             // Enable/disable 3D animations
+      animationsEnabled: true,            // Enable/disable 3D animations
+      audioEnabled: true                  // Enable/disable game audio
     };
 
     this.options = this.load();
