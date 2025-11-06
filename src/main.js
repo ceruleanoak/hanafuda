@@ -314,9 +314,9 @@ class Game {
     this.updateUI();
     this.statusElement.classList.remove('show');
 
-    // Initialize Card3D system from game state
+    // Initialize Card3D system from game state with Toss Across animation
     this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
-    this.card3DManager.initializeFromGameState(this.game.getState());
+    this.card3DManager.initializeFromGameState(this.game.getState(), true);
     debugLogger.log('3dCards', '✨ Card3D system initialized for new game', null);
   }
 
