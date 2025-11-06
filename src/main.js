@@ -324,14 +324,14 @@ class Game {
 
     const gameState = this.game.getState();
 
-    // Only allow dragging from player's hand during 'select_hand' phase
-    if (gameState.phase !== 'select_hand') {
+    // Only allow interactions during select phases
+    if (gameState.phase !== 'select_hand' && gameState.phase !== 'select_field') {
       return;
     }
 
     // Use 3D hit detection
     const card3D = this.card3DManager.getCardAtPosition(x, y);
-    if (card3D && card3D.homeZone === 'playerHand') {
+    if (card3D && (card3D.homeZone === 'playerHand' || card3D.homeZone === 'field')) {
       // Clear any hover state
       if (this.hoveredCard3D) {
         this.hoveredCard3D.setHovered(false);
