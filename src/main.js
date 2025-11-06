@@ -1696,6 +1696,23 @@ class Game {
       this.animationTester.stopAnimation();
     });
 
+    // Copy settings button
+    document.getElementById('copy-settings').addEventListener('click', () => {
+      const settingsText = this.animationTester.getParametersAsString();
+      navigator.clipboard.writeText(settingsText).then(() => {
+        // Show temporary feedback
+        const btn = document.getElementById('copy-settings');
+        const originalText = btn.textContent;
+        btn.textContent = '✓ Copied!';
+        setTimeout(() => {
+          btn.textContent = originalText;
+        }, 2000);
+      }).catch(err => {
+        console.error('Failed to copy settings:', err);
+        alert('Failed to copy to clipboard. Please try again.');
+      });
+    });
+
     // Preset selector
     document.getElementById('animation-preset').addEventListener('change', (e) => {
       const presetName = e.target.value;
