@@ -432,7 +432,21 @@ class Game {
         }
 
         // Execute the card play
-        const success = this.game.selectCard(this.draggedCardData, 'player');
+        // Check if card is already selected (phase is select_field)
+        const gameState = this.game.getState();
+        const isAlreadySelected = gameState.phase === 'select_field' &&
+          gameState.selectedCards.length > 0 &&
+          gameState.selectedCards[0].id === this.draggedCardData.id;
+
+        let success;
+        if (isAlreadySelected) {
+          // Card already selected, skip first selectCard and go straight to matching
+          success = true;
+        } else {
+          // Select the card from hand first
+          success = this.game.selectCard(this.draggedCardData, 'player');
+        }
+
         if (success) {
           // Then select the field card
           this.game.selectCard(this.dropTargetCard3D.cardData, 'field');
