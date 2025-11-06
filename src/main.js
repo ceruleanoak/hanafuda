@@ -1425,21 +1425,53 @@ class Game {
     }
 
     let completedCount = 0;
+    const hasRotationAnims = configs.some(config => config.rotation !== undefined);
+
     configs.forEach(config => {
-      const anim = this.animateCard(
-        config.card,
-        config.startX,
-        config.startY,
-        config.endX,
-        config.endY,
-        config.duration || 500,
-        () => {
+      // Check if this animation includes rotation (requires Card3D tweenTo)
+      if (config.rotation !== undefined) {
+        // Use Card3D tweenTo for animations with rotation
+        const card3D = this.card3DManager.cards.get(config.card.id);
+        if (card3D) {
+          card3D.tweenTo({
+            x: config.endX,
+            y: config.endY,
+            z: config.endZ || 0,
+            rotation: config.rotation,
+            faceUp: config.faceUp !== undefined ? config.faceUp : 1
+          }, config.duration || 500, 'easeInOutQuad');
+
+          // Use setTimeout to track completion since tweenTo doesn't have callback
+          setTimeout(() => {
+            completedCount++;
+            if (completedCount === configs.length) {
+              onComplete();
+            }
+          }, config.duration || 500);
+        } else {
+          // Fallback if Card3D not found
           completedCount++;
           if (completedCount === configs.length) {
             onComplete();
           }
         }
-      );
+      } else {
+        // Use simple animation for non-rotating cards
+        const anim = this.animateCard(
+          config.card,
+          config.startX,
+          config.startY,
+          config.endX,
+          config.endY,
+          config.duration || 500,
+          () => {
+            completedCount++;
+            if (completedCount === configs.length) {
+              onComplete();
+            }
+          }
+        );
+      }
     });
   }
 
@@ -1618,7 +1650,7 @@ class Game {
 
     const pilePos = this.getZonePosition(capturedZone, this.game.getState());
 
-    // Stage 1: All cards fly to celebration positions simultaneously
+    // Stage 1: All cards fly to celebration positions simultaneously with spin animation
     sequence.addParallelStage(cards.map((card, index) => {
       const startX = card._renderX !== undefined ? card._renderX : celebrationPositions[index].x;
       const startY = card._renderY !== undefined ? card._renderY : celebrationPositions[index].y;
@@ -1629,12 +1661,16 @@ class Game {
         end: `(${Math.round(celebrationPositions[index].x)}, ${Math.round(celebrationPositions[index].y)})`
       });
 
+      // Add ease-in-out spin animation (1 full rotation per card)
       return {
         card: card,
         startX: startX,
         startY: startY,
         endX: celebrationPositions[index].x,
         endY: celebrationPositions[index].y,
+        endZ: 20,
+        rotation: Math.PI * 2, // One full 360° spin with ease-in-out
+        faceUp: 1,
         duration: 600
       };
     }), 'Cards to celebration area');
@@ -1657,6 +1693,9 @@ class Game {
       startY: celebrationPositions[index].y,
       endX: mergeX + (index * cardWidth / 4), // Compress together
       endY: celebrationY,
+      endZ: 0,
+      rotation: 0, // Reset rotation back to normal
+      faceUp: 1,
       duration: 400
     })), 'Cards merge together');
 
@@ -1670,6 +1709,9 @@ class Game {
       startY: celebrationY,
       endX: pilePos.x,
       endY: pilePos.y,
+      endZ: 0,
+      rotation: 0, // Ensure rotation stays at 0
+      faceUp: 1,
       duration: 500
     })), 'All cards to pile');
 
