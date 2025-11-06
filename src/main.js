@@ -75,6 +75,9 @@ class Game {
     this.lastGameOverMessage = '';
     this.frameCount = 0;
 
+    // Animation tracking
+    this.lastShowcaseAnimation = -1; // Track last showcase animation to prevent repeats
+
     // New features state
     this.helpMode = this.gameOptions.get('helpMode'); // Load from saved options
     this.hoverX = -1;             // Mouse hover X position
@@ -238,7 +241,7 @@ class Game {
     this.optionsButton.addEventListener('click', () => this.showOptionsModal());
 
     // Test 3D animation button
-    this.test3DButton.addEventListener('click', () => this.startWaveAnimation());
+    this.test3DButton.addEventListener('click', () => this.playRandomShowcaseAnimation());
 
     // Animation tester button
     this.animationTesterButton.addEventListener('click', () => this.showAnimationTester());
@@ -917,6 +920,18 @@ class Game {
       const winner = data.playerTotalScore > data.opponentTotalScore ? 'You Win!' :
                      data.opponentTotalScore > data.playerTotalScore ? 'Opponent Wins!' : 'Tie Game!';
       title.textContent = `Game Over - ${winner}`;
+
+      // Play appropriate animation based on outcome
+      if (data.playerTotalScore > data.opponentTotalScore) {
+        // Player wins - play random showcase animation
+        setTimeout(() => this.playRandomShowcaseAnimation(), 300);
+      } else if (data.playerTotalScore < data.opponentTotalScore) {
+        // Player loses - play losing animation
+        setTimeout(() => this.playLosingAnimation(), 300);
+      } else {
+        // Tie - play random showcase animation
+        setTimeout(() => this.playRandomShowcaseAnimation(), 300);
+      }
     } else {
       title.textContent = `Round ${data.roundNumber} Complete!`;
     }
@@ -1030,8 +1045,11 @@ class Game {
     this.roundSummaryModal.classList.remove('show');
 
     if (this.game.gameOver) {
-      // Start new game
-      this.showRoundModal();
+      // Game is over - show message in lower panel instead of modal
+      const state = this.game.getState();
+      const winner = state.playerScore > state.opponentScore ? 'You won!' :
+                     state.opponentScore > state.playerScore ? 'You lost!' : 'Tie game!';
+      this.instructionsElement.textContent = `${winner} Final score: You ${state.playerScore} - Opponent ${state.opponentScore}. Click "New Game" to play again.`;
     } else {
       // Continue to next round
       this.game.startNextRound();
@@ -1964,6 +1982,466 @@ class Game {
 
       debugLogger.log('animation', '✨ Showcase animation complete', null);
     }, showcaseDuration);
+  }
+
+  /**
+   * Play a random showcase animation (never the same twice in a row)
+   */
+  playRandomShowcaseAnimation() {
+    const animations = [
+      () => this.startWaveAnimation(),
+      () => this.startSpiralAnimation(),
+      () => this.startGridAnimation(),
+      () => this.startRippleAnimation(),
+      () => this.startColumnsAnimation(),
+      () => this.startScatterAnimation()
+    ];
+
+    // Select a random animation that's different from the last one
+    let randomIndex;
+    do {
+      randomIndex = Math.floor(Math.random() * animations.length);
+    } while (randomIndex === this.lastShowcaseAnimation && animations.length > 1);
+
+    this.lastShowcaseAnimation = randomIndex;
+    animations[randomIndex]();
+  }
+
+  /**
+   * Showcase animation 2: Spiral formation
+   */
+  startSpiralAnimation() {
+    if (!this.card3DManager) {
+      debugLogger.logError('Card3DManager not initialized', null);
+      return;
+    }
+
+    debugLogger.log('animation', '🌀 Starting spiral animation', null);
+
+    const allCard3Ds = [];
+    this.card3DManager.cards.forEach(card3D => {
+      allCard3Ds.push(card3D);
+    });
+
+    if (allCard3Ds.length === 0) return;
+
+    // Store original positions
+    allCard3Ds.forEach(card3D => {
+      card3D._showcaseOriginalZone = card3D.homeZone;
+      card3D._showcaseOriginalX = card3D.homePosition.x;
+      card3D._showcaseOriginalY = card3D.homePosition.y;
+    });
+
+    const centerX = this.renderer.displayWidth / 2;
+    const centerY = this.renderer.displayHeight / 2;
+
+    // Animate cards into spiral formation
+    allCard3Ds.forEach((card3D, index) => {
+      const angle = (index / allCard3Ds.length) * Math.PI * 6; // 3 full rotations
+      const radius = (index / allCard3Ds.length) * Math.min(this.renderer.displayWidth, this.renderer.displayHeight) * 0.4;
+
+      const targetX = centerX + Math.cos(angle) * radius;
+      const targetY = centerY + Math.sin(angle) * radius;
+      const targetZ = 20 + (index / allCard3Ds.length) * 40;
+
+      const delay = index * 25;
+
+      setTimeout(() => {
+        card3D.tweenTo({
+          x: targetX,
+          y: targetY,
+          z: targetZ,
+          faceUp: 1,
+          rotation: angle
+        }, 700, 'easeOutCubic');
+      }, delay);
+    });
+
+    // Return cards to original positions
+    const showcaseDuration = allCard3Ds.length * 25 + 700 + 2000;
+    setTimeout(() => {
+      allCard3Ds.forEach((card3D, index) => {
+        const delay = index * 20;
+        setTimeout(() => {
+          const originalFaceUp = (card3D._showcaseOriginalZone === 'opponentHand' || card3D._showcaseOriginalZone === 'deck') ? 0 : 1;
+          card3D.tweenTo({
+            x: card3D._showcaseOriginalX,
+            y: card3D._showcaseOriginalY,
+            z: 0,
+            faceUp: originalFaceUp,
+            rotation: 0
+          }, 500, 'easeInOutQuad');
+        }, delay);
+      });
+    }, showcaseDuration);
+  }
+
+  /**
+   * Showcase animation 3: Grid/Matrix formation
+   */
+  startGridAnimation() {
+    if (!this.card3DManager) {
+      debugLogger.logError('Card3DManager not initialized', null);
+      return;
+    }
+
+    debugLogger.log('animation', '📊 Starting grid animation', null);
+
+    const allCard3Ds = [];
+    this.card3DManager.cards.forEach(card3D => {
+      allCard3Ds.push(card3D);
+    });
+
+    if (allCard3Ds.length === 0) return;
+
+    // Store original positions
+    allCard3Ds.forEach(card3D => {
+      card3D._showcaseOriginalZone = card3D.homeZone;
+      card3D._showcaseOriginalX = card3D.homePosition.x;
+      card3D._showcaseOriginalY = card3D.homePosition.y;
+    });
+
+    const cols = 8;
+    const rows = Math.ceil(allCard3Ds.length / cols);
+    const { width: cardWidth, height: cardHeight } = this.renderer.cardRenderer.getCardDimensions();
+    const spacingX = cardWidth * 1.2;
+    const spacingY = cardHeight * 1.2;
+    const gridWidth = cols * spacingX;
+    const gridHeight = rows * spacingY;
+    const startX = (this.renderer.displayWidth - gridWidth) / 2 + spacingX / 2;
+    const startY = (this.renderer.displayHeight - gridHeight) / 2 + spacingY / 2;
+
+    // Animate cards into grid formation
+    allCard3Ds.forEach((card3D, index) => {
+      const col = index % cols;
+      const row = Math.floor(index / cols);
+
+      const targetX = startX + col * spacingX;
+      const targetY = startY + row * spacingY;
+      const targetZ = 15;
+
+      const delay = (row * cols + col) * 30; // Animate row by row
+
+      setTimeout(() => {
+        card3D.tweenTo({
+          x: targetX,
+          y: targetY,
+          z: targetZ,
+          faceUp: 1,
+          rotation: 0
+        }, 600, 'easeOutCubic');
+      }, delay);
+    });
+
+    // Return cards to original positions
+    const showcaseDuration = (rows * cols) * 30 + 600 + 2000;
+    setTimeout(() => {
+      allCard3Ds.forEach((card3D, index) => {
+        const delay = index * 15;
+        setTimeout(() => {
+          const originalFaceUp = (card3D._showcaseOriginalZone === 'opponentHand' || card3D._showcaseOriginalZone === 'deck') ? 0 : 1;
+          card3D.tweenTo({
+            x: card3D._showcaseOriginalX,
+            y: card3D._showcaseOriginalY,
+            z: 0,
+            faceUp: originalFaceUp,
+            rotation: 0
+          }, 500, 'easeInOutQuad');
+        }, delay);
+      });
+    }, showcaseDuration);
+  }
+
+  /**
+   * Showcase animation 4: Ripple/Wave formation
+   */
+  startRippleAnimation() {
+    if (!this.card3DManager) {
+      debugLogger.logError('Card3DManager not initialized', null);
+      return;
+    }
+
+    debugLogger.log('animation', '〰️ Starting ripple animation', null);
+
+    const allCard3Ds = [];
+    this.card3DManager.cards.forEach(card3D => {
+      allCard3Ds.push(card3D);
+    });
+
+    if (allCard3Ds.length === 0) return;
+
+    // Store original positions
+    allCard3Ds.forEach(card3D => {
+      card3D._showcaseOriginalZone = card3D.homeZone;
+      card3D._showcaseOriginalX = card3D.homePosition.x;
+      card3D._showcaseOriginalY = card3D.homePosition.y;
+    });
+
+    const centerX = this.renderer.displayWidth / 2;
+    const centerY = this.renderer.displayHeight / 2;
+    const numRings = 6;
+
+    // Animate cards in concentric circles (ripple effect)
+    allCard3Ds.forEach((card3D, index) => {
+      const ringIndex = Math.floor((index / allCard3Ds.length) * numRings);
+      const cardsInRing = Math.max(6, ringIndex * 3 + 6);
+      const angleOffset = (index % cardsInRing) / cardsInRing;
+      const angle = angleOffset * Math.PI * 2;
+      const radius = (ringIndex + 1) * (Math.min(this.renderer.displayWidth, this.renderer.displayHeight) / (numRings + 2));
+
+      const targetX = centerX + Math.cos(angle) * radius;
+      const targetY = centerY + Math.sin(angle) * radius;
+      const targetZ = 20 + ringIndex * 5;
+
+      const delay = ringIndex * 150; // Ripple outward
+
+      setTimeout(() => {
+        card3D.tweenTo({
+          x: targetX,
+          y: targetY,
+          z: targetZ,
+          faceUp: 1,
+          rotation: angle + Math.PI / 2
+        }, 600, 'easeOutCubic');
+      }, delay);
+    });
+
+    // Return cards to original positions
+    const showcaseDuration = numRings * 150 + 600 + 2000;
+    setTimeout(() => {
+      allCard3Ds.forEach((card3D, index) => {
+        const delay = index * 18;
+        setTimeout(() => {
+          const originalFaceUp = (card3D._showcaseOriginalZone === 'opponentHand' || card3D._showcaseOriginalZone === 'deck') ? 0 : 1;
+          card3D.tweenTo({
+            x: card3D._showcaseOriginalX,
+            y: card3D._showcaseOriginalY,
+            z: 0,
+            faceUp: originalFaceUp,
+            rotation: 0
+          }, 500, 'easeInOutQuad');
+        }, delay);
+      });
+    }, showcaseDuration);
+  }
+
+  /**
+   * Showcase animation 5: Vertical columns
+   */
+  startColumnsAnimation() {
+    if (!this.card3DManager) {
+      debugLogger.logError('Card3DManager not initialized', null);
+      return;
+    }
+
+    debugLogger.log('animation', '📊 Starting columns animation', null);
+
+    const allCard3Ds = [];
+    this.card3DManager.cards.forEach(card3D => {
+      allCard3Ds.push(card3D);
+    });
+
+    if (allCard3Ds.length === 0) return;
+
+    // Store original positions
+    allCard3Ds.forEach(card3D => {
+      card3D._showcaseOriginalZone = card3D.homeZone;
+      card3D._showcaseOriginalX = card3D.homePosition.x;
+      card3D._showcaseOriginalY = card3D.homePosition.y;
+    });
+
+    const numColumns = 6;
+    const { width: cardWidth, height: cardHeight } = this.renderer.cardRenderer.getCardDimensions();
+    const columnSpacing = this.renderer.displayWidth / (numColumns + 1);
+
+    // Animate cards into vertical columns
+    allCard3Ds.forEach((card3D, index) => {
+      const colIndex = index % numColumns;
+      const rowIndex = Math.floor(index / numColumns);
+
+      const targetX = columnSpacing * (colIndex + 1);
+      const targetY = 80 + rowIndex * (cardHeight * 0.5);
+      const targetZ = 15 + Math.sin((colIndex / numColumns) * Math.PI) * 20;
+
+      const delay = colIndex * 100 + rowIndex * 40; // Columns appear one by one
+
+      setTimeout(() => {
+        card3D.tweenTo({
+          x: targetX,
+          y: targetY,
+          z: targetZ,
+          faceUp: 1,
+          rotation: 0
+        }, 650, 'easeOutCubic');
+      }, delay);
+    });
+
+    // Return cards to original positions
+    const maxRows = Math.ceil(allCard3Ds.length / numColumns);
+    const showcaseDuration = (numColumns * 100 + maxRows * 40) + 650 + 2000;
+    setTimeout(() => {
+      allCard3Ds.forEach((card3D, index) => {
+        const delay = index * 18;
+        setTimeout(() => {
+          const originalFaceUp = (card3D._showcaseOriginalZone === 'opponentHand' || card3D._showcaseOriginalZone === 'deck') ? 0 : 1;
+          card3D.tweenTo({
+            x: card3D._showcaseOriginalX,
+            y: card3D._showcaseOriginalY,
+            z: 0,
+            faceUp: originalFaceUp,
+            rotation: 0
+          }, 500, 'easeInOutQuad');
+        }, delay);
+      });
+    }, showcaseDuration);
+  }
+
+  /**
+   * Showcase animation 6: Scatter then organize
+   */
+  startScatterAnimation() {
+    if (!this.card3DManager) {
+      debugLogger.logError('Card3DManager not initialized', null);
+      return;
+    }
+
+    debugLogger.log('animation', '✨ Starting scatter animation', null);
+
+    const allCard3Ds = [];
+    this.card3DManager.cards.forEach(card3D => {
+      allCard3Ds.push(card3D);
+    });
+
+    if (allCard3Ds.length === 0) return;
+
+    // Store original positions
+    allCard3Ds.forEach(card3D => {
+      card3D._showcaseOriginalZone = card3D.homeZone;
+      card3D._showcaseOriginalX = card3D.homePosition.x;
+      card3D._showcaseOriginalY = card3D.homePosition.y;
+    });
+
+    const centerX = this.renderer.displayWidth / 2;
+    const centerY = this.renderer.displayHeight / 2;
+
+    // Phase 1: Scatter randomly
+    allCard3Ds.forEach((card3D, index) => {
+      const randomAngle = Math.random() * Math.PI * 2;
+      const randomRadius = Math.random() * 150 + 100;
+      const scatterX = centerX + Math.cos(randomAngle) * randomRadius;
+      const scatterY = centerY + Math.sin(randomAngle) * randomRadius;
+      const scatterZ = Math.random() * 40 + 10;
+
+      const delay = index * 20;
+
+      setTimeout(() => {
+        card3D.tweenTo({
+          x: scatterX,
+          y: scatterY,
+          z: scatterZ,
+          faceUp: 1,
+          rotation: Math.random() * Math.PI * 2
+        }, 600, 'easeOutCubic');
+      }, delay);
+    });
+
+    // Phase 2: Organize into neat formation
+    const phase2Start = allCard3Ds.length * 20 + 600 + 800;
+    setTimeout(() => {
+      const radius = Math.min(this.renderer.displayWidth, this.renderer.displayHeight) * 0.35;
+
+      allCard3Ds.forEach((card3D, index) => {
+        const progress = allCard3Ds.length > 1 ? index / (allCard3Ds.length - 1) : 0.5;
+        const angle = progress * Math.PI * 2;
+
+        const targetX = centerX + Math.cos(angle) * radius;
+        const targetY = centerY + Math.sin(angle) * radius;
+        const targetZ = 15;
+
+        const delay = index * 25;
+
+        setTimeout(() => {
+          card3D.tweenTo({
+            x: targetX,
+            y: targetY,
+            z: targetZ,
+            faceUp: 1,
+            rotation: angle + Math.PI / 2
+          }, 700, 'easeInOutQuad');
+        }, delay);
+      });
+    }, phase2Start);
+
+    // Return cards to original positions
+    const showcaseDuration = phase2Start + allCard3Ds.length * 25 + 700 + 1500;
+    setTimeout(() => {
+      allCard3Ds.forEach((card3D, index) => {
+        const delay = index * 20;
+        setTimeout(() => {
+          const originalFaceUp = (card3D._showcaseOriginalZone === 'opponentHand' || card3D._showcaseOriginalZone === 'deck') ? 0 : 1;
+          card3D.tweenTo({
+            x: card3D._showcaseOriginalX,
+            y: card3D._showcaseOriginalY,
+            z: 0,
+            faceUp: originalFaceUp,
+            rotation: 0
+          }, 500, 'easeInOutQuad');
+        }, delay);
+      });
+    }, showcaseDuration);
+  }
+
+  /**
+   * Play losing animation - cards scatter in frustration
+   */
+  playLosingAnimation() {
+    if (!this.card3DManager) {
+      debugLogger.logError('Card3DManager not initialized', null);
+      return;
+    }
+
+    debugLogger.log('animation', '😢 Starting losing animation', null);
+
+    const allCard3Ds = [];
+    this.card3DManager.cards.forEach(card3D => {
+      allCard3Ds.push(card3D);
+    });
+
+    if (allCard3Ds.length === 0) return;
+
+    const centerX = this.renderer.displayWidth / 2;
+    const centerY = this.renderer.displayHeight / 2;
+
+    // Phase 1: Move all cards to random positions near center, elevated
+    allCard3Ds.forEach((card3D, index) => {
+      const randomOffsetX = (Math.random() - 0.5) * 100;
+      const randomOffsetY = (Math.random() - 0.5) * 100;
+
+      card3D.tweenTo({
+        x: centerX + randomOffsetX,
+        y: centerY + randomOffsetY,
+        z: 200, // High up
+        faceUp: 1,
+        rotation: Math.random() * Math.PI * 2
+      }, 500, 'easeInQuad');
+    });
+
+    // Phase 2: All cards fall and scatter dramatically
+    setTimeout(() => {
+      allCard3Ds.forEach((card3D, index) => {
+        const scatterX = centerX + (Math.random() - 0.5) * 400; // -200 to 200
+        const scatterY = centerY + (Math.random() - 0.5) * 400; // -200 to 200
+        const finalRotation = Math.random() * Math.PI * 4; // Multiple spins
+
+        card3D.tweenTo({
+          x: scatterX,
+          y: scatterY,
+          z: 0,
+          faceUp: Math.random() > 0.5 ? 1 : 0, // Random face orientation
+          rotation: finalRotation
+        }, 1200, 'easeOutBounce'); // Bounce for extra drama
+      });
+    }, 500);
   }
 
   /**
