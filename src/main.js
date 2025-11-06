@@ -9,6 +9,7 @@ import { GameOptions } from './game/GameOptions.js';
 import { Card3DManager } from './utils/Card3DManager.js';
 import { AnimationTester } from './utils/AnimationTester.js';
 import { InitializationManager } from './utils/InitializationManager.js';
+import { AudioManager } from './utils/AudioManager.js';
 import { APP_VERSION } from './utils/version.js';
 
 class Game {
@@ -66,6 +67,12 @@ class Game {
     this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
     this.card3DManager.initializeFromGameState(this.game.getState());
     debugLogger.log('3dCards', '✨ Card3D system initialized on page load', null);
+
+    // Initialize Audio Manager
+    this.audioManager = new AudioManager();
+    this.audioManager.setEnabled(this.gameOptions.get('audioEnabled', true));
+    this.audioManager.loadAudio();
+    debugLogger.log('audio', '🎵 Audio Manager initialized', null);
 
     // Initialize Animation Tester
     this.animationTester = new AnimationTester(this.renderer.cardRenderer, this.card3DManager);
@@ -816,6 +823,7 @@ class Game {
     document.getElementById('viewing-sake').value = options.viewingSakeMode;
     document.getElementById('moon-viewing-sake').value = options.moonViewingSakeMode;
     document.getElementById('animations-enabled').checked = options.animationsEnabled;
+    document.getElementById('audio-enabled').checked = options.audioEnabled;
 
     this.optionsModal.classList.add('show');
   }
@@ -838,7 +846,8 @@ class Game {
       bothPlayersScore: document.getElementById('both-players-score').checked,
       viewingSakeMode: document.getElementById('viewing-sake').value,
       moonViewingSakeMode: document.getElementById('moon-viewing-sake').value,
-      animationsEnabled: document.getElementById('animations-enabled').checked
+      animationsEnabled: document.getElementById('animations-enabled').checked,
+      audioEnabled: document.getElementById('audio-enabled').checked
     };
 
     this.gameOptions.update(newOptions);
@@ -849,6 +858,11 @@ class Game {
     // Update Card3DManager animation settings
     if (this.card3DManager) {
       this.card3DManager.setAnimationsEnabled(newOptions.animationsEnabled);
+    }
+
+    // Update AudioManager settings
+    if (this.audioManager) {
+      this.audioManager.setEnabled(newOptions.audioEnabled);
     }
 
     this.hideOptionsModal();
@@ -872,6 +886,10 @@ class Game {
       // Update Card3DManager
       if (this.card3DManager) {
         this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
+      }
+      // Update AudioManager
+      if (this.audioManager) {
+        this.audioManager.setEnabled(this.gameOptions.get('audioEnabled'));
       }
       // Reload the form
       this.showOptionsModal();
@@ -916,15 +934,17 @@ class Game {
   showRoundSummary(data) {
     // If game over, play animation first, then show modal after delay
     if (data.isGameOver) {
-      // Play appropriate animation based on outcome
+      // Play appropriate animation and music based on outcome
       if (data.playerTotalScore > data.opponentTotalScore) {
-        // Player wins - play random showcase animation
+        // Player wins - play random showcase animation and win music
         this.playRandomShowcaseAnimation();
+        this.audioManager.playWinMusic();
       } else if (data.playerTotalScore < data.opponentTotalScore) {
-        // Player loses - play losing animation
+        // Player loses - play losing animation and lose music
         this.playLosingAnimation();
+        this.audioManager.playLoseMusic();
       } else {
-        // Tie - play random showcase animation
+        // Tie - play random showcase animation (no music)
         this.playRandomShowcaseAnimation();
       }
 
