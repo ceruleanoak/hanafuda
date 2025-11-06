@@ -1063,11 +1063,8 @@ class Game {
     this.roundSummaryModal.classList.remove('show');
 
     if (this.game.gameOver) {
-      // Game is over - show message in lower panel instead of modal
-      const state = this.game.getState();
-      const winner = state.playerScore > state.opponentScore ? 'You won!' :
-                     state.opponentScore > state.playerScore ? 'You lost!' : 'Tie game!';
-      this.instructionsElement.textContent = `${winner} Final score: You ${state.playerScore} - Opponent ${state.opponentScore}. Click "New Game" to play again.`;
+      // Game is over - start a new game
+      this.showRoundModal();
     } else {
       // Continue to next round
       this.game.startNextRound();

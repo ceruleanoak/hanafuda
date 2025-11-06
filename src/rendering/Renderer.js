@@ -215,8 +215,8 @@ export class Renderer {
       }
     }
 
-    // Show help mode highlighting
-    if (helpMode && gameState.phase === 'select_hand') {
+    // Show help mode highlighting (but not while animations are playing)
+    if (helpMode && gameState.phase === 'select_hand' && !card3DManager.isAnyAnimating()) {
       this.highlight3DMatchableCards(gameState, card3DManager);
     }
 
@@ -333,31 +333,24 @@ export class Renderer {
     this.ctx.save();
     let offsetY = 0;
 
-    // Draw completed yaku
+    // Draw completed yaku (all of them)
     if (yaku && yaku.length > 0) {
       this.ctx.fillStyle = '#4ecdc4';
       this.ctx.font = 'bold 11px monospace';
       this.ctx.textAlign = 'right';
 
-      const displayYaku = isOpponent ? yaku.slice(0, 5) : yaku.slice(-5);
-      displayYaku.forEach(yakuItem => {
+      yaku.forEach(yakuItem => {
         this.ctx.fillText(`${yakuItem.name} (${yakuItem.points})`, x + 100, y + offsetY);
         offsetY += isOpponent ? 14 : -14;
       });
-
-      if (yaku.length > 5) {
-        this.ctx.fillStyle = '#888';
-        this.ctx.fillText(`+${yaku.length - 5} more...`, x + 100, y + offsetY);
-        offsetY += isOpponent ? 14 : -14;
-      }
     }
 
-    // Draw yaku progress
+    // Draw yaku progress (all of them)
     if (yakuProgress && yakuProgress.length > 0) {
       this.ctx.font = '11px monospace';
       this.ctx.textAlign = 'right';
 
-      yakuProgress.slice(0, 3).forEach(prog => {
+      yakuProgress.forEach(prog => {
         this.ctx.fillStyle = prog.isPossible === false ? '#ff6b6b' : '#ffeb3b';
         this.ctx.fillText(`${prog.name} ${prog.current}/${prog.needed}`, x + 100, y + offsetY);
         offsetY += isOpponent ? 14 : -14;
@@ -372,7 +365,6 @@ export class Renderer {
    */
   highlight3DMatchableCards(gameState, card3DManager) {
     const matchableHandCards = new Set();
-    const matchableFieldCards = new Set();
 
     gameState.playerHand.forEach(handCard => {
       const matches = gameState.field.filter(fieldCard =>
@@ -380,23 +372,15 @@ export class Renderer {
       );
       if (matches.length > 0) {
         matchableHandCards.add(handCard.id);
-        matches.forEach(m => matchableFieldCards.add(m.id));
       }
     });
 
     this.ctx.save();
 
-    // Highlight matchable hand cards
+    // Highlight matchable hand cards only
     card3DManager.getCardsInZone('playerHand').forEach(card3D => {
       if (matchableHandCards.has(card3D.id)) {
         this.drawCardHighlight(card3D, '#ffeb3b');
-      }
-    });
-
-    // Highlight matchable field cards
-    card3DManager.getCardsInZone('field').forEach(card3D => {
-      if (matchableFieldCards.has(card3D.id)) {
-        this.drawCardHighlight(card3D, '#4ecdc4');
       }
     });
 

@@ -128,12 +128,13 @@ export class Card3DManager {
     const flipTiming = 0.5;
     const peakScale = 0;
     const rotationVariance = 20 * Math.PI / 180; // 20 degrees
-    const positionXVariance = 60;
+    const positionXVariance = 30; // Reduced from 60 to 30 (half)
     const positionYVariance = 5;
 
-    // Starting position: above the viewport, centered
-    const startX = this.viewportWidth / 2;
-    const startY = -200; // Above the viewport
+    // Starting position: draw pile location (deck position)
+    const margin = 30;
+    const startX = margin + 50; // Deck x position (80)
+    const startY = this.viewportHeight / 2; // Deck y position (centerY)
     const startZ = 0;
 
     fieldCards.forEach((card3D) => {
