@@ -58,7 +58,7 @@ export class Card3DManager {
   /**
    * Initialize all cards from game state
    */
-  initializeFromGameState(gameState) {
+  initializeFromGameState(gameState, isNewGame = false) {
     debugLogger.log('3dCards', '🎴 Initializing Card3D system from game state', null);
 
     // Clear existing
@@ -102,7 +102,75 @@ export class Card3DManager {
 
     // Initial layout for all zones
     Object.keys(this.zoneCards).forEach(zone => {
+      // For new games with animations enabled, use Toss Across animation for field cards
+      const shouldAnimateField = isNewGame && this.useAnimations && zone === 'field';
       this.relayoutZone(zone, false); // No animation for initial layout
+
+      // Apply Toss Across animation to field cards after initial layout
+      if (shouldAnimateField) {
+        this.applyTossAcrossAnimation();
+      }
+    });
+  }
+
+  /**
+   * Apply Toss Across animation to field cards
+   */
+  applyTossAcrossAnimation() {
+    const fieldCards = Array.from(this.zoneCards.field);
+    if (fieldCards.length === 0) return;
+
+    debugLogger.log('3dCards', '🎬 Applying Toss Across animation to field cards', null);
+
+    // Toss Across animation preset parameters
+    const duration = 1350;
+    const easing = 'easeOutCubic';
+    const flipTiming = 0.5;
+    const peakScale = 0;
+    const rotationVariance = 20 * Math.PI / 180; // 20 degrees
+    const positionXVariance = 60;
+    const positionYVariance = 5;
+
+    // Starting position: above the viewport, centered
+    const startX = this.viewportWidth / 2;
+    const startY = -200; // Above the viewport
+    const startZ = 0;
+
+    fieldCards.forEach((card3D) => {
+      // Store the target position (already set by relayoutZone)
+      const targetX = card3D.homePosition.x;
+      const targetY = card3D.homePosition.y;
+      const targetZ = card3D.homePosition.z;
+
+      // Apply variance to target position and rotation
+      const variantX = targetX + (Math.random() * 2 - 1) * positionXVariance;
+      const variantY = targetY + (Math.random() * 2 - 1) * positionYVariance;
+      const variantRotation = (Math.random() * 2 - 1) * rotationVariance;
+
+      // Set card to starting position
+      card3D.x = startX;
+      card3D.y = startY;
+      card3D.z = startZ;
+      card3D.rotation = 0;
+      card3D.faceUp = 0; // Start face down
+      card3D.opacity = 1.0;
+
+      // Animate to target position with variance
+      card3D.tweenTo(
+        {
+          x: variantX,
+          y: variantY,
+          z: targetZ,
+          rotation: variantRotation,
+          faceUp: 1, // End face up
+          opacity: 1.0
+        },
+        duration,
+        easing,
+        null, // No control point
+        flipTiming,
+        peakScale
+      );
     });
   }
 
