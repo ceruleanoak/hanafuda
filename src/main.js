@@ -914,24 +914,42 @@ class Game {
    * Show round summary modal
    */
   showRoundSummary(data) {
+    // If game over, play animation first, then show modal after delay
+    if (data.isGameOver) {
+      // Play appropriate animation based on outcome
+      if (data.playerTotalScore > data.opponentTotalScore) {
+        // Player wins - play random showcase animation
+        this.playRandomShowcaseAnimation();
+      } else if (data.playerTotalScore < data.opponentTotalScore) {
+        // Player loses - play losing animation
+        this.playLosingAnimation();
+      } else {
+        // Tie - play random showcase animation
+        this.playRandomShowcaseAnimation();
+      }
+
+      // Delay showing modal to let animation play
+      // Losing animation: ~1700ms, Showcase animations: ~2000-3000ms
+      // Using 2500ms to ensure animation is visible before modal appears
+      setTimeout(() => {
+        this.displayRoundSummaryModal(data);
+      }, 2500);
+    } else {
+      // Round complete (not game over) - show immediately
+      this.displayRoundSummaryModal(data);
+    }
+  }
+
+  /**
+   * Display the round summary modal (extracted from showRoundSummary)
+   */
+  displayRoundSummaryModal(data) {
     // Update title
     const title = document.getElementById('round-summary-title');
     if (data.isGameOver) {
       const winner = data.playerTotalScore > data.opponentTotalScore ? 'You Win!' :
                      data.opponentTotalScore > data.playerTotalScore ? 'Opponent Wins!' : 'Tie Game!';
       title.textContent = `Game Over - ${winner}`;
-
-      // Play appropriate animation based on outcome
-      if (data.playerTotalScore > data.opponentTotalScore) {
-        // Player wins - play random showcase animation
-        setTimeout(() => this.playRandomShowcaseAnimation(), 300);
-      } else if (data.playerTotalScore < data.opponentTotalScore) {
-        // Player loses - play losing animation
-        setTimeout(() => this.playLosingAnimation(), 300);
-      } else {
-        // Tie - play random showcase animation
-        setTimeout(() => this.playRandomShowcaseAnimation(), 300);
-      }
     } else {
       title.textContent = `Round ${data.roundNumber} Complete!`;
     }
