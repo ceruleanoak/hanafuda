@@ -89,6 +89,9 @@ class Game {
     this.isDragging = false;      // Whether a drag is in progress
     this.dropTargetCard3D = null; // Valid drop target card (matching card on field)
 
+    // Selected card state (for click-to-match)
+    this.selectedCard3D = null;   // Card selected for matching (stays raised)
+
     // Track state for change detection
     this.lastStateLengths = {
       playerCaptured: 0,
@@ -436,29 +439,65 @@ class Game {
           this.updateUI();
         }
 
-        // Reset drag state
+        // Reset drag state and selection
         this.draggedCard3D.isDragging = false;
         this.draggedCard3D = null;
         this.draggedCardData = null;
         this.isDragging = false;
         this.dropTargetCard3D = null;
+        if (this.selectedCard3D) {
+          this.selectedCard3D.z = 0;
+          this.selectedCard3D = null;
+        }
       } else {
         // Invalid drop - return card to hand
         this.cancelDrag();
       }
     } else {
       // This was just a click (no drag), treat it as a regular card selection
-      debugLogger.log('gameState', `Card clicked (no drag): ${this.draggedCardData.name}`, null);
+      const clickedCard3D = this.draggedCard3D;
+      const clickedCardData = this.draggedCardData;
+      const clickedZone = clickedCard3D.homeZone;
 
-      const success = this.game.selectCard(this.draggedCardData, 'player');
-      if (success) {
-        this.updateUI();
-      }
+      debugLogger.log('gameState', `Card clicked (no drag): ${clickedCardData.name} from ${clickedZone}`, null);
 
-      // Reset drag state
+      // Reset drag state first
       this.draggedCard3D.isDragging = false;
       this.draggedCard3D = null;
       this.draggedCardData = null;
+
+      // Handle click based on zone
+      if (clickedZone === 'playerHand') {
+        // Clicking a hand card - select it
+        const success = this.game.selectCard(clickedCardData, 'player');
+        if (success) {
+          // Clear previous selection
+          if (this.selectedCard3D && this.selectedCard3D !== clickedCard3D) {
+            this.selectedCard3D.z = 0;
+          }
+
+          // Keep this card raised and selected
+          this.selectedCard3D = clickedCard3D;
+          this.selectedCard3D.z = 30; // Raise selected card
+
+          debugLogger.log('gameState', `Hand card selected, waiting for field card click`, null);
+          this.updateUI();
+        }
+      } else if (clickedZone === 'field') {
+        // Clicking a field card - try to match with selected hand card
+        const success = this.game.selectCard(clickedCardData, 'field');
+        if (success) {
+          // Match successful - clear selection
+          if (this.selectedCard3D) {
+            this.selectedCard3D.z = 0;
+            this.selectedCard3D = null;
+          }
+          debugLogger.log('gameState', `Field card matched successfully`, null);
+          this.updateUI();
+        } else {
+          debugLogger.log('gameState', `Field card match failed`, null);
+        }
+      }
     }
   }
 
@@ -573,11 +612,14 @@ class Game {
     // Get card at current hover position
     const card3D = this.card3DManager.getCardAtPosition(this.hoverX, this.hoverY);
 
-    // Check if this card is hoverable (playerHand or field zones only)
+    // Check if this card is hoverable
+    // When a hand card is selected, only allow hovering over field cards or the selected card itself
     // Don't hover over cards that are being used as drop targets
     const isHoverable = card3D &&
       (card3D.homeZone === 'playerHand' || card3D.homeZone === 'field') &&
-      card3D !== this.dropTargetCard3D;
+      card3D !== this.dropTargetCard3D &&
+      // If a hand card is selected, don't hover other hand cards
+      !(this.selectedCard3D && card3D.homeZone === 'playerHand' && card3D !== this.selectedCard3D);
 
     // Update hover state
     if (isHoverable && card3D !== this.hoveredCard3D) {
@@ -1085,6 +1127,12 @@ class Game {
 
   updateUI() {
     const state = this.game.getState();
+
+    // Clear selected card if we're no longer in select_field phase
+    if (this.selectedCard3D && state.phase !== 'select_field') {
+      this.selectedCard3D.z = 0;
+      this.selectedCard3D = null;
+    }
 
     // Update scores - show round progress
     const roundText = state.totalRounds > 1 ? ` (Round ${state.currentRound}/${state.totalRounds})` : '';
