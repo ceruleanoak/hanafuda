@@ -160,6 +160,20 @@ export class AnimationTester {
         endOpacity: 0.3,
         endZ: 0,
       },
+      'Toss Across': {
+        duration: 1350,
+        easing: 'easeOutCubic',
+        peakScale: 0,
+        endFaceUp: 1,
+        endOpacity: 1.0,
+        endZ: 0,
+        varianceEnabled: true,
+        rotationVariance: 20 * Math.PI / 180, // 20 degrees
+        positionXVariance: 60,
+        positionYVariance: 5,
+        positionZVariance: 0,
+        flipTiming: 0.5,
+      },
     };
   }
 
@@ -592,28 +606,51 @@ export class AnimationTester {
    */
   getParametersAsString() {
     const lines = [
-      '// Animation Parameters',
-      '{',
+      '// Animation Settings',
+      '',
     ];
 
-    // Group parameters
-    lines.push('  // End Position');
-    lines.push(`  endX: ${this.params.endX},`);
-    lines.push(`  endY: ${this.params.endY},`);
-    lines.push(`  endZ: ${this.params.endZ},`);
+    // Animation
+    lines.push('Animation:');
+    lines.push(`  Duration: ${this.params.duration}ms`);
+    lines.push(`  Easing: ${this.params.easing}`);
     lines.push('');
 
-    lines.push('  // Animation');
-    lines.push(`  duration: ${this.params.duration},`);
-    lines.push(`  easing: '${this.params.easing}',`);
+    // End Position
+    lines.push('End Position:');
+    lines.push(`  X: ${Math.round(this.params.endX)}`);
+    lines.push(`  Y: ${Math.round(this.params.endY)}`);
+    lines.push(`  Z: ${Math.round(this.params.endZ)}`);
     lines.push('');
 
-    lines.push('  // Visual Properties');
-    lines.push(`  endRotation: ${this.params.endRotation},`);
-    lines.push(`  endScale: ${this.params.endScale},`);
-    lines.push(`  endFaceUp: ${this.params.endFaceUp},`);
-    lines.push(`  endOpacity: ${this.params.endOpacity},`);
-    lines.push('}');
+    // Curved Path
+    if (this.params.curveEnabled) {
+      lines.push('Curved Path:');
+      lines.push(`  Enabled: ${this.params.curveEnabled}`);
+      lines.push(`  Control X: ${Math.round(this.params.curveX)}`);
+      lines.push(`  Control Y: ${Math.round(this.params.curveY)}`);
+      lines.push(`  Control Z: ${Math.round(this.params.curveZ)}`);
+      lines.push('');
+    }
+
+    // Visual Properties
+    lines.push('Visual Properties:');
+    lines.push(`  End Rotation: ${Math.round(this.params.endRotation * 180 / Math.PI)}°`);
+    lines.push(`  Peak Scale: ${this.params.peakScale}`);
+    lines.push(`  End Face Up: ${this.params.endFaceUp === 1 ? 'Yes' : 'No'}`);
+    lines.push(`  Flip Timing: ${this.params.flipTiming}`);
+    lines.push(`  End Opacity: ${this.params.endOpacity}`);
+    lines.push('');
+
+    // Variance
+    if (this.params.varianceEnabled) {
+      lines.push('Variance (Scattering):');
+      lines.push(`  Enabled: ${this.params.varianceEnabled}`);
+      lines.push(`  Rotation: ±${Math.round(this.params.rotationVariance * 180 / Math.PI)}°`);
+      lines.push(`  Position X: ±${this.params.positionXVariance}`);
+      lines.push(`  Position Y: ±${this.params.positionYVariance}`);
+      lines.push(`  Position Z: ±${this.params.positionZVariance}`);
+    }
 
     return lines.join('\n');
   }
