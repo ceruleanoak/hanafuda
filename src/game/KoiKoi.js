@@ -1211,12 +1211,23 @@ export class KoiKoi {
           }, 3600);
           return;
         } else {
-          // Normal 2-card capture
-          const fieldIndex = this.field.findIndex(c => c.id === selectedMatch.id);
-          this.field.splice(fieldIndex, 1);
-          this.opponentCaptured.push(handCard, selectedMatch);
+          // Normal 2-card capture - show played card before matching
+          this.message = `Opponent plays ${handCard.name} - Matching...`;
+
+          // Delay state update so both played card AND field card are visible together
+          setTimeout(() => {
+            // Update captures after showing both cards
+            const fieldIndex = this.field.findIndex(c => c.id === selectedMatch.id);
+            this.field.splice(fieldIndex, 1);
+            this.opponentCaptured.push(handCard, selectedMatch);
+            this.updateYaku('opponent', true); // Defer decision during hand phase
+            this.opponentPlayedCard = null;
+
+            // Draw phase for opponent with visual feedback
+            this.opponentDrawPhase();
+          }, 1200);
+          return;
         }
-        this.updateYaku('opponent', true); // Defer decision during hand phase
       } else {
         // Check for 4-card same-month capture when placing
         const sameMonthOnField = this.field.filter(c => c.month === handCard.month);

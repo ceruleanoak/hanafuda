@@ -360,7 +360,7 @@ export class Card3D {
     const diff = this.targetFaceUp - this.faceUp;
     if (Math.abs(diff) > 0.01) {
       // Smooth transition using spring-like motion (8x faster than original)
-      this.faceUpVelocity += diff * 80 * deltaTime;
+      this.faceUpVelocity += diff * 70 * deltaTime;
       this.faceUpVelocity *= 0.8; // Damping
       this.faceUp += this.faceUpVelocity * deltaTime;
 
@@ -397,8 +397,8 @@ export class Card3D {
     const diff = this.targetScale - this.scale;
     if (Math.abs(diff) > 0.001) {
       // Quick spring-like animation for hover effect
-      this.scaleVelocity += diff * 15 * deltaTime;
-      this.scaleVelocity *= 0.7; // Damping
+      this.scaleVelocity += diff * 70 * deltaTime;
+      this.scaleVelocity *= 0.8; // Damping (matching flip animation)
       this.scale += this.scaleVelocity * deltaTime;
 
       // Clamp to reasonable range
