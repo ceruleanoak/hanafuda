@@ -468,20 +468,43 @@ class Game {
 
       // Handle click based on zone
       if (clickedZone === 'playerHand') {
-        // Clicking a hand card - select it
+        // Get current game state before the action
+        const gameState = this.game.getState();
+        const wasInSelectField = gameState.phase === 'select_field';
+        const isClickingSameCard = wasInSelectField &&
+          gameState.selectedCards.length > 0 &&
+          gameState.selectedCards[0].id === clickedCardData.id;
+
+        // Clicking a hand card - select it or place it
         const success = this.game.selectCard(clickedCardData, 'player');
+
         if (success) {
-          // Clear previous selection
-          if (this.selectedCard3D && this.selectedCard3D !== clickedCard3D) {
-            this.selectedCard3D.z = 0;
+          const newGameState = this.game.getState();
+
+          // Check if we're still in select_field (meaning card is still in hand, waiting to be matched)
+          if (newGameState.phase === 'select_field') {
+            // Clear previous selection if switching cards
+            if (this.selectedCard3D && this.selectedCard3D !== clickedCard3D) {
+              this.selectedCard3D.z = 0;
+            }
+
+            // Keep this card raised and selected
+            this.selectedCard3D = clickedCard3D;
+            this.selectedCard3D.z = 30; // Raise selected card
+
+            debugLogger.log('gameState', `Hand card selected, waiting for field card click`, null);
+          } else {
+            // Phase changed (card was placed) - clear selection
+            if (this.selectedCard3D) {
+              this.selectedCard3D.z = 0;
+              this.selectedCard3D = null;
+            }
+            debugLogger.log('gameState', `Card placed on field, proceeding to next phase`, null);
           }
 
-          // Keep this card raised and selected
-          this.selectedCard3D = clickedCard3D;
-          this.selectedCard3D.z = 30; // Raise selected card
-
-          debugLogger.log('gameState', `Hand card selected, waiting for field card click`, null);
           this.updateUI();
+        } else {
+          debugLogger.log('gameState', `Hand card selection failed - ${this.game.getState().message}`, null);
         }
       } else if (clickedZone === 'field') {
         // Clicking a field card - try to match with selected hand card
