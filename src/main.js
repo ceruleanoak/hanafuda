@@ -331,7 +331,7 @@ class Game {
     const gameState = this.game.getState();
 
     // Only allow interactions during select phases
-    if (gameState.phase !== 'select_hand' && gameState.phase !== 'select_field') {
+    if (gameState.phase !== 'select_hand' && gameState.phase !== 'select_field' && gameState.phase !== 'select_drawn_match') {
       return;
     }
 
