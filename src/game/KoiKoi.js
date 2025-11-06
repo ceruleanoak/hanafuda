@@ -458,7 +458,7 @@ export class KoiKoi {
 
         // Update yaku
         this.updateYaku('opponent', true);
-      }, 1200);
+      }, 600);
     }
   }
 
@@ -585,7 +585,7 @@ export class KoiKoi {
         this.selectedCards = [];
         this.updateYaku('player', true); // Defer decision during hand phase
         this.drawPhase();
-      }, 3600); // Twice as long as regular draw (1800ms * 2)
+      }, 1800); // Twice as long as regular draw (900ms * 2)
       return;
     }
 
@@ -678,14 +678,40 @@ export class KoiKoi {
       // Check if drawn card matches anything on field
       const matches = this.field.filter(fc => this.cardsMatch(drawnCard, fc));
 
-      if (matches.length > 1) {
+      // Check for 4-card capture (celebrate scenario) FIRST - takes priority over multiple matches
+      const sameMonthOnField = this.field.filter(c => c.month === drawnCard.month);
+
+      if (sameMonthOnField.length === 3) {
+        // Celebrate! Show special message with longer pause
+        this.phase = 'celebrate';
+        this.message = `🎉 Celebrate! Drew ${drawnCard.name} - All 4 ${drawnCard.month} cards captured!`;
+
+        // Delay state update so both drawn card AND field cards are visible together
+        setTimeout(() => {
+          // Update captures after showing both cards
+          this.field = this.field.filter(c => c.month !== drawnCard.month);
+          this.playerCaptured.push(drawnCard, ...sameMonthOnField);
+          this.checkForKoikoiDecision('player');
+
+          // Don't continue if waiting for koi-koi decision
+          if (this.koikoiState.waitingForDecision) {
+            this.koikoiState.resumeAction = () => {
+              this.drawnCard = null;
+              this.endTurn();
+            };
+            return;
+          }
+
+          this.drawnCard = null;
+          this.endTurn();
+        }, 1800); // Twice as long as regular draw
+      } else if (matches.length > 1) {
         // Multiple matches - player must choose
         this.drawnCardMatches = matches;
         this.phase = 'select_drawn_match';
         this.message = `Drew ${drawnCard.name} - Select which card to match`;
       } else if (matches.length === 1) {
         // Single match - show drawn card briefly before auto-capturing
-        // Check for 4-card capture (celebrate scenario) first
         const sameMonthOnField = this.field.filter(c => c.month === drawnCard.month);
 
         if (sameMonthOnField.length === 3) {
@@ -711,7 +737,7 @@ export class KoiKoi {
 
             this.drawnCard = null;
             this.endTurn();
-          }, 3600); // Twice as long as regular draw
+          }, 900); // Twice as long as regular draw
         } else {
           // Normal single match
           this.phase = 'show_drawn';
@@ -738,7 +764,7 @@ export class KoiKoi {
 
             this.drawnCard = null;
             this.endTurn();
-          }, 1800);
+          }, 900);
         }
       } else {
         // No match - check for celebrate when placing on field
@@ -767,7 +793,7 @@ export class KoiKoi {
 
             this.drawnCard = null;
             this.endTurn();
-          }, 3600);
+          }, 900);
         } else {
           // Normal no match - place on field
           this.phase = 'show_drawn';
@@ -777,10 +803,10 @@ export class KoiKoi {
             this.field.push(drawnCard);
             this.drawnCard = null;
             this.endTurn();
-          }, 1800);
+          }, 900);
         }
       }
-    }, 300);
+    }, 150);
   }
 
   /**
@@ -1013,7 +1039,7 @@ export class KoiKoi {
     // Short delay to make it feel natural
     setTimeout(() => {
       this.resolveKoikoiDecision(decision, 'opponent');
-    }, 1500);
+    }, 750);
   }
 
   /**
@@ -1035,7 +1061,7 @@ export class KoiKoi {
       } else {
         this.message = 'Opponent called Shobu! Round ends.';
       }
-      setTimeout(() => this.endRound(), 1500);
+      setTimeout(() => this.endRound(), 750);
     } else {
       // Continue playing (koi-koi)
       if (player === 'player') {
@@ -1098,7 +1124,7 @@ export class KoiKoi {
       this.turnStartYaku.opponent = [...this.opponentYaku];
 
       // Trigger opponent AI after short delay
-      setTimeout(() => this.opponentTurn(), 800);
+      setTimeout(() => this.opponentTurn(), 400);
     } else {
       this.currentPlayer = 'player';
       this.phase = 'select_hand';
@@ -1138,7 +1164,7 @@ export class KoiKoi {
         this.message = '💣 Opponent played bomb card - discarded';
         this.opponentPlayedCard = null;
         this.opponentDrawPhase();
-      }, 1200);
+      }, 600);
       return;
     }
 
@@ -1151,7 +1177,7 @@ export class KoiKoi {
           // Bomb play was executed, now continue to draw phase
           setTimeout(() => {
             this.opponentDrawPhase();
-          }, 1200);
+          }, 600);
           return;
         }
       }
@@ -1208,7 +1234,7 @@ export class KoiKoi {
             this.opponentPlayedCard = null;
 
             this.opponentDrawPhase();
-          }, 3600);
+          }, 900);
           return;
         } else {
           // Normal 2-card capture - show played card before matching
@@ -1225,7 +1251,7 @@ export class KoiKoi {
 
             // Draw phase for opponent with visual feedback
             this.opponentDrawPhase();
-          }, 1200);
+          }, 600);
           return;
         }
       } else {
@@ -1244,7 +1270,7 @@ export class KoiKoi {
             this.opponentPlayedCard = null;
 
             this.opponentDrawPhase();
-          }, 3600);
+          }, 900);
           return;
         } else {
           this.field.push(handCard);
@@ -1255,7 +1281,7 @@ export class KoiKoi {
 
       // Draw phase for opponent with visual feedback
       this.opponentDrawPhase();
-    }, 1200);
+    }, 600);
   }
 
   /**
@@ -1303,7 +1329,7 @@ export class KoiKoi {
 
             this.drawnCard = null;
             this.endTurn();
-          }, 3600);
+          }, 900);
         } else {
           // Normal match - show drawn card before matching
           this.phase = 'opponent_drawn';
@@ -1332,7 +1358,7 @@ export class KoiKoi {
 
             this.drawnCard = null;
             this.endTurn();
-          }, 1800);
+          }, 900);
         }
       } else {
         // No match - check for celebrate when placing
@@ -1361,7 +1387,7 @@ export class KoiKoi {
 
             this.drawnCard = null;
             this.endTurn();
-          }, 3600);
+          }, 900);
         } else {
           // Normal no match - show drawn card before placing
           this.phase = 'opponent_drawn';
@@ -1371,10 +1397,10 @@ export class KoiKoi {
             this.field.push(drawnCard);
             this.drawnCard = null;
             this.endTurn();
-          }, 1800);
+          }, 900);
         }
       }
-    }, 300);
+    }, 150);
   }
 
   /**
