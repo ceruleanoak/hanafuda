@@ -1256,16 +1256,7 @@ class Game {
     }
     this.instructionsElement.textContent = state.message;
 
-    // Show game over status
-    if (state.gameOver) {
-      const gameOverMsg = state.message + '\n\nPress N or click New Game';
-      this.statusElement.textContent = gameOverMsg;
-      this.statusElement.classList.add('show');
-      if (this.lastGameOverMessage !== gameOverMsg) {
-        debugLogger.logMessage(gameOverMsg);
-        this.lastGameOverMessage = gameOverMsg;
-      }
-    }
+    // Game over status popup removed per user request
   }
 
   updateAnimations(deltaTime) {
