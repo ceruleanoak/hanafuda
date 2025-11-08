@@ -1088,6 +1088,11 @@ class Game {
     } else {
       // Continue to next round
       this.game.startNextRound();
+      this.updateUI();
+
+      // Reinitialize Card3D system for the new round to reset positions
+      this.card3DManager.initializeFromGameState(this.game.getState(), true);
+      debugLogger.log('3dCards', '✨ Card3D system reinitialized for next round', null);
     }
   }
 
