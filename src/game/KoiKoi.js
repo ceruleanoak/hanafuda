@@ -801,6 +801,17 @@ export class KoiKoi {
 
           setTimeout(() => {
             this.field.push(drawnCard);
+            this.checkForKoikoiDecision('player');
+
+            // Don't continue if waiting for koi-koi decision
+            if (this.koikoiState.waitingForDecision) {
+              this.koikoiState.resumeAction = () => {
+                this.drawnCard = null;
+                this.endTurn();
+              };
+              return;
+            }
+
             this.drawnCard = null;
             this.endTurn();
           }, 900);
@@ -1008,6 +1019,9 @@ export class KoiKoi {
         }
       } else if (player === 'opponent' && this.currentPlayer === 'opponent') {
         // Opponent AI makes decision
+        // Set waiting flag to pause game flow until decision is made
+        this.koikoiState.waitingForDecision = true;
+        this.koikoiState.decisionPlayer = 'opponent';
         this.opponentKoikoiDecision(currentYaku, displayScore);
       }
     }
