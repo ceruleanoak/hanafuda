@@ -620,10 +620,12 @@ class Game {
             const [card1, card2] = updatedState.flippedCards;
 
             if (card1.month === card2.month) {
-              // Match! Animate cards to matched pile after a brief delay
-              setTimeout(() => {
-                this.handleMatchedCards(card1, card2);
-              }, 800);
+              // Match! Call handler immediately
+              debugLogger.log('gameState', `Match detected, calling handleMatchedCards`, {
+                card1: card1.month,
+                card2: card2.month
+              });
+              this.handleMatchedCards(card1, card2);
             } else {
               // No match - flip back after delay
               setTimeout(() => {
@@ -1018,6 +1020,12 @@ class Game {
     const centerX = this.renderer.displayWidth / 2;
     const topY = 100; // Starting position at top of field
 
+    debugLogger.log('gameState', `Adding floating match text: "${month} Match!"`, {
+      x: centerX,
+      y: topY,
+      floatingTextsCount: this.floatingTexts.length
+    });
+
     this.floatingTexts.push({
       text: `${month} Match!`,
       x: centerX,
@@ -1026,6 +1034,8 @@ class Game {
       age: 0,
       maxAge: 3000 // Display for 3 seconds
     });
+
+    debugLogger.log('gameState', `Floating texts array now has ${this.floatingTexts.length} items`, null);
   }
 
   /**
@@ -1056,10 +1066,18 @@ class Game {
   renderFloatingTexts() {
     if (this.floatingTexts.length === 0) return;
 
+    debugLogger.log('render', `Rendering ${this.floatingTexts.length} floating texts`, null);
+
     const ctx = this.renderer.ctx;
     ctx.save();
 
-    this.floatingTexts.forEach(floatingText => {
+    this.floatingTexts.forEach((floatingText, index) => {
+      debugLogger.log('render', `Drawing floating text ${index}: "${floatingText.text}"`, {
+        x: floatingText.x,
+        y: floatingText.y,
+        opacity: floatingText.opacity
+      });
+
       ctx.globalAlpha = floatingText.opacity;
       ctx.fillStyle = '#FFD700'; // Gold color
       ctx.strokeStyle = '#FF6347'; // Tomato red for outline
