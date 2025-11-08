@@ -38,8 +38,8 @@ class Game {
     // Initialize game options
     this.gameOptions = new GameOptions();
 
-    // Game mode tracking
-    this.currentGameMode = 'koikoi'; // 'koikoi' or 'match'
+    // Game mode tracking - restore from localStorage or default to 'koikoi'
+    this.currentGameMode = localStorage.getItem('currentGameMode') || 'koikoi'; // 'koikoi' or 'match'
     this.gameModeSelect = document.getElementById('game-mode-select');
 
     // Initialize both game types
@@ -197,6 +197,9 @@ class Game {
       // Initialize variations button state
       this.updateVariationsButtonState();
 
+      // Restore game mode select dropdown value from localStorage
+      this.gameModeSelect.value = this.currentGameMode;
+
       // Hide loading screen with fade out
       loadingScreen.classList.add('fade-out');
       setTimeout(() => {
@@ -208,8 +211,15 @@ class Game {
         setTimeout(() => this.showTutorial(), 1000);
       }
 
-      // Show round modal and start game loop
-      this.showRoundModal();
+      // Start the appropriate game based on current mode
+      if (this.currentGameMode === 'match') {
+        // Switch to match game mode (this will start a new match game)
+        this.switchGameMode('match');
+      } else {
+        // Show round modal for Koi Koi
+        this.showRoundModal();
+      }
+
       this.gameLoop();
 
       debugLogger.log('gameState', '✅ Game initialized successfully', null);
@@ -490,6 +500,8 @@ class Game {
     debugLogger.log('gameState', `Switching game mode to: ${mode}`, null);
 
     this.currentGameMode = mode;
+    // Save game mode to localStorage so it persists across browser refreshes
+    localStorage.setItem('currentGameMode', mode);
 
     // Switch active game instance
     if (mode === 'match') {
@@ -922,7 +934,7 @@ class Game {
   }
 
   /**
-   * Handle matched cards in match game - animate to matched pile
+   * Handle matched cards in match game - fade out in place
    */
   handleMatchedCards(card1, card2) {
     debugLogger.log('gameState', `Match found: ${card1.month}`, {
@@ -943,22 +955,16 @@ class Game {
       return;
     }
 
-    debugLogger.log('gameState', `Animating matched cards to pile`, {
+    debugLogger.log('gameState', `Fading out matched cards`, {
       card1: card3D1.cardData.name,
       card2: card3D2.cardData.name
     });
 
-    // Get matched pile position (bottom right)
-    const matchedPileX = this.renderer.displayWidth - 150;
-    const matchedPileY = this.renderer.displayHeight - 150;
-
-    // Animate both cards to matched pile with slight offset for visibility
+    // Fade out matched cards in place (don't move them to avoid layout recalculation)
     card3D1.tweenTo(
       {
-        x: matchedPileX,
-        y: matchedPileY,
-        z: 0,
-        opacity: 0.9
+        opacity: 0,
+        z: -50  // Move them down so they're behind other cards
       },
       600,            // duration
       'easeOutCubic'  // easing
@@ -966,22 +972,17 @@ class Game {
 
     card3D2.tweenTo(
       {
-        x: matchedPileX + 5,  // Slight offset
-        y: matchedPileY + 5,
-        z: 1,                 // Slightly raised
-        opacity: 0.9
+        opacity: 0,
+        z: -50  // Move them down so they're behind other cards
       },
       600,            // duration
       'easeOutCubic'  // easing
     );
 
-    // After animation, move to matched pile zone
+    // After fade animation completes, update UI
     setTimeout(() => {
-      debugLogger.log('gameState', `Moving matched cards to playerTrick zone`, null);
+      debugLogger.log('gameState', `Matched cards faded out`, null);
 
-      // Move cards to matched pile in Card3DManager
-      this.card3DManager.moveCardToZone(card3D1, 'playerTrick');
-      this.card3DManager.moveCardToZone(card3D2, 'playerTrick');
       this.updateUI();
 
       // Check if game is complete
