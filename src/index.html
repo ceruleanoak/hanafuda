@@ -16,7 +16,13 @@
 <body>
   <div id="app">
     <header>
-      <h1>Hanafuda Koi-Koi</h1>
+      <div id="game-mode-selector">
+        <h1>Hanafuda</h1>
+        <select id="game-mode-select">
+          <option value="koikoi">Koi Koi</option>
+          <option value="match">Match Game</option>
+        </select>
+      </div>
       <div id="game-info">
         <div id="score">
           <span>Player: <strong id="player-score">0</strong></span>

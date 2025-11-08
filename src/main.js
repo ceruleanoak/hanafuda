@@ -3,6 +3,7 @@
  */
 
 import { KoiKoi } from './game/KoiKoi.js';
+import { MatchGame } from './game/MatchGame.js';
 import { Renderer } from './rendering/Renderer.js';
 import { debugLogger } from './utils/DebugLogger.js';
 import { GameOptions } from './game/GameOptions.js';
@@ -36,10 +37,21 @@ class Game {
     // Initialize game options
     this.gameOptions = new GameOptions();
 
-    this.game = new KoiKoi(this.gameOptions);
-    this.game.setUICallback((yaku, score) => this.showKoikoiDecision(yaku, score));
-    this.game.setRoundSummaryCallback((data) => this.showRoundSummary(data));
-    this.game.setOpponentKoikoiCallback(() => this.showOpponentKoikoiNotification());
+    // Game mode tracking
+    this.currentGameMode = 'koikoi'; // 'koikoi' or 'match'
+    this.gameModeSelect = document.getElementById('game-mode-select');
+
+    // Initialize both game types
+    this.koikoiGame = new KoiKoi(this.gameOptions);
+    this.koikoiGame.setUICallback((yaku, score) => this.showKoikoiDecision(yaku, score));
+    this.koikoiGame.setRoundSummaryCallback((data) => this.showRoundSummary(data));
+    this.koikoiGame.setOpponentKoikoiCallback(() => this.showOpponentKoikoiNotification());
+
+    this.matchGame = new MatchGame(this.gameOptions);
+
+    // Set active game based on mode
+    this.game = this.koikoiGame;
+
     this.renderer = new Renderer(this.canvas);
 
     // Initialize Card3D system
@@ -235,6 +247,9 @@ class Game {
       }
     });
 
+    // Game mode selector
+    this.gameModeSelect.addEventListener('change', (e) => this.switchGameMode(e.target.value));
+
     // New game button
     this.newGameButton.addEventListener('click', () => this.showRoundModal());
 
@@ -311,6 +326,13 @@ class Game {
   }
 
   showRoundModal() {
+    // Don't show round modal for match game
+    if (this.currentGameMode === 'match') {
+      this.game.startNewGame();
+      this.updateUI();
+      return;
+    }
+
     this.roundModal.classList.add('show');
   }
 
@@ -320,7 +342,15 @@ class Game {
 
   startNewGame(rounds) {
     this.hideRoundModal();
-    this.game.startNewGame(rounds);
+
+    if (this.currentGameMode === 'match') {
+      // Match game doesn't use rounds
+      this.game.startNewGame();
+    } else {
+      // Koi Koi uses rounds
+      this.game.startNewGame(rounds);
+    }
+
     this.updateUI();
     this.statusElement.classList.remove('show');
 
@@ -330,11 +360,139 @@ class Game {
     debugLogger.log('3dCards', '✨ Card3D system initialized for new game', null);
   }
 
+  switchGameMode(mode) {
+    debugLogger.log('gameState', `Switching game mode to: ${mode}`, null);
+
+    this.currentGameMode = mode;
+
+    // Switch active game instance
+    if (mode === 'match') {
+      this.game = this.matchGame;
+
+      // Hide Koi Koi specific UI elements
+      document.getElementById('score').style.display = 'none';
+      document.getElementById('options-btn').style.display = 'none';
+      document.getElementById('variations-btn').style.display = 'none';
+      document.getElementById('test-3d-btn').style.display = 'none';
+
+      // Update instructions
+      this.instructionsElement.textContent = 'Click cards to flip and find matching pairs!';
+    } else {
+      this.game = this.koikoiGame;
+
+      // Show Koi Koi specific UI elements
+      document.getElementById('score').style.display = 'flex';
+      document.getElementById('options-btn').style.display = 'inline-block';
+      document.getElementById('variations-btn').style.display = 'inline-block';
+      document.getElementById('test-3d-btn').style.display = 'inline-block';
+
+      // Update instructions
+      this.instructionsElement.textContent = 'Click cards to select them';
+    }
+
+    // Start new game with the selected mode
+    if (mode === 'match') {
+      this.game.startNewGame();
+      this.updateUI();
+
+      // Initialize Card3D system from game state
+      this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
+      this.card3DManager.initializeFromGameState(this.game.getState(), false);
+
+      // Override card positions to use match game's predetermined positions
+      const gameState = this.game.getState();
+      gameState.allCards.forEach(cardData => {
+        const card3D = this.card3DManager.cards.get(cardData.id);
+        if (card3D && cardData.position) {
+          // Set custom position from match game
+          card3D.homePosition = {
+            x: cardData.position.x,
+            y: cardData.position.y,
+            z: 0
+          };
+          // For match game, cards start face down
+          card3D.faceUp = 0;
+          card3D.setFaceUp(false);
+        }
+      });
+
+      // Apply Toss Across animation if enabled
+      if (this.gameOptions.get('animationsEnabled')) {
+        this.card3DManager.applyTossAcrossAnimation();
+      } else {
+        // If animations disabled, immediately position cards
+        gameState.allCards.forEach(cardData => {
+          const card3D = this.card3DManager.cards.get(cardData.id);
+          if (card3D && cardData.position) {
+            card3D.x = cardData.position.x;
+            card3D.y = cardData.position.y;
+            card3D.z = 0;
+          }
+        });
+      }
+
+      debugLogger.log('3dCards', '✨ Card3D system initialized for match game', null);
+    } else {
+      // For Koi Koi, show round modal
+      this.showRoundModal();
+    }
+  }
+
   handleMouseDown(event) {
     const rect = this.canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
 
+    // Handle match game differently - simple click to flip
+    if (this.currentGameMode === 'match') {
+      const gameState = this.game.getState();
+
+      // Use 3D hit detection
+      const card3D = this.card3DManager.getCardAtPosition(x, y);
+      if (card3D) {
+        const cardData = card3D.cardData;
+        debugLogger.log('gameState', `Match game card clicked: ${cardData.id}`, { x, y });
+
+        // Try to handle the card click in the match game
+        const success = this.game.handleCardClick(cardData.id);
+        if (success) {
+          // Animate card flip
+          card3D.tweenTo({
+            endFaceUp: true,
+            duration: 300,
+            easing: 'easeOutQuad',
+            flipTiming: 0.5
+          });
+
+          // Update card data state
+          cardData.state = 'faceup';
+
+          // Check if we need to handle match/mismatch
+          const updatedState = this.game.getState();
+          if (updatedState.flippedCards.length === 2) {
+            // Two cards are flipped, check will happen in game logic
+            const [card1, card2] = updatedState.flippedCards;
+
+            if (card1.month === card2.month) {
+              // Match! Animate cards to matched pile after a brief delay
+              setTimeout(() => {
+                this.handleMatchedCards(card1, card2);
+              }, 800);
+            } else {
+              // No match - flip back after delay
+              setTimeout(() => {
+                this.flipCardsBack(card1, card2);
+              }, 1500);
+            }
+          }
+
+          this.updateUI();
+        }
+      }
+      return;
+    }
+
+    // Koi Koi drag and drop logic
     const gameState = this.game.getState();
 
     // Only allow interactions during select phases
@@ -630,6 +788,83 @@ class Game {
     this.draggedCard3D = null;
     this.draggedCardData = null;
     this.isDragging = false;
+  }
+
+  /**
+   * Handle matched cards in match game - animate to matched pile
+   */
+  handleMatchedCards(card1, card2) {
+    debugLogger.log('gameState', `Match found: ${card1.month}`, null);
+
+    // Get Card3D objects
+    const card3D1 = this.card3DManager.cards.get(card1.id);
+    const card3D2 = this.card3DManager.cards.get(card2.id);
+
+    if (!card3D1 || !card3D2) return;
+
+    // Get matched pile position (bottom right)
+    const matchedPileX = this.renderer.displayWidth - 150;
+    const matchedPileY = this.renderer.displayHeight - 150;
+
+    // Animate both cards to matched pile
+    const animConfig = {
+      endX: matchedPileX,
+      endY: matchedPileY,
+      endZ: 0,
+      duration: 600,
+      easing: 'easeOutCubic',
+      endOpacity: 0.8
+    };
+
+    card3D1.tweenTo(animConfig);
+    card3D2.tweenTo(animConfig);
+
+    // After animation, remove from board
+    setTimeout(() => {
+      // Move cards to matched pile in Card3DManager
+      this.card3DManager.moveCardToZone(card3D1, 'playerTrick');
+      this.card3DManager.moveCardToZone(card3D2, 'playerTrick');
+      this.updateUI();
+
+      // Check if game is complete
+      const gameState = this.game.getState();
+      if (gameState.gameOver) {
+        this.statusElement.textContent = gameState.message;
+        this.statusElement.classList.add('show');
+      }
+    }, 650);
+  }
+
+  /**
+   * Flip cards back face down after mismatch
+   */
+  flipCardsBack(card1, card2) {
+    debugLogger.log('gameState', `No match, flipping cards back`, null);
+
+    // Get Card3D objects
+    const card3D1 = this.card3DManager.cards.get(card1.id);
+    const card3D2 = this.card3DManager.cards.get(card2.id);
+
+    if (!card3D1 || !card3D2) return;
+
+    // Animate flip back to face down
+    card3D1.tweenTo({
+      endFaceUp: false,
+      duration: 300,
+      easing: 'easeOutQuad',
+      flipTiming: 0.5
+    });
+
+    card3D2.tweenTo({
+      endFaceUp: false,
+      duration: 300,
+      easing: 'easeOutQuad',
+      flipTiming: 0.5
+    });
+
+    // Update card data state
+    card1.state = 'facedown';
+    card2.state = 'facedown';
   }
 
   /**
@@ -1278,6 +1513,21 @@ class Game {
   updateUI() {
     const state = this.game.getState();
 
+    // Handle match game UI differently
+    if (this.currentGameMode === 'match') {
+      // Update instructions with match counter
+      const matchText = `Matches: ${state.matchCount / 2} / 24`;
+      this.instructionsElement.textContent = `${state.message} | ${matchText}`;
+
+      // Log message changes
+      if (this.lastMessage !== state.message) {
+        debugLogger.logMessage(state.message);
+        this.lastMessage = state.message;
+      }
+      return;
+    }
+
+    // Koi Koi UI updates
     // Clear selected card if we're no longer in select_field phase
     if (this.selectedCard3D && state.phase !== 'select_field') {
       this.selectedCard3D.z = 0;
