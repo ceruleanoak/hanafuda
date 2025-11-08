@@ -3129,6 +3129,42 @@ class Game {
 document.addEventListener('DOMContentLoaded', async () => {
   console.log(`Hanafuda Koi-Koi starting (v${APP_VERSION})`);
 
+  // Register service worker for intelligent caching
+  if ('serviceWorker' in navigator) {
+    try {
+      const registration = await navigator.serviceWorker.register('/hanafuda/sw.js', {
+        scope: '/hanafuda/'
+      });
+
+      console.log('[SW] Service Worker registered successfully:', registration.scope);
+
+      // Handle updates
+      registration.addEventListener('updatefound', () => {
+        const newWorker = registration.installing;
+        console.log('[SW] New version found, updating...');
+
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            // New service worker is ready, notify user to refresh
+            console.log('[SW] New version ready. Refresh to update.');
+
+            // Automatically activate new service worker
+            newWorker.postMessage({ type: 'SKIP_WAITING' });
+          }
+        });
+      });
+
+      // Refresh page when new service worker takes control
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        console.log('[SW] New version activated, reloading page...');
+        window.location.reload();
+      });
+
+    } catch (error) {
+      console.warn('[SW] Service Worker registration failed:', error);
+    }
+  }
+
   const game = new Game();
 
   // Run async initialization with loading screen
