@@ -490,6 +490,121 @@ footer {
   background: rgba(0, 0, 0, 0.4);
 }
 
+/* Match Game Options Modal */
+.match-options-content {
+  min-width: 500px;
+  max-width: 600px;
+  text-align: left;
+}
+
+.match-options-grid {
+  margin-bottom: 2rem;
+}
+
+.high-scores-section {
+  margin-top: 2rem;
+}
+
+.high-scores-section h3 {
+  color: #4ecdc4;
+  margin-bottom: 1rem;
+  font-size: 1.2rem;
+}
+
+.high-scores-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.score-tab {
+  padding: 0.5rem 1rem;
+  background: #333;
+  border: 2px solid #555;
+  border-radius: 6px 6px 0 0;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: bold;
+}
+
+.score-tab:hover {
+  background: #444;
+  border-color: #4ecdc4;
+}
+
+.score-tab.active {
+  background: #4ecdc4;
+  border-color: #4ecdc4;
+  color: #000;
+}
+
+.high-scores-list {
+  background: rgba(0, 0, 0, 0.3);
+  border: 2px solid #333;
+  border-radius: 0 6px 6px 6px;
+  padding: 1rem;
+  min-height: 200px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.high-score-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem;
+  margin-bottom: 0.5rem;
+  background: rgba(78, 205, 196, 0.1);
+  border-left: 3px solid #4ecdc4;
+  border-radius: 4px;
+}
+
+.high-score-item:nth-child(1) .score-rank {
+  color: #ffd700; /* Gold */
+}
+
+.high-score-item:nth-child(2) .score-rank {
+  color: #c0c0c0; /* Silver */
+}
+
+.high-score-item:nth-child(3) .score-rank {
+  color: #cd7f32; /* Bronze */
+}
+
+.score-rank {
+  font-weight: bold;
+  margin-right: 1rem;
+  min-width: 30px;
+}
+
+.score-time {
+  flex: 1;
+  color: #4ecdc4;
+  font-family: monospace;
+  font-size: 1.1rem;
+}
+
+.score-points {
+  color: #ffeb3b;
+  font-weight: bold;
+  margin-left: 1rem;
+}
+
+.score-date {
+  color: #888;
+  font-size: 0.85rem;
+  margin-left: 1rem;
+}
+
+.high-scores-list:empty::before {
+  content: "No high scores yet. Start playing to set a record!";
+  color: #888;
+  font-style: italic;
+  display: block;
+  text-align: center;
+  padding: 2rem;
+}
+
 /* Koi-Koi Decision Modal */
 .koikoi-modal-content {
   min-width: 450px;

@@ -29,6 +29,7 @@ class Game {
     this.roundModal = document.getElementById('round-modal');
     this.variationsModal = document.getElementById('variations-modal');
     this.optionsModal = document.getElementById('options-modal');
+    this.matchOptionsModal = document.getElementById('match-options-modal');
     this.koikoiModal = document.getElementById('koikoi-modal');
     this.roundSummaryModal = document.getElementById('round-summary-modal');
     this.tutorialBubble = document.getElementById('tutorial-bubble');
@@ -312,6 +313,12 @@ class Game {
       }
     });
 
+    // Match options modal buttons
+    document.getElementById('match-options-start').addEventListener('click', () => this.startMatchGame());
+    document.getElementById('match-options-cancel').addEventListener('click', () => this.hideMatchOptionsModal());
+    document.getElementById('show-normal-scores').addEventListener('click', () => this.showHighScores(false));
+    document.getElementById('show-bonus-scores').addEventListener('click', () => this.showHighScores(true));
+
     // Animation tester controls
     this.setupAnimationTesterControls();
 
@@ -326,10 +333,9 @@ class Game {
   }
 
   showRoundModal() {
-    // Don't show round modal for match game
+    // Show match options modal for match game
     if (this.currentGameMode === 'match') {
-      this.game.startNewGame();
-      this.updateUI();
+      this.showMatchOptionsModal();
       return;
     }
 
@@ -338,6 +344,118 @@ class Game {
 
   hideRoundModal() {
     this.roundModal.classList.remove('show');
+  }
+
+  showMatchOptionsModal() {
+    // Load current bonus setting
+    const bonusCheckbox = document.getElementById('bonus-multiplier-enabled');
+    bonusCheckbox.checked = this.matchGame.bonusMultiplierEnabled;
+
+    // Show high scores for normal mode by default
+    this.showHighScores(false);
+
+    this.matchOptionsModal.classList.add('show');
+  }
+
+  hideMatchOptionsModal() {
+    this.matchOptionsModal.classList.remove('show');
+  }
+
+  startMatchGame() {
+    const bonusEnabled = document.getElementById('bonus-multiplier-enabled').checked;
+    this.hideMatchOptionsModal();
+
+    this.game.startNewGame(bonusEnabled);
+    this.updateUI();
+
+    // Initialize Card3D system from game state
+    this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
+    this.card3DManager.initializeFromGameState(this.game.getState(), false);
+
+    // Override card positions to use match game's predetermined positions
+    const gameState = this.game.getState();
+    gameState.allCards.forEach(cardData => {
+      const card3D = this.card3DManager.cards.get(cardData.id);
+      if (card3D && cardData.position) {
+        // Set custom position from match game
+        card3D.homePosition = {
+          x: cardData.position.x,
+          y: cardData.position.y,
+          z: 0
+        };
+        // For match game, cards start face down
+        card3D.faceUp = 0;
+        card3D.setFaceUp(false);
+      }
+    });
+
+    // Apply Toss Across animation if enabled (cards end face-down for match game)
+    if (this.gameOptions.get('animationsEnabled')) {
+      this.card3DManager.applyTossAcrossAnimation(false); // false = end face down
+    } else {
+      // If animations disabled, immediately position cards
+      gameState.allCards.forEach(cardData => {
+        const card3D = this.card3DManager.cards.get(cardData.id);
+        if (card3D && cardData.position) {
+          card3D.x = cardData.position.x;
+          card3D.y = cardData.position.y;
+          card3D.z = 0;
+          card3D.faceUp = 0; // Face down
+        }
+      });
+    }
+
+    debugLogger.log('3dCards', '✨ Card3D system initialized for match game', null);
+  }
+
+  showHighScores(bonusMode = false) {
+    // Update tab active state
+    document.getElementById('show-normal-scores').classList.toggle('active', !bonusMode);
+    document.getElementById('show-bonus-scores').classList.toggle('active', bonusMode);
+
+    // Create a temporary match game instance to access high scores
+    const tempGame = new MatchGame();
+    tempGame.bonusMultiplierEnabled = bonusMode;
+    const scores = tempGame.getHighScores();
+
+    const listElement = document.getElementById('high-scores-list');
+    listElement.innerHTML = '';
+
+    if (scores.length === 0) {
+      // CSS will show the "No high scores" message via :empty pseudo-class
+      return;
+    }
+
+    scores.forEach((score, index) => {
+      const item = document.createElement('div');
+      item.className = 'high-score-item';
+
+      const rank = document.createElement('span');
+      rank.className = 'score-rank';
+      rank.textContent = `#${index + 1}`;
+
+      const time = document.createElement('span');
+      time.className = 'score-time';
+      time.textContent = score.formattedTime;
+
+      item.appendChild(rank);
+      item.appendChild(time);
+
+      if (bonusMode) {
+        const points = document.createElement('span');
+        points.className = 'score-points';
+        points.textContent = `${score.score} pts`;
+        item.appendChild(points);
+      }
+
+      const date = document.createElement('span');
+      date.className = 'score-date';
+      const scoreDate = new Date(score.date);
+      date.textContent = scoreDate.toLocaleDateString();
+      item.appendChild(date);
+
+      listElement.appendChild(item);
+    });
   }
 
   startNewGame(rounds) {
@@ -416,9 +534,9 @@ class Game {
         }
       });
 
-      // Apply Toss Across animation if enabled
+      // Apply Toss Across animation if enabled (cards end face-down for match game)
       if (this.gameOptions.get('animationsEnabled')) {
-        this.card3DManager.applyTossAcrossAnimation();
+        this.card3DManager.applyTossAcrossAnimation(false); // false = end face down
       } else {
         // If animations disabled, immediately position cards
         gameState.allCards.forEach(cardData => {
@@ -427,6 +545,7 @@ class Game {
             card3D.x = cardData.position.x;
             card3D.y = cardData.position.y;
             card3D.z = 0;
+            card3D.faceUp = 0; // Face down
           }
         });
       }
@@ -794,33 +913,59 @@ class Game {
    * Handle matched cards in match game - animate to matched pile
    */
   handleMatchedCards(card1, card2) {
-    debugLogger.log('gameState', `Match found: ${card1.month}`, null);
+    debugLogger.log('gameState', `Match found: ${card1.month}`, {
+      card1Id: card1.id,
+      card2Id: card2.id
+    });
 
     // Get Card3D objects
     const card3D1 = this.card3DManager.cards.get(card1.id);
     const card3D2 = this.card3DManager.cards.get(card2.id);
 
-    if (!card3D1 || !card3D2) return;
+    if (!card3D1) {
+      debugLogger.logError('Card3D not found for card1', { id: card1.id });
+      return;
+    }
+    if (!card3D2) {
+      debugLogger.logError('Card3D not found for card2', { id: card2.id });
+      return;
+    }
+
+    debugLogger.log('gameState', `Animating matched cards to pile`, {
+      card1: card3D1.cardData.name,
+      card2: card3D2.cardData.name
+    });
 
     // Get matched pile position (bottom right)
     const matchedPileX = this.renderer.displayWidth - 150;
     const matchedPileY = this.renderer.displayHeight - 150;
 
-    // Animate both cards to matched pile
-    const animConfig = {
+    // Animate both cards to matched pile with slight offset for visibility
+    const animConfig1 = {
       endX: matchedPileX,
       endY: matchedPileY,
       endZ: 0,
       duration: 600,
       easing: 'easeOutCubic',
-      endOpacity: 0.8
+      endOpacity: 0.9
     };
 
-    card3D1.tweenTo(animConfig);
-    card3D2.tweenTo(animConfig);
+    const animConfig2 = {
+      endX: matchedPileX + 5, // Slight offset
+      endY: matchedPileY + 5,
+      endZ: 1, // Slightly raised
+      duration: 600,
+      easing: 'easeOutCubic',
+      endOpacity: 0.9
+    };
 
-    // After animation, remove from board
+    card3D1.tweenTo(animConfig1);
+    card3D2.tweenTo(animConfig2);
+
+    // After animation, move to matched pile zone
     setTimeout(() => {
+      debugLogger.log('gameState', `Moving matched cards to playerTrick zone`, null);
+
       // Move cards to matched pile in Card3DManager
       this.card3DManager.moveCardToZone(card3D1, 'playerTrick');
       this.card3DManager.moveCardToZone(card3D2, 'playerTrick');
@@ -1515,9 +1660,19 @@ class Game {
 
     // Handle match game UI differently
     if (this.currentGameMode === 'match') {
-      // Update instructions with match counter
+      // Update instructions with timer, matches, and score
       const matchText = `Matches: ${state.matchCount / 2} / 24`;
-      this.instructionsElement.textContent = `${state.message} | ${matchText}`;
+      const timerText = `Time: ${state.formattedTime}`;
+
+      let displayText = `${state.message} | ${matchText} | ${timerText}`;
+
+      if (state.bonusMultiplierEnabled) {
+        const scoreText = `Score: ${state.score}`;
+        const comboText = state.consecutiveMatches > 0 ? ` | Combo: ${state.consecutiveMatches}x` : '';
+        displayText = `${state.message} | ${matchText} | ${scoreText}${comboText} | ${timerText}`;
+      }
+
+      this.instructionsElement.textContent = displayText;
 
       // Log message changes
       if (this.lastMessage !== state.message) {

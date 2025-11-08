@@ -189,6 +189,39 @@
         </div>
       </div>
 
+      <!-- Match Game Options Modal -->
+      <div id="match-options-modal" class="modal">
+        <div class="modal-content match-options-content">
+          <h2>Match Game Options</h2>
+
+          <div class="match-options-grid">
+            <div class="option-row">
+              <label for="bonus-multiplier-enabled">
+                <input type="checkbox" id="bonus-multiplier-enabled">
+                Enable Bonus Multiplier
+              </label>
+              <span class="option-description">Successive matches grant increasing points (1x, 2x, 3x...)</span>
+            </div>
+          </div>
+
+          <div class="high-scores-section">
+            <h3>High Scores</h3>
+            <div class="high-scores-tabs">
+              <button id="show-normal-scores" class="score-tab active">Normal Mode</button>
+              <button id="show-bonus-scores" class="score-tab">Bonus Mode</button>
+            </div>
+            <div id="high-scores-list" class="high-scores-list">
+              <!-- Will be populated dynamically -->
+            </div>
+          </div>
+
+          <div class="modal-buttons">
+            <button id="match-options-start">Start Game</button>
+            <button id="match-options-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Koi-Koi Decision Modal -->
       <div id="koikoi-modal" class="modal">
         <div class="modal-content koikoi-modal-content">

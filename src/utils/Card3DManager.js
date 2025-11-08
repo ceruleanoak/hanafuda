@@ -115,12 +115,13 @@ export class Card3DManager {
 
   /**
    * Apply Toss Across animation to field cards
+   * @param {boolean} endFaceUp - Whether cards should end face up (default: true for Koi Koi, false for Match Game)
    */
-  applyTossAcrossAnimation() {
+  applyTossAcrossAnimation(endFaceUp = true) {
     const fieldCards = Array.from(this.zoneCards.field);
     if (fieldCards.length === 0) return;
 
-    debugLogger.log('3dCards', '🎬 Applying Toss Across animation to field cards', null);
+    debugLogger.log('3dCards', '🎬 Applying Toss Across animation to field cards', { endFaceUp });
 
     // Toss Across animation preset parameters
     const duration = 1350;
@@ -163,7 +164,7 @@ export class Card3DManager {
           y: variantY,
           z: targetZ,
           rotation: variantRotation,
-          faceUp: 1, // End face up
+          faceUp: endFaceUp ? 1 : 0, // Configurable end face state
           opacity: 1.0
         },
         duration,
