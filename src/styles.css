@@ -30,6 +30,36 @@ header {
 h1 {
   font-size: 1.8rem;
   color: #ff6b6b;
+  margin: 0;
+}
+
+#game-mode-selector {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+#game-mode-select {
+  padding: 0.5rem 1rem;
+  background: #1e1e1e;
+  border: 2px solid #4ecdc4;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+#game-mode-select:hover {
+  border-color: #5effd6;
+  background: #2a2a2a;
+}
+
+#game-mode-select:focus {
+  outline: none;
+  border-color: #5effd6;
+  box-shadow: 0 0 10px rgba(78, 205, 196, 0.3);
 }
 
 #game-info {
