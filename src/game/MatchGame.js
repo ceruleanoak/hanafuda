@@ -29,23 +29,34 @@ export class MatchGame {
     this.score = 0;               // Total score with multipliers
     this.bonusMultiplierEnabled = false; // Whether bonus multiplier is enabled
 
+    // Viewport dimensions - will be set when game starts
+    this.originalViewportWidth = null;
+    this.originalViewportHeight = null;
+
     this.reset();
   }
 
   /**
    * Start a new match game
    * @param {boolean} bonusMultiplierEnabled - Whether to enable bonus multipliers
+   * @param {number} viewportWidth - Current viewport width
+   * @param {number} viewportHeight - Current viewport height
    */
-  startNewGame(bonusMultiplierEnabled = false) {
+  startNewGame(bonusMultiplierEnabled = false, viewportWidth = 2000, viewportHeight = 1000) {
     this.bonusMultiplierEnabled = bonusMultiplierEnabled;
-    this.reset();
+    // Store original viewport dimensions for this game session
+    this.originalViewportWidth = viewportWidth;
+    this.originalViewportHeight = viewportHeight;
+    this.reset(viewportWidth, viewportHeight);
     this.startTimer();
   }
 
   /**
    * Reset the game state
+   * @param {number} viewportWidth - Viewport width for calculating positions
+   * @param {number} viewportHeight - Viewport height for calculating positions
    */
-  reset() {
+  reset(viewportWidth = null, viewportHeight = null) {
     this.deck.reset();
 
     // Stop any running timer
@@ -55,10 +66,9 @@ export class MatchGame {
     this.allCards = [];
     const cards = this.deck.cards;
 
-    // Create card objects with random positions
-    // We'll spread them across the screen in a grid-like pattern with randomness
-    const canvasWidth = 2000;  // Approximate canvas width
-    const canvasHeight = 1000; // Approximate canvas height
+    // Use provided dimensions or fall back to defaults
+    const canvasWidth = viewportWidth || 2000;
+    const canvasHeight = viewportHeight || 1000;
     const margin = 100;
 
     // Calculate grid dimensions (8 rows x 6 columns for 48 cards)
@@ -290,12 +300,45 @@ export class MatchGame {
   }
 
   /**
-   * Get the current game state (compatible with Card3DManager)
+   * Scale positions based on current viewport dimensions
+   * @param {number} currentWidth - Current viewport width
+   * @param {number} currentHeight - Current viewport height
+   * @returns {Array} Cards with scaled positions
    */
-  getState() {
+  getScaledCards(currentWidth, currentHeight) {
+    // If no original dimensions stored, return cards as-is
+    if (!this.originalViewportWidth || !this.originalViewportHeight) {
+      return this.allCards;
+    }
+
+    // Calculate scale factors
+    const scaleX = currentWidth / this.originalViewportWidth;
+    const scaleY = currentHeight / this.originalViewportHeight;
+
+    // Return cards with scaled positions
+    return this.allCards.map(card => ({
+      ...card,
+      position: {
+        x: card.position.x * scaleX,
+        y: card.position.y * scaleY
+      }
+    }));
+  }
+
+  /**
+   * Get the current game state (compatible with Card3DManager)
+   * @param {number} currentWidth - Current viewport width for scaling
+   * @param {number} currentHeight - Current viewport height for scaling
+   */
+  getState(currentWidth = null, currentHeight = null) {
+    // Get cards with scaled positions if dimensions provided
+    const cards = (currentWidth && currentHeight)
+      ? this.getScaledCards(currentWidth, currentHeight)
+      : this.allCards;
+
     return {
       // For match game rendering
-      allCards: this.allCards,
+      allCards: cards,
       flippedCards: this.flippedCards,
       matchedCards: this.matchedCards,
       isProcessing: this.isProcessing,
@@ -312,9 +355,13 @@ export class MatchGame {
       consecutiveMatches: this.consecutiveMatches,
       bonusMultiplierEnabled: this.bonusMultiplierEnabled,
 
+      // Viewport info for scaling
+      originalViewportWidth: this.originalViewportWidth,
+      originalViewportHeight: this.originalViewportHeight,
+
       // For Card3DManager compatibility - keep ALL cards in field (including matched)
       // This prevents the synchronize() method from triggering zone moves and layout recalculations
-      field: this.allCards,
+      field: cards,
       playerCaptured: [],  // Empty - don't move matched cards here
       opponentCaptured: [],
       playerHand: [],

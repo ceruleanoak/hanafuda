@@ -386,7 +386,7 @@ class Game {
     // Save animation setting to game options
     this.gameOptions.set('animationsEnabled', animEnabled);
 
-    this.game.startNewGame(bonusEnabled);
+    this.game.startNewGame(bonusEnabled, this.renderer.displayWidth, this.renderer.displayHeight);
     this.updateUI();
 
     // Initialize Card3D system from game state
@@ -483,8 +483,8 @@ class Game {
     this.hideRoundModal();
 
     if (this.currentGameMode === 'match') {
-      // Match game doesn't use rounds
-      this.game.startNewGame();
+      // Match game doesn't use rounds - pass viewport dimensions
+      this.game.startNewGame(false, this.renderer.displayWidth, this.renderer.displayHeight);
     } else {
       // Koi Koi uses rounds
       this.game.startNewGame(rounds);
@@ -536,7 +536,7 @@ class Game {
 
     // Start new game with the selected mode
     if (mode === 'match') {
-      this.game.startNewGame();
+      this.game.startNewGame(false, this.renderer.displayWidth, this.renderer.displayHeight);
       this.updateUI();
 
       // Initialize Card3D system from game state
@@ -1727,7 +1727,10 @@ class Game {
   }
 
   updateUI() {
-    const state = this.game.getState();
+    // For Match Game, pass current viewport dimensions for position scaling
+    const state = this.currentGameMode === 'match'
+      ? this.game.getState(this.renderer.displayWidth, this.renderer.displayHeight)
+      : this.game.getState();
 
     // Handle match game UI differently
     if (this.currentGameMode === 'match') {
@@ -2249,7 +2252,10 @@ class Game {
       const deltaTime = this.lastTime ? (now - this.lastTime) / 1000 : 0; // Convert to seconds
       this.lastTime = now;
 
-      const state = this.game.getState();
+      // For Match Game, pass current viewport dimensions for position scaling
+      const state = this.currentGameMode === 'match'
+        ? this.game.getState(this.renderer.displayWidth, this.renderer.displayHeight)
+        : this.game.getState();
 
       // If animation tester is active, render it instead of the game
       if (this.animationTesterActive) {
