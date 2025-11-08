@@ -293,10 +293,6 @@ export class MatchGame {
    * Get the current game state (compatible with Card3DManager)
    */
   getState() {
-    // Filter cards by state for Card3DManager compatibility
-    const boardCards = this.allCards.filter(c => c.state !== 'matched');
-    const capturedCards = this.matchedCards;
-
     return {
       // For match game rendering
       allCards: this.allCards,
@@ -316,9 +312,10 @@ export class MatchGame {
       consecutiveMatches: this.consecutiveMatches,
       bonusMultiplierEnabled: this.bonusMultiplierEnabled,
 
-      // For Card3DManager compatibility
-      field: boardCards,
-      playerCaptured: capturedCards,
+      // For Card3DManager compatibility - keep ALL cards in field (including matched)
+      // This prevents the synchronize() method from triggering zone moves and layout recalculations
+      field: this.allCards,
+      playerCaptured: [],  // Empty - don't move matched cards here
       opponentCaptured: [],
       playerHand: [],
       opponentHand: [],
