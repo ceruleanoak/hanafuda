@@ -3129,6 +3129,12 @@ class Game {
 document.addEventListener('DOMContentLoaded', async () => {
   console.log(`Hanafuda Koi-Koi starting (v${APP_VERSION})`);
 
+  // Display build ID in header
+  const buildIdElement = document.getElementById('build-id');
+  if (buildIdElement) {
+    buildIdElement.textContent = `v${APP_VERSION}`;
+  }
+
   // Register service worker for intelligent caching
   if ('serviceWorker' in navigator) {
     try {
