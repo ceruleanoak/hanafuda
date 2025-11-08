@@ -180,6 +180,9 @@ export class Card3DManager {
    * Synchronize with game state (called after game logic changes)
    */
   synchronize(gameState) {
+    // Store current game state for use in layout calculations
+    this.currentGameState = gameState;
+
     // Build current zone mapping from game state
     const currentMapping = this.buildZoneMapping(gameState);
 
@@ -192,7 +195,6 @@ export class Card3DManager {
       }
 
       if (card3D.homeZone !== newZone) {
-        debugLogger.log('3dCards', `📦 Card ${card3D.cardData.name} moved: ${card3D.homeZone} → ${newZone}`, null);
         this.moveCardToZone(card3D, newZone);
       }
     }
@@ -256,12 +258,6 @@ export class Card3DManager {
 
     // Mark render queue dirty
     this.renderQueueDirty = true;
-
-    debugLogger.log('3dCards', `📦 Card zone change: ${oldZone} → ${newZone}`, {
-      card: card3D.cardData.name,
-      oldZone,
-      newZone
-    });
   }
 
   /**
@@ -314,6 +310,34 @@ export class Card3DManager {
   relayoutZone(zone, animate = true) {
     const zoneSet = this.zoneCards[zone];
     if (!zoneSet || zoneSet.size === 0) return;
+
+    // For Match Game field zone, use stored positions from game state
+    const isMatchGameField = this.currentGameState?.phase === 'match_game' && zone === 'field';
+
+    if (isMatchGameField) {
+      // Use custom positions from Match Game state
+      const cards = Array.from(zoneSet);
+      cards.forEach(card3D => {
+        // Find the card in allCards array which has the position
+        const cardData = this.currentGameState.allCards?.find(c => c.id === card3D.cardData.id);
+        if (cardData?.position) {
+          // Preserve custom position from Match Game
+          card3D.homePosition = {
+            x: cardData.position.x,
+            y: cardData.position.y,
+            z: 0
+          };
+
+          // Don't animate resize - just snap to position
+          if (!animate) {
+            card3D.x = cardData.position.x;
+            card3D.y = cardData.position.y;
+            card3D.z = card3D.opacity === 0 ? -50 : 0; // Preserve fade state
+          }
+        }
+      });
+      return; // Skip normal layout calculation
+    }
 
     // Get zone configuration
     const config = LayoutManager.getZoneConfig(zone, this.viewportWidth, this.viewportHeight, this.useAnimations);
