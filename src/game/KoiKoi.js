@@ -855,6 +855,16 @@ export class KoiKoi {
       const isNewYaku = this.hasNewYaku(previousYaku, yaku);
 
       if (isNewYaku && this.gameOptions && this.gameOptions.get('koikoiEnabled') && !deferDecision) {
+        // Check if this is the last card - if so, skip koi-koi decision
+        const playerHand = player === 'player' ? this.playerHand : this.opponentHand;
+        const isLastCard = playerHand.length === 0 && this.deck.isEmpty();
+        const bothHandsEmpty = this.playerHand.length === 0 && this.opponentHand.length === 0;
+
+        if (isLastCard || bothHandsEmpty) {
+          console.log(`[KOIKOI] Last card in updateYaku - no koi-koi decision for ${player} (hand empty: ${playerHand.length === 0}, deck empty: ${this.deck.isEmpty()}, both hands empty: ${bothHandsEmpty})`);
+          return; // No point in koi-koi on last card - round will end anyway
+        }
+
         // Update previous yaku
         if (player === 'player') {
           this.previousPlayerYaku = [...yaku];
@@ -951,9 +961,10 @@ export class KoiKoi {
     // Check if this is the last card (no more hand cards and no more deck cards)
     const playerHand = player === 'player' ? this.playerHand : this.opponentHand;
     const isLastCard = playerHand.length === 0 && this.deck.isEmpty();
+    const bothHandsEmpty = this.playerHand.length === 0 && this.opponentHand.length === 0;
 
-    if (isLastCard) {
-      console.log(`[KOIKOI] Last card - no koi-koi decision for ${player}`);
+    if (isLastCard || bothHandsEmpty) {
+      console.log(`[KOIKOI] Last card - no koi-koi decision for ${player} (hand empty: ${playerHand.length === 0}, deck empty: ${this.deck.isEmpty()}, both hands empty: ${bothHandsEmpty})`);
       return; // No point in koi-koi on last card - round will end anyway
     }
 
