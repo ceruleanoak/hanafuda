@@ -801,6 +801,17 @@ export class KoiKoi {
 
           setTimeout(() => {
             this.field.push(drawnCard);
+            this.checkForKoikoiDecision('player');
+
+            // Don't continue if waiting for koi-koi decision
+            if (this.koikoiState.waitingForDecision) {
+              this.koikoiState.resumeAction = () => {
+                this.drawnCard = null;
+                this.endTurn();
+              };
+              return;
+            }
+
             this.drawnCard = null;
             this.endTurn();
           }, 900);
