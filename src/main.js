@@ -115,6 +115,9 @@ class Game {
     // Selected card state (for click-to-match)
     this.selectedCard3D = null;   // Card selected for matching (stays raised)
 
+    // Floating text for match game celebrations
+    this.floatingTexts = [];      // Array of {text, x, y, opacity, age, maxAge}
+
     // Track state for change detection
     this.lastStateLengths = {
       playerCaptured: 0,
@@ -934,7 +937,7 @@ class Game {
   }
 
   /**
-   * Handle matched cards in match game - fade out in place
+   * Handle matched cards in match game - show floating text
    */
   handleMatchedCards(card1, card2) {
     debugLogger.log('gameState', `Match found: ${card1.month}`, {
@@ -955,43 +958,23 @@ class Game {
       return;
     }
 
-    debugLogger.log('gameState', `Fading out matched cards`, {
+    debugLogger.log('gameState', `Match found!`, {
       card1: card3D1.cardData.name,
       card2: card3D2.cardData.name
     });
 
-    // Fade out matched cards in place (don't move them to avoid layout recalculation)
-    card3D1.tweenTo(
-      {
-        opacity: 0,
-        z: -50  // Move them down so they're behind other cards
-      },
-      600,            // duration
-      'easeOutCubic'  // easing
-    );
+    // Add floating text celebration at the top of the field
+    this.addFloatingMatchText(card1.month);
 
-    card3D2.tweenTo(
-      {
-        opacity: 0,
-        z: -50  // Move them down so they're behind other cards
-      },
-      600,            // duration
-      'easeOutCubic'  // easing
-    );
+    // Update UI immediately (cards stay visible)
+    this.updateUI();
 
-    // After fade animation completes, update UI
-    setTimeout(() => {
-      debugLogger.log('gameState', `Matched cards faded out`, null);
-
-      this.updateUI();
-
-      // Check if game is complete
-      const gameState = this.game.getState();
-      if (gameState.gameOver) {
-        this.statusElement.textContent = gameState.message;
-        this.statusElement.classList.add('show');
-      }
-    }, 650);
+    // Check if game is complete
+    const gameState = this.game.getState();
+    if (gameState.gameOver) {
+      this.statusElement.textContent = gameState.message;
+      this.statusElement.classList.add('show');
+    }
   }
 
   /**
@@ -1026,6 +1009,72 @@ class Game {
     // Update card data state
     card1.state = 'facedown';
     card2.state = 'facedown';
+  }
+
+  /**
+   * Add floating text for a match celebration
+   */
+  addFloatingMatchText(month) {
+    const centerX = this.renderer.displayWidth / 2;
+    const topY = 100; // Starting position at top of field
+
+    this.floatingTexts.push({
+      text: `${month} Match!`,
+      x: centerX,
+      y: topY,
+      opacity: 1.0,
+      age: 0,
+      maxAge: 3000 // Display for 3 seconds
+    });
+  }
+
+  /**
+   * Update all floating texts (aging and fading)
+   */
+  updateFloatingTexts(deltaTime) {
+    // Update each floating text
+    for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
+      const floatingText = this.floatingTexts[i];
+      floatingText.age += deltaTime * 1000; // Convert to milliseconds
+
+      // Fade out in the last second
+      if (floatingText.age > floatingText.maxAge - 1000) {
+        const fadeProgress = (floatingText.age - (floatingText.maxAge - 1000)) / 1000;
+        floatingText.opacity = 1.0 - fadeProgress;
+      }
+
+      // Remove expired texts
+      if (floatingText.age >= floatingText.maxAge) {
+        this.floatingTexts.splice(i, 1);
+      }
+    }
+  }
+
+  /**
+   * Render all floating texts
+   */
+  renderFloatingTexts() {
+    if (this.floatingTexts.length === 0) return;
+
+    const ctx = this.renderer.ctx;
+    ctx.save();
+
+    this.floatingTexts.forEach(floatingText => {
+      ctx.globalAlpha = floatingText.opacity;
+      ctx.fillStyle = '#FFD700'; // Gold color
+      ctx.strokeStyle = '#FF6347'; // Tomato red for outline
+      ctx.font = 'bold 48px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineWidth = 4;
+
+      // Draw text outline
+      ctx.strokeText(floatingText.text, floatingText.x, floatingText.y);
+      // Draw text fill
+      ctx.fillText(floatingText.text, floatingText.x, floatingText.y);
+    });
+
+    ctx.restore();
   }
 
   /**
@@ -2251,6 +2300,15 @@ class Game {
           debugLogger.logError('Error in Card3D system update', err);
         }
 
+        // Update floating texts (match game only)
+        if (this.currentGameMode === 'match') {
+          try {
+            this.updateFloatingTexts(deltaTime);
+          } catch (err) {
+            debugLogger.logError('Error updating floating texts', err);
+          }
+        }
+
         // Render
         try {
           const renderOptions = {
@@ -2262,6 +2320,11 @@ class Game {
           };
 
           this.renderer.render(state, [], renderOptions);
+
+          // Render floating texts on top (match game only)
+          if (this.currentGameMode === 'match') {
+            this.renderFloatingTexts();
+          }
         } catch (err) {
           debugLogger.logError('Error in render', err);
         }
