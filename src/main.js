@@ -351,6 +351,10 @@ class Game {
     const bonusCheckbox = document.getElementById('bonus-multiplier-enabled');
     bonusCheckbox.checked = this.matchGame.bonusMultiplierEnabled;
 
+    // Load current animation setting
+    const animCheckbox = document.getElementById('match-animations-enabled');
+    animCheckbox.checked = this.gameOptions.get('animationsEnabled', true);
+
     // Show high scores for normal mode by default
     this.showHighScores(false);
 
@@ -363,13 +367,17 @@ class Game {
 
   startMatchGame() {
     const bonusEnabled = document.getElementById('bonus-multiplier-enabled').checked;
+    const animEnabled = document.getElementById('match-animations-enabled').checked;
     this.hideMatchOptionsModal();
+
+    // Save animation setting to game options
+    this.gameOptions.set('animationsEnabled', animEnabled);
 
     this.game.startNewGame(bonusEnabled);
     this.updateUI();
 
     // Initialize Card3D system from game state
-    this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
+    this.card3DManager.setAnimationsEnabled(animEnabled);
     this.card3DManager.initializeFromGameState(this.game.getState(), false);
 
     // Override card positions to use match game's predetermined positions
@@ -390,7 +398,7 @@ class Game {
     });
 
     // Apply Toss Across animation if enabled (cards end face-down for match game)
-    if (this.gameOptions.get('animationsEnabled')) {
+    if (animEnabled) {
       this.card3DManager.applyTossAcrossAnimation(false); // false = end face down
     } else {
       // If animations disabled, immediately position cards
@@ -489,9 +497,12 @@ class Game {
 
       // Hide Koi Koi specific UI elements
       document.getElementById('score').style.display = 'none';
-      document.getElementById('options-btn').style.display = 'none';
       document.getElementById('variations-btn').style.display = 'none';
       document.getElementById('test-3d-btn').style.display = 'none';
+
+      // Keep options button visible but change its behavior
+      document.getElementById('options-btn').style.display = 'inline-block';
+      document.getElementById('options-btn').textContent = 'Options';
 
       // Update instructions
       this.instructionsElement.textContent = 'Click cards to flip and find matching pairs!';
@@ -575,13 +586,14 @@ class Game {
         // Try to handle the card click in the match game
         const success = this.game.handleCardClick(cardData.id);
         if (success) {
-          // Animate card flip
-          card3D.tweenTo({
-            endFaceUp: true,
-            duration: 300,
-            easing: 'easeOutQuad',
-            flipTiming: 0.5
-          });
+          // Animate card flip to face up
+          card3D.tweenTo(
+            { faceUp: 1 },  // target: flip to face up
+            300,            // duration
+            'easeOutQuad',  // easing
+            null,           // no control point
+            0.5             // flip timing
+          );
 
           // Update card data state
           cardData.state = 'faceup';
@@ -941,26 +953,27 @@ class Game {
     const matchedPileY = this.renderer.displayHeight - 150;
 
     // Animate both cards to matched pile with slight offset for visibility
-    const animConfig1 = {
-      endX: matchedPileX,
-      endY: matchedPileY,
-      endZ: 0,
-      duration: 600,
-      easing: 'easeOutCubic',
-      endOpacity: 0.9
-    };
+    card3D1.tweenTo(
+      {
+        x: matchedPileX,
+        y: matchedPileY,
+        z: 0,
+        opacity: 0.9
+      },
+      600,            // duration
+      'easeOutCubic'  // easing
+    );
 
-    const animConfig2 = {
-      endX: matchedPileX + 5, // Slight offset
-      endY: matchedPileY + 5,
-      endZ: 1, // Slightly raised
-      duration: 600,
-      easing: 'easeOutCubic',
-      endOpacity: 0.9
-    };
-
-    card3D1.tweenTo(animConfig1);
-    card3D2.tweenTo(animConfig2);
+    card3D2.tweenTo(
+      {
+        x: matchedPileX + 5,  // Slight offset
+        y: matchedPileY + 5,
+        z: 1,                 // Slightly raised
+        opacity: 0.9
+      },
+      600,            // duration
+      'easeOutCubic'  // easing
+    );
 
     // After animation, move to matched pile zone
     setTimeout(() => {
@@ -993,19 +1006,21 @@ class Game {
     if (!card3D1 || !card3D2) return;
 
     // Animate flip back to face down
-    card3D1.tweenTo({
-      endFaceUp: false,
-      duration: 300,
-      easing: 'easeOutQuad',
-      flipTiming: 0.5
-    });
+    card3D1.tweenTo(
+      { faceUp: 0 },  // target: flip to face down
+      300,            // duration
+      'easeOutQuad',  // easing
+      null,           // no control point
+      0.5             // flip timing
+    );
 
-    card3D2.tweenTo({
-      endFaceUp: false,
-      duration: 300,
-      easing: 'easeOutQuad',
-      flipTiming: 0.5
-    });
+    card3D2.tweenTo(
+      { faceUp: 0 },  // target: flip to face down
+      300,            // duration
+      'easeOutQuad',  // easing
+      null,           // no control point
+      0.5             // flip timing
+    );
 
     // Update card data state
     card1.state = 'facedown';
@@ -1194,18 +1209,24 @@ class Game {
    * Show options modal
    */
   showOptionsModal() {
-    // Populate current values
-    const options = this.gameOptions.getAll();
-    document.getElementById('koikoi-enabled').checked = options.koikoiEnabled;
-    document.getElementById('multiplier-mode').value = options.multiplierMode;
-    document.getElementById('auto-double').checked = options.autoDouble7Plus;
-    document.getElementById('both-players-score').checked = options.bothPlayersScore;
-    document.getElementById('viewing-sake').value = options.viewingSakeMode;
-    document.getElementById('moon-viewing-sake').value = options.moonViewingSakeMode;
-    document.getElementById('animations-enabled').checked = options.animationsEnabled;
-    document.getElementById('audio-enabled').checked = options.audioEnabled;
+    // Show different options based on game mode
+    if (this.currentGameMode === 'match') {
+      this.showMatchOptionsModal();
+    } else {
+      // Koi Koi options
+      // Populate current values
+      const options = this.gameOptions.getAll();
+      document.getElementById('koikoi-enabled').checked = options.koikoiEnabled;
+      document.getElementById('multiplier-mode').value = options.multiplierMode;
+      document.getElementById('auto-double').checked = options.autoDouble7Plus;
+      document.getElementById('both-players-score').checked = options.bothPlayersScore;
+      document.getElementById('viewing-sake').value = options.viewingSakeMode;
+      document.getElementById('moon-viewing-sake').value = options.moonViewingSakeMode;
+      document.getElementById('animations-enabled').checked = options.animationsEnabled;
+      document.getElementById('audio-enabled').checked = options.audioEnabled;
 
-    this.optionsModal.classList.add('show');
+      this.optionsModal.classList.add('show');
+    }
   }
 
   /**
