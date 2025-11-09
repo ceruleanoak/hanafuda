@@ -97,7 +97,7 @@ export class LayoutManager {
       return {
         x: startX + (col * spacing),
         y: startY + (row * rowSpacing),
-        z: 0,
+        z: row * 0.5, // Each row gets slightly higher z to prevent overlap
         index: slotIndex
       };
     });
@@ -207,6 +207,7 @@ export class LayoutManager {
         centerX: centerX,
         spacing: 115,
         maxPerRow: 8,
+        rowSpacing: 180, // Increased from default 160 to prevent overlap (card height is 140)
         useFixedPositions: true,
         faceUp: 1,
         renderLayer: 3
