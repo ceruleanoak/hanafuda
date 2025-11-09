@@ -31,6 +31,7 @@
         </div>
         <button id="help-btn" title="Highlight matchable cards">Help</button>
         <button id="variations-btn" title="Toggle game variations">💣</button>
+        <button id="card-back-btn" title="Select card back design">🃏</button>
         <button id="options-btn" title="Game options and rules">Options</button>
         <button id="test-3d-btn" title="Showcase card animations">✨ Showcase</button>
         <button id="animation-tester-btn" title="Animation Testing Environment">🎬 Animator</button>
@@ -311,6 +312,21 @@
 
           <div class="modal-buttons">
             <button id="continue-next-round" class="primary-btn">Continue to Next Round</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card Back Selection Modal -->
+      <div id="card-back-modal" class="modal">
+        <div class="modal-content card-back-modal-content">
+          <h2>Select Card Back</h2>
+
+          <div id="card-back-grid" class="card-back-grid">
+            <!-- Card back previews will be dynamically generated here -->
+          </div>
+
+          <div class="modal-buttons">
+            <button id="card-back-close" class="primary-btn">Close</button>
           </div>
         </div>
       </div>
