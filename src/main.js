@@ -1316,8 +1316,25 @@ class Game {
 
       // Create preview
       const preview = document.createElement('div');
-      preview.className = 'card-back-preview placeholder';
-      preview.textContent = '🃏';
+      preview.className = 'card-back-preview';
+
+      // Try to load the image
+      const img = document.createElement('img');
+      img.src = cardBack.image;
+      img.alt = cardBack.name;
+
+      // Fallback to placeholder if image fails to load
+      img.onerror = () => {
+        img.style.display = 'none';
+        preview.classList.add('placeholder');
+        preview.textContent = '🃏';
+      };
+
+      img.onload = () => {
+        preview.classList.remove('placeholder');
+      };
+
+      preview.appendChild(img);
 
       // Add lock icon if locked
       if (!cardBack.unlocked) {
