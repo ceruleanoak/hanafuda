@@ -1290,6 +1290,7 @@ class Game {
       document.getElementById('both-players-score').checked = options.bothPlayersScore;
       document.getElementById('viewing-sake').value = options.viewingSakeMode;
       document.getElementById('moon-viewing-sake').value = options.moonViewingSakeMode;
+      document.getElementById('ai-difficulty').value = options.aiDifficulty;
       document.getElementById('animations-enabled').checked = options.animationsEnabled;
       document.getElementById('audio-enabled').checked = options.audioEnabled;
 
@@ -1315,6 +1316,7 @@ class Game {
       bothPlayersScore: document.getElementById('both-players-score').checked,
       viewingSakeMode: document.getElementById('viewing-sake').value,
       moonViewingSakeMode: document.getElementById('moon-viewing-sake').value,
+      aiDifficulty: document.getElementById('ai-difficulty').value,
       animationsEnabled: document.getElementById('animations-enabled').checked,
       audioEnabled: document.getElementById('audio-enabled').checked
     };

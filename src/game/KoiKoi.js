@@ -5,6 +5,7 @@
 import { Deck } from './Deck.js';
 import { Yaku } from './Yaku.js';
 import { CARD_TYPES } from '../data/cards.js';
+import { AdvancedAI } from './AdvancedAI.js';
 
 export class KoiKoi {
   constructor(gameOptions = null) {
@@ -1042,24 +1043,43 @@ export class KoiKoi {
    * Opponent AI makes koi-koi decision
    */
   opponentKoikoiDecision(yaku, score) {
-    // Simple AI strategy:
-    // - If score >= 10 points: Always call Shobu (safe)
-    // - If score 7-9 points: 70% Shobu, 30% Koi-Koi
-    // - If score 4-6 points: 50% Shobu, 50% Koi-Koi
-    // - If score <= 3 points: 70% Koi-Koi, 30% Shobu
+    // Check if advanced AI is enabled
+    const useAdvancedAI = this.gameOptions && this.gameOptions.get('aiDifficulty') === 'advanced';
+    let decision;
 
-    let koikoiProbability;
-    if (score >= 10) {
-      koikoiProbability = 0.1; // Almost always shobu
-    } else if (score >= 7) {
-      koikoiProbability = 0.3;
-    } else if (score >= 4) {
-      koikoiProbability = 0.5;
+    if (useAdvancedAI) {
+      // Use advanced AI for koi-koi decision
+      const shouldKoikoi = AdvancedAI.makeKoikoiDecision(
+        yaku,
+        score,
+        this.opponentCaptured,
+        this.playerCaptured,
+        this.deck.cards.length,
+        this.opponentScore,  // AI's current total game score
+        this.playerScore     // Player's current total game score
+      );
+      decision = shouldKoikoi ? 'koikoi' : 'shobu';
+      console.log(`Advanced AI koi-koi decision: ${decision} (round score: ${score}, game score: AI ${this.opponentScore} vs Player ${this.playerScore})`);
     } else {
-      koikoiProbability = 0.7;
-    }
+      // Simple AI strategy:
+      // - If score >= 10 points: Always call Shobu (safe)
+      // - If score 7-9 points: 70% Shobu, 30% Koi-Koi
+      // - If score 4-6 points: 50% Shobu, 50% Koi-Koi
+      // - If score <= 3 points: 70% Koi-Koi, 30% Shobu
 
-    const decision = Math.random() < koikoiProbability ? 'koikoi' : 'shobu';
+      let koikoiProbability;
+      if (score >= 10) {
+        koikoiProbability = 0.1; // Almost always shobu
+      } else if (score >= 7) {
+        koikoiProbability = 0.3;
+      } else if (score >= 4) {
+        koikoiProbability = 0.5;
+      } else {
+        koikoiProbability = 0.7;
+      }
+
+      decision = Math.random() < koikoiProbability ? 'koikoi' : 'shobu';
+    }
 
     // Short delay to make it feel natural
     setTimeout(() => {
@@ -1212,24 +1232,53 @@ export class KoiKoi {
     let selectedCardIndex = -1;
     let selectedMatch = null;
 
-    // First, try to find a card with a match
-    for (let i = 0; i < this.opponentHand.length; i++) {
-      const handCard = this.opponentHand[i];
-      const fieldMatches = this.field.filter(fc => this.cardsMatch(handCard, fc));
+    // Check if advanced AI is enabled
+    const useAdvancedAI = this.gameOptions && this.gameOptions.get('aiDifficulty') === 'advanced';
 
-      if (fieldMatches.length > 0) {
-        selectedCardIndex = i;
-        // Prioritize high-value cards in matches
-        selectedMatch = fieldMatches.reduce((best, current) =>
-          current.points > best.points ? current : best
-        );
-        break;
+    if (useAdvancedAI) {
+      // Use advanced AI to select card
+      const aiDecision = AdvancedAI.selectCard(
+        this.opponentHand,
+        this.opponentCaptured,
+        this.field,
+        this.playerCaptured,
+        this.gameOptions
+      );
+
+      if (aiDecision) {
+        selectedCardIndex = this.opponentHand.findIndex(c => c.id === aiDecision.card.id);
+        if (aiDecision.matches && aiDecision.matches.length > 0) {
+          // AI selected a match - use the highest priority one
+          selectedMatch = aiDecision.matches.reduce((best, current) =>
+            current.points > best.points ? current : best
+          );
+        }
+        // Log AI reasoning for debugging (can be removed in production)
+        if (aiDecision.reasoning) {
+          console.log(`Advanced AI: Playing ${aiDecision.card.name} - ${aiDecision.reasoning}`);
+        }
       }
-    }
+    } else {
+      // Use normal AI logic
+      // First, try to find a card with a match
+      for (let i = 0; i < this.opponentHand.length; i++) {
+        const handCard = this.opponentHand[i];
+        const fieldMatches = this.field.filter(fc => this.cardsMatch(handCard, fc));
 
-    // If no matches found, pick a random card
-    if (selectedCardIndex === -1) {
-      selectedCardIndex = Math.floor(Math.random() * this.opponentHand.length);
+        if (fieldMatches.length > 0) {
+          selectedCardIndex = i;
+          // Prioritize high-value cards in matches
+          selectedMatch = fieldMatches.reduce((best, current) =>
+            current.points > best.points ? current : best
+          );
+          break;
+        }
+      }
+
+      // If no matches found, pick a random card
+      if (selectedCardIndex === -1) {
+        selectedCardIndex = Math.floor(Math.random() * this.opponentHand.length);
+      }
     }
 
     const handCard = this.opponentHand[selectedCardIndex];

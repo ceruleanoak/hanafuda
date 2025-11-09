@@ -19,6 +19,9 @@ export class GameOptions {
       // Game Variations
       bombVariationEnabled: false,       // Enable bomb variation (multi-card play)
 
+      // AI Settings
+      aiDifficulty: 'normal',            // 'normal' or 'advanced'
+
       // UI Settings
       helpMode: false,                    // Help highlighting
       tutorialShown: false,               // Has user seen tutorial bubble?
