@@ -4,6 +4,7 @@
 
 import { KoiKoi } from './game/KoiKoi.js';
 import { MatchGame } from './game/MatchGame.js';
+import { KoiKoiShop } from './game/KoiKoiShop.js';
 import { Renderer } from './rendering/Renderer.js';
 import { debugLogger } from './utils/DebugLogger.js';
 import { GameOptions } from './game/GameOptions.js';
@@ -13,6 +14,7 @@ import { InitializationManager } from './utils/InitializationManager.js';
 import { AudioManager } from './utils/AudioManager.js';
 import { APP_VERSION } from './utils/version.js';
 import { CARD_BACKS, getSelectedCardBack, setSelectedCardBack } from './data/cardBacks.js';
+import { ShopUI } from './ui/ShopUI.js';
 
 class Game {
   constructor() {
@@ -35,6 +37,7 @@ class Game {
     this.matchOptionsModal = document.getElementById('match-options-modal');
     this.koikoiModal = document.getElementById('koikoi-modal');
     this.roundSummaryModal = document.getElementById('round-summary-modal');
+    this.shopModal = document.getElementById('shop-modal');
     this.tutorialBubble = document.getElementById('tutorial-bubble');
     this.animationTesterPanel = document.getElementById('animation-tester-panel');
 
@@ -42,16 +45,18 @@ class Game {
     this.gameOptions = new GameOptions();
 
     // Game mode tracking - restore from localStorage or default to 'koikoi'
-    this.currentGameMode = localStorage.getItem('currentGameMode') || 'koikoi'; // 'koikoi' or 'match'
+    this.currentGameMode = localStorage.getItem('currentGameMode') || 'koikoi'; // 'koikoi', 'match', or 'shop'
     this.gameModeSelect = document.getElementById('game-mode-select');
 
-    // Initialize both game types
+    // Initialize all game types
     this.koikoiGame = new KoiKoi(this.gameOptions);
     this.koikoiGame.setUICallback((yaku, score) => this.showKoikoiDecision(yaku, score));
     this.koikoiGame.setRoundSummaryCallback((data) => this.showRoundSummary(data));
     this.koikoiGame.setOpponentKoikoiCallback(() => this.showOpponentKoikoiNotification());
 
     this.matchGame = new MatchGame(this.gameOptions);
+
+    this.shopGame = new KoiKoiShop(this.gameOptions);
 
     // Set active game based on mode
     this.game = this.koikoiGame;
@@ -93,6 +98,10 @@ class Game {
     // Initialize Animation Tester
     this.animationTester = new AnimationTester(this.renderer.cardRenderer, this.card3DManager);
     this.animationTesterActive = false;
+
+    // Initialize Shop UI
+    this.shopUI = new ShopUI(this.renderer.cardRenderer);
+    this.shopUI.setOnCompleteCallback((cards, condition) => this.startShopGame(cards, condition));
 
     this.lastMessage = '';
     this.lastGameOverMessage = '';
@@ -221,6 +230,9 @@ class Game {
       if (this.currentGameMode === 'match') {
         // Switch to match game mode (this will start a new match game)
         this.switchGameMode('match');
+      } else if (this.currentGameMode === 'shop') {
+        // Switch to shop mode (this will show the shop)
+        this.switchGameMode('shop');
       } else {
         // Show round modal for Koi Koi
         this.showRoundModal();
@@ -361,11 +373,155 @@ class Game {
       return;
     }
 
+    // Show shop modal for shop mode
+    if (this.currentGameMode === 'shop') {
+      this.showShopModal();
+      return;
+    }
+
     this.roundModal.classList.add('show');
   }
 
   hideRoundModal() {
     this.roundModal.classList.remove('show');
+  }
+
+  /**
+   * Show the shop modal for Koi Koi Shop mode
+   */
+  showShopModal() {
+    this.shopUI.initialize();
+    this.shopUI.renderToModal(this.shopModal.querySelector('.shop-modal-content'));
+    this.shopModal.classList.add('show');
+  }
+
+  /**
+   * Hide the shop modal
+   */
+  hideShopModal() {
+    this.shopModal.classList.remove('show');
+  }
+
+  /**
+   * Start the shop game with selected cards and win condition
+   */
+  startShopGame(selectedCards, winCondition) {
+    this.hideShopModal();
+
+    // Start the shop game with the selected cards and win condition
+    this.shopGame.startShopGame(selectedCards, winCondition);
+
+    this.updateUI();
+
+    // Initialize Card3D system from game state with Toss Across animation
+    this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
+    this.card3DManager.initializeFromGameState(this.game.getState(), true);
+    debugLogger.log('3dCards', '✨ Card3D system initialized for shop game', null);
+
+    // Add the active win condition display to the page
+    this.showActiveWinCondition(winCondition);
+  }
+
+  /**
+   * Show the active win condition during gameplay
+   */
+  showActiveWinCondition(winCondition) {
+    const element = document.getElementById('active-win-condition');
+    if (!element) return;
+
+    element.innerHTML = `
+      <h4>${winCondition.stars} ${winCondition.name}</h4>
+      <p>${winCondition.description}</p>
+      <div class="win-condition-progress" id="win-condition-progress">
+        <!-- Progress will be updated here -->
+      </div>
+    `;
+
+    element.classList.remove('hidden');
+  }
+
+  /**
+   * Hide the active win condition display
+   */
+  hideActiveWinCondition() {
+    const element = document.getElementById('active-win-condition');
+    if (element) {
+      element.classList.add('hidden');
+    }
+  }
+
+  /**
+   * Update the win condition progress display
+   */
+  updateWinConditionProgress() {
+    if (this.currentGameMode !== 'shop') return;
+
+    const progressElement = document.getElementById('win-condition-progress');
+    if (!progressElement) return;
+
+    const state = this.game.getState();
+    if (!state.selectedWinCondition) return;
+
+    // Get progress based on win condition type
+    const progress = this.getWinConditionProgress(state);
+    progressElement.textContent = progress;
+  }
+
+  /**
+   * Get progress text for the current win condition
+   */
+  getWinConditionProgress(state) {
+    const condition = state.selectedWinCondition;
+    const playerCaptured = state.playerCaptured || [];
+
+    switch (condition.id) {
+      case 'easy_five_animals':
+      case 'medium_seven_animals':
+      case 'hard_nine_animals': {
+        const count = playerCaptured.filter(c => c.type === 'ANIMAL').length;
+        const target = condition.id.includes('five') ? 5 : condition.id.includes('seven') ? 7 : 9;
+        return `Animals: ${count}/${target}`;
+      }
+
+      case 'easy_five_ribbons':
+      case 'medium_seven_ribbons':
+      case 'hard_all_ribbons': {
+        const count = playerCaptured.filter(c => c.type === 'RIBBON').length;
+        const target = condition.id.includes('five') ? 5 : condition.id.includes('seven') ? 7 : 10;
+        return `Ribbons: ${count}/${target}`;
+      }
+
+      case 'easy_ten_chaff':
+      case 'hard_fifteen_chaff': {
+        const count = playerCaptured.filter(c => c.type === 'CHAFF').length;
+        const target = condition.id.includes('ten') ? 10 : 15;
+        return `Chaff: ${count}/${target}`;
+      }
+
+      case 'medium_two_brights': {
+        const count = playerCaptured.filter(c => c.type === 'BRIGHT').length;
+        return `Brights: ${count}/2`;
+      }
+
+      case 'medium_three_months':
+      case 'hard_four_months': {
+        const monthCounts = {};
+        playerCaptured.forEach(card => {
+          monthCounts[card.month] = (monthCounts[card.month] || 0) + 1;
+        });
+        const completeMonths = Object.values(monthCounts).filter(c => c === 4).length;
+        const target = condition.id.includes('three') ? 3 : 4;
+        return `Complete months: ${completeMonths}/${target}`;
+      }
+
+      case 'hard_speed_run': {
+        const remaining = state.deck?.length || 0;
+        return `Deck remaining: ${remaining}`;
+      }
+
+      default:
+        return 'In progress...';
+    }
   }
 
   showMatchOptionsModal() {
@@ -515,6 +671,11 @@ class Game {
     // Save game mode to localStorage so it persists across browser refreshes
     localStorage.setItem('currentGameMode', mode);
 
+    // Hide win condition display when switching away from shop mode
+    if (mode !== 'shop') {
+      this.hideActiveWinCondition();
+    }
+
     // Switch active game instance
     if (mode === 'match') {
       this.game = this.matchGame;
@@ -530,6 +691,16 @@ class Game {
 
       // Update instructions
       this.instructionsElement.textContent = 'Click cards to flip and find matching pairs!';
+    } else if (mode === 'shop') {
+      this.game = this.shopGame;
+
+      // Hide score display for shop mode
+      document.getElementById('score').style.display = 'none';
+      document.getElementById('variations-btn').style.display = 'none';
+      document.getElementById('test-3d-btn').style.display = 'inline-block';
+
+      // Update instructions
+      this.instructionsElement.textContent = 'Achieve your win condition!';
     } else {
       this.game = this.koikoiGame;
 
@@ -586,6 +757,9 @@ class Game {
       }
 
       debugLogger.log('3dCards', '✨ Card3D system initialized for match game', null);
+    } else if (mode === 'shop') {
+      // For Shop mode, show the shop modal
+      this.showShopModal();
     } else {
       // For Koi Koi, show round modal
       this.showRoundModal();
@@ -1924,6 +2098,11 @@ class Game {
       this.lastMessage = state.message;
     }
     this.instructionsElement.textContent = state.message;
+
+    // Update win condition progress for shop mode
+    if (this.currentGameMode === 'shop') {
+      this.updateWinConditionProgress();
+    }
 
     // Game over status popup removed per user request
   }
