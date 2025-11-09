@@ -182,6 +182,28 @@ export class AdvancedAI {
       }
     }
 
+    // Chaff threat (10+ points, 1+ point yaku)
+    const chaff = capturedCards.filter(c => c.type === CARD_TYPES.CHAFF);
+    if (chaff.length >= 7) {
+      const opponentChaff = opponentCards.filter(c => c.type === CARD_TYPES.CHAFF).length;
+      const remaining = 24 - chaff.length - opponentChaff; // 24 total chaff cards
+      const needed = 10 - chaff.length;
+
+      if (remaining >= needed) {
+        // Points: 1 for 10 chaff, +1 for each additional
+        const points = Math.max(1, chaff.length - 9);
+        threats.push({
+          type: 'chaff',
+          name: 'Chaff',
+          current: chaff.length,
+          needed: needed,
+          points: points,
+          priority: points * (1 / needed) * (chaff.length >= 9 ? 3 : 1), // Higher priority when very close
+          cards: chaff
+        });
+      }
+    }
+
     // Viewing Sake threats (3 points each)
     const curtain = capturedCards.find(c => c.name.includes('curtain'));
     const moon = capturedCards.find(c => c.name.includes('moon'));
@@ -538,16 +560,91 @@ export class AdvancedAI {
     // Calculate what the game score would be if we call shobu
     const potentialAIScore = aiTotalScore + score;
     const currentPlayerScore = playerTotalScore;
+    const scoreMargin = potentialAIScore - currentPlayerScore;
 
-    // CRITICAL: If calling shobu would still result in losing, we MUST continue (koi-koi)
-    // This prevents the AI from giving up when it's behind
-    if (potentialAIScore <= currentPlayerScore) {
-      console.log(`Advanced AI: Must koi-koi - calling shobu would lose (AI: ${potentialAIScore} vs Player: ${currentPlayerScore})`);
-      return true; // Must continue, we're losing
+    // Analyze threats from player
+    const threats = this.analyzeThreats(playerCaptured, captured);
+    const highestThreat = threats.length > 0 ? threats[0] : null;
+
+    // Calculate threat level based on how close player is to scoring
+    let threatLevel = 0;
+    if (highestThreat) {
+      // Threat level increases significantly when player needs only 1 card
+      if (highestThreat.needed === 1) {
+        threatLevel = highestThreat.points * 5; // Very dangerous
+      } else if (highestThreat.needed === 2) {
+        threatLevel = highestThreat.points * 2; // Dangerous
+      } else {
+        threatLevel = highestThreat.points; // Moderate threat
+      }
     }
 
-    // If we would win by calling shobu, check if it's safe to do so
-    const scoreMargin = potentialAIScore - currentPlayerScore;
+    // CRITICAL RISK ASSESSMENT: Consider the 2x multiplier penalty
+    // If player scores after our koi-koi, they get 2x points and we get 0
+    const riskOfContinuing = threatLevel * 2; // Potential points player could get with multiplier
+
+    // Calculate probability that player completes their yaku
+    // With each turn, player draws 2 cards (1 from hand, 1 from deck)
+    // Remaining turns ≈ deckCount / 2 (rough estimate)
+    const remainingTurns = Math.max(1, Math.ceil(deckCount / 2));
+
+    let completionProbability = 0;
+    if (highestThreat) {
+      // Estimate based on cards needed and remaining turns
+      // For chaff: 24 total, very common
+      // For other types: fewer cards available
+      const isChaff = highestThreat.type === 'chaff';
+      const cardsNeeded = highestThreat.needed;
+
+      if (cardsNeeded === 1) {
+        // Need only 1 card
+        if (isChaff) {
+          // With 24 chaff total, very likely to draw one
+          completionProbability = remainingTurns >= 4 ? 0.95 : Math.min(0.95, remainingTurns * 0.2);
+        } else {
+          // For specific cards (brights, animals, etc.), lower but still significant
+          completionProbability = remainingTurns >= 3 ? 0.7 : Math.min(0.7, remainingTurns * 0.2);
+        }
+      } else if (cardsNeeded === 2) {
+        // Need 2 cards
+        if (isChaff) {
+          completionProbability = remainingTurns >= 6 ? 0.8 : Math.min(0.8, remainingTurns * 0.12);
+        } else {
+          completionProbability = remainingTurns >= 5 ? 0.5 : Math.min(0.5, remainingTurns * 0.1);
+        }
+      } else {
+        // Need 3+ cards - lower probability
+        completionProbability = Math.min(0.3, remainingTurns * 0.05);
+      }
+    }
+
+    // If we're behind in the game score, evaluate whether koi-koi is worth the risk
+    if (potentialAIScore <= currentPlayerScore) {
+      // We're losing if we call shobu now
+      // BUT: if player has a high threat and is likely to complete it, calling koi-koi is very risky
+
+      if (highestThreat && highestThreat.needed <= 2) {
+        // Player is close to scoring - evaluate the risk
+        const maxPlayerScore = currentPlayerScore + riskOfContinuing;
+        const gapIfPlayerScores = maxPlayerScore - potentialAIScore;
+
+        // If completion probability is high (>60%) and the risk is significant, call shobu
+        if (completionProbability > 0.6) {
+          if (gapIfPlayerScores > 10 || (highestThreat.needed === 1 && highestThreat.points >= 1)) {
+            console.log(`Advanced AI: High risk detected - player needs ${highestThreat.needed} for ${highestThreat.name} (${highestThreat.points} pts)`);
+            console.log(`Advanced AI: Completion probability: ${(completionProbability * 100).toFixed(0)}% with ${remainingTurns} turns left`);
+            console.log(`Advanced AI: Calling shobu to avoid 2x penalty (AI: ${potentialAIScore} vs Player: ${currentPlayerScore})`);
+            return false; // Too risky to continue
+          }
+        }
+      }
+
+      // Low/moderate threat - continue playing to try to catch up
+      console.log(`Advanced AI: Behind but threat is manageable - koi-koi (AI: ${potentialAIScore} vs Player: ${currentPlayerScore})`);
+      return true;
+    }
+
+    // We would win by calling shobu - evaluate if it's worth the risk to continue
 
     // If we have a comfortable lead (5+ points), take the win
     if (scoreMargin >= 5 && score >= 4) {
@@ -555,22 +652,36 @@ export class AdvancedAI {
       return Math.random() < 0.15; // 15% koi-koi, mostly take the win
     }
 
-    // Basic safety: if round score is very high, take the win (unless player is ahead)
+    // Basic safety: if round score is very high, take the win
     if (score >= 10 && scoreMargin >= 3) {
       return Math.random() < 0.1; // 10% koi-koi
     }
 
-    // Analyze threats and opportunities
-    const threats = this.analyzeThreats(playerCaptured, captured);
-    const highThreat = threats.length > 0 && threats[0].priority > 5;
+    // If player has a high-priority threat (needs 1-2 cards), consider probability
+    if (highestThreat && highestThreat.needed <= 2) {
+      // High completion probability (>60%) means we should be very conservative
+      if (completionProbability > 0.6) {
+        console.log(`Advanced AI: Player close to ${highestThreat.name} (needs ${highestThreat.needed}, ${(completionProbability * 100).toFixed(0)}% likely)`);
+        console.log(`Advanced AI: Calling shobu to avoid risk (score: ${score}, margin: ${scoreMargin})`);
 
-    // If player has a high-priority threat and we have a narrow lead, be conservative
-    if (highThreat && score >= 6 && scoreMargin < 5) {
-      return Math.random() < 0.2; // 20% koi-koi
+        // Only koi-koi if we have a very strong position
+        if (score >= 8 && scoreMargin >= 10) {
+          return Math.random() < 0.2; // 20% koi-koi with strong position
+        }
+        return false; // Too risky, call shobu
+      } else if (completionProbability > 0.4) {
+        // Moderate probability (40-60%) - be conservative with medium scores
+        if (score >= 6 && scoreMargin < 10) {
+          console.log(`Advanced AI: Moderate threat risk - calling shobu`);
+          return Math.random() < 0.3; // 30% koi-koi
+        } else if (score >= 3 && scoreMargin < 5) {
+          console.log(`Advanced AI: High threat + narrow lead - calling shobu`);
+          return false;
+        }
+      }
     }
 
     // Check if we have good opportunities
-    // This is a simplified check - in a real scenario we'd evaluate the field and hand
     const hasGoodOpportunity = yaku.some(y =>
       y.name.includes('Ribbons') || y.name.includes('Animals')
     );
@@ -580,8 +691,8 @@ export class AdvancedAI {
       return Math.random() < 0.3; // 30% koi-koi
     }
 
-    // If we only have a small lead (1-3 points), be more aggressive to build it
-    if (scoreMargin <= 3 && score >= 3) {
+    // If we only have a small lead (1-3 points) and low threat, be more aggressive
+    if (scoreMargin <= 3 && score >= 3 && (!highestThreat || highestThreat.needed > 2)) {
       return Math.random() < 0.6; // 60% koi-koi, try to build lead
     }
 
@@ -591,8 +702,9 @@ export class AdvancedAI {
     } else if (score >= 4) {
       return hasGoodOpportunity ? Math.random() < 0.6 : Math.random() < 0.4;
     } else {
-      // Low score - be aggressive
-      return Math.random() < 0.8; // 80% koi-koi
+      // Low score - be aggressive only if threat is low
+      const koikoiProbability = highestThreat && highestThreat.needed <= 2 ? 0.4 : 0.8;
+      return Math.random() < koikoiProbability;
     }
   }
 }
