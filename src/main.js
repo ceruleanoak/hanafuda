@@ -12,6 +12,7 @@ import { AnimationTester } from './utils/AnimationTester.js';
 import { InitializationManager } from './utils/InitializationManager.js';
 import { AudioManager } from './utils/AudioManager.js';
 import { APP_VERSION } from './utils/version.js';
+import { CARD_BACKS, getSelectedCardBack, setSelectedCardBack } from './data/cardBacks.js';
 
 class Game {
   constructor() {
@@ -23,11 +24,13 @@ class Game {
     this.newGameButton = document.getElementById('new-game-btn');
     this.helpButton = document.getElementById('help-btn');
     this.variationsButton = document.getElementById('variations-btn');
+    this.cardBackButton = document.getElementById('card-back-btn');
     this.optionsButton = document.getElementById('options-btn');
     this.test3DButton = document.getElementById('test-3d-btn');
     this.animationTesterButton = document.getElementById('animation-tester-btn');
     this.roundModal = document.getElementById('round-modal');
     this.variationsModal = document.getElementById('variations-modal');
+    this.cardBackModal = document.getElementById('card-back-modal');
     this.optionsModal = document.getElementById('options-modal');
     this.matchOptionsModal = document.getElementById('match-options-modal');
     this.koikoiModal = document.getElementById('koikoi-modal');
@@ -273,6 +276,9 @@ class Game {
     // Variations button
     this.variationsButton.addEventListener('click', () => this.toggleVariationsModal());
 
+    // Card back button
+    this.cardBackButton.addEventListener('click', () => this.showCardBackModal());
+
     // Options button
     this.optionsButton.addEventListener('click', () => this.showOptionsModal());
 
@@ -307,6 +313,9 @@ class Game {
 
     // Variations modal buttons
     document.getElementById('variations-close').addEventListener('click', () => this.hideVariationsModal());
+
+    // Card back modal buttons
+    document.getElementById('card-back-close').addEventListener('click', () => this.hideCardBackModal());
 
     // Variations checkbox - live toggle
     document.getElementById('bomb-variation-enabled').addEventListener('change', (e) => {
@@ -1281,6 +1290,86 @@ class Game {
    */
   hideVariationsModal() {
     this.variationsModal.classList.remove('show');
+  }
+
+  /**
+   * Show card back selection modal
+   */
+  showCardBackModal() {
+    const grid = document.getElementById('card-back-grid');
+    grid.innerHTML = ''; // Clear existing content
+
+    const currentCardBack = getSelectedCardBack();
+
+    // Create card back items
+    CARD_BACKS.forEach(cardBack => {
+      const item = document.createElement('div');
+      item.className = 'card-back-item';
+
+      if (currentCardBack === cardBack.id) {
+        item.classList.add('selected');
+      }
+
+      if (!cardBack.unlocked) {
+        item.classList.add('locked');
+      }
+
+      // Create preview
+      const preview = document.createElement('div');
+      preview.className = 'card-back-preview placeholder';
+      preview.textContent = '🃏';
+
+      // Add lock icon if locked
+      if (!cardBack.unlocked) {
+        const lockIcon = document.createElement('div');
+        lockIcon.className = 'lock-icon';
+        lockIcon.textContent = '🔒';
+        preview.appendChild(lockIcon);
+      }
+
+      item.appendChild(preview);
+
+      // Create name
+      const name = document.createElement('div');
+      name.className = 'card-back-name';
+      name.textContent = cardBack.name;
+      item.appendChild(name);
+
+      // Add unlock condition if locked
+      if (!cardBack.unlocked) {
+        const condition = document.createElement('div');
+        condition.className = 'unlock-condition';
+        condition.textContent = cardBack.unlockCondition;
+        item.appendChild(condition);
+      }
+
+      // Add click handler
+      if (cardBack.unlocked) {
+        item.addEventListener('click', () => {
+          // Update selection
+          setSelectedCardBack(cardBack.id);
+
+          // Update UI
+          document.querySelectorAll('.card-back-item').forEach(el => {
+            el.classList.remove('selected');
+          });
+          item.classList.add('selected');
+
+          debugLogger.log('cardBack', `Card back changed to: ${cardBack.name}`, null);
+        });
+      }
+
+      grid.appendChild(item);
+    });
+
+    this.cardBackModal.classList.add('show');
+  }
+
+  /**
+   * Hide card back modal
+   */
+  hideCardBackModal() {
+    this.cardBackModal.classList.remove('show');
   }
 
   /**
