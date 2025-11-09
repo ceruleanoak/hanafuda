@@ -1712,13 +1712,17 @@ export class KoiKoi {
       totalRounds: this.totalRounds
     };
 
+    // Set gameOver flag if this is the last round
+    if (this.currentRound >= this.totalRounds) {
+      this.gameOver = true;
+    }
+
     // Show round summary modal
     if (this.roundSummaryCallback) {
       this.roundSummaryCallback(roundSummaryData);
     } else {
       // Fallback if no callback set (for backwards compatibility)
       if (this.currentRound >= this.totalRounds) {
-        this.gameOver = true;
         const winner = this.playerScore > this.opponentScore ? 'Player' :
                        this.opponentScore > this.playerScore ? 'Opponent' : 'Tie';
         this.message = `Game Over! ${winner} wins! Final: Player ${this.playerScore} - Opponent ${this.opponentScore}`;
