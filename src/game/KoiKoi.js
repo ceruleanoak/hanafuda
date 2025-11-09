@@ -19,6 +19,7 @@ export class KoiKoi {
     this.roundSummaryCallback = null; // Will be set by main.js to show round summary modal
     this.opponentKoikoiCallback = null; // Will be set by main.js to show opponent koi-koi notification
     this.bombCardCounter = 0; // Counter for unique bomb card IDs
+    this.firstPlayerThisGame = null; // Track who went first in round 1 for alternating
 
     // Koi-koi state tracking
     this.koikoiState = {
@@ -84,6 +85,7 @@ export class KoiKoi {
     this.currentRound = 1;
     this.playerScore = 0;
     this.opponentScore = 0;
+    this.firstPlayerThisGame = null; // Reset for new game
     this.reset();
   }
 
@@ -98,8 +100,23 @@ export class KoiKoi {
     this.opponentYaku = [];
     this.previousPlayerYaku = [];
     this.previousOpponentYaku = [];
-    // Alternate who goes first each round
-    this.currentPlayer = (this.currentRound % 2 === 1) ? 'player' : 'opponent';
+
+    // Determine who goes first
+    if (this.currentRound === 1) {
+      // First round: randomly choose (50/50)
+      this.firstPlayerThisGame = Math.random() < 0.5 ? 'player' : 'opponent';
+      this.currentPlayer = this.firstPlayerThisGame;
+    } else {
+      // Subsequent rounds: alternate who goes first
+      if (this.currentRound % 2 === 1) {
+        // Odd rounds: same as first round
+        this.currentPlayer = this.firstPlayerThisGame;
+      } else {
+        // Even rounds: opposite of first round
+        this.currentPlayer = (this.firstPlayerThisGame === 'player') ? 'opponent' : 'player';
+      }
+    }
+
     this.selectedCards = [];
     // Set initial phase based on who goes first
     this.phase = (this.currentPlayer === 'player') ? 'select_hand' : 'opponent_turn';
