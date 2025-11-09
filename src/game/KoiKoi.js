@@ -98,9 +98,11 @@ export class KoiKoi {
     this.opponentYaku = [];
     this.previousPlayerYaku = [];
     this.previousOpponentYaku = [];
-    this.currentPlayer = 'player'; // 'player' or 'opponent'
+    // Alternate who goes first each round
+    this.currentPlayer = (this.currentRound % 2 === 1) ? 'player' : 'opponent';
     this.selectedCards = [];
-    this.phase = 'select_hand'; // 'select_hand', 'select_field', 'draw_phase', 'select_drawn_match', 'opponent_playing'
+    // Set initial phase based on who goes first
+    this.phase = (this.currentPlayer === 'player') ? 'select_hand' : 'opponent_turn';
     this.drawnCard = null;
     this.drawnCardMatches = [];
     this.opponentPlayedCard = null; // Card opponent is currently playing
@@ -148,12 +150,19 @@ export class KoiKoi {
     this.playerHand = this.deck.drawMultiple(handSize);
     this.opponentHand = this.deck.drawMultiple(handSize);
 
-    // Check if player has a card that would complete a 4-card capture
-    const celebrateMonth = this.checkHandForFourCardCapture('player');
-    if (celebrateMonth) {
-      this.message = `Celebrate month of ${celebrateMonth}! You can capture all 4 cards!`;
+    // Set message and trigger first turn based on who goes first
+    if (this.currentPlayer === 'player') {
+      // Check if player has a card that would complete a 4-card capture
+      const celebrateMonth = this.checkHandForFourCardCapture('player');
+      if (celebrateMonth) {
+        this.message = `Celebrate month of ${celebrateMonth}! You can capture all 4 cards!`;
+      } else {
+        this.message = 'Select a card from your hand';
+      }
     } else {
-      this.message = 'Select a card from your hand';
+      // Opponent goes first - trigger opponent turn after short delay
+      this.message = 'Opponent goes first...';
+      setTimeout(() => this.opponentTurn(), 400);
     }
   }
 
@@ -887,6 +896,21 @@ export class KoiKoi {
           this.endRound();
           return; // Stop execution here
         } else {
+          // Check if player has cards remaining before offering koi-koi
+          const playerHand = player === 'player' ? this.playerHand : this.opponentHand;
+          const hasCardsRemaining = playerHand.length > 0;
+
+          if (!hasCardsRemaining) {
+            // No cards remaining - automatically end round (shobu)
+            this.koikoiState.roundWinner = player;
+            this.message = player === 'player' ?
+              `Yaku! ${yakuNames} (${displayScore} points) - Round ends!` :
+              `Opponent scored ${yakuNames} (${displayScore} points) - Round ends!`;
+            console.log(`[KOIKOI] Round ending automatically - ${player} has no cards remaining`);
+            this.endRound();
+            return;
+          }
+
           // Trigger koi-koi decision
           if (player === 'player' && this.currentPlayer === 'player') {
             // Show koi-koi decision modal for human player
