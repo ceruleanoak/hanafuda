@@ -150,6 +150,35 @@ export class KoiKoi {
     this.playerHand = this.deck.drawMultiple(handSize);
     this.opponentHand = this.deck.drawMultiple(handSize);
 
+    // Check for Four of a Kind lucky hand (instant win with 6 points)
+    const fourOfAKind = this.checkFourOfAKindInStartingHand();
+
+    if (fourOfAKind.both) {
+      // Both players have Four of a Kind - draw (both get 6 points)
+      this.message = `Lucky Hand! Both players have Four of a Kind (${fourOfAKind.player} and ${fourOfAKind.opponent})! Draw - both get 6 points!`;
+      this.playerScore += 6;
+      this.opponentScore += 6;
+      this.phase = 'round_over';
+      setTimeout(() => this.endRound(), 3000);
+      return;
+    } else if (fourOfAKind.player) {
+      // Player has Four of a Kind - instant win
+      this.message = `Lucky Hand! You have Four of a Kind (${fourOfAKind.player})! You win 6 points!`;
+      this.playerScore += 6;
+      this.koikoiState.roundWinner = 'player';
+      this.phase = 'round_over';
+      setTimeout(() => this.endRound(), 3000);
+      return;
+    } else if (fourOfAKind.opponent) {
+      // Opponent has Four of a Kind - instant win
+      this.message = `Lucky Hand! Opponent has Four of a Kind (${fourOfAKind.opponent})! Opponent wins 6 points!`;
+      this.opponentScore += 6;
+      this.koikoiState.roundWinner = 'opponent';
+      this.phase = 'round_over';
+      setTimeout(() => this.endRound(), 3000);
+      return;
+    }
+
     // Set message and trigger first turn based on who goes first
     if (this.currentPlayer === 'player') {
       // Check if player has a card that would complete a 4-card capture
@@ -547,6 +576,35 @@ export class KoiKoi {
     }
 
     return null;
+  }
+
+  /**
+   * Check for Four of a Kind lucky hand (all 4 cards of same month in starting hand)
+   * Returns { player: month|null, opponent: month|null, both: boolean }
+   */
+  checkFourOfAKindInStartingHand() {
+    const checkHand = (hand) => {
+      const monthCounts = {};
+      for (const card of hand) {
+        monthCounts[card.month] = (monthCounts[card.month] || 0) + 1;
+      }
+
+      for (const month in monthCounts) {
+        if (monthCounts[month] === 4) {
+          return month;
+        }
+      }
+      return null;
+    };
+
+    const playerMonth = checkHand(this.playerHand);
+    const opponentMonth = checkHand(this.opponentHand);
+
+    return {
+      player: playerMonth,
+      opponent: opponentMonth,
+      both: playerMonth !== null && opponentMonth !== null
+    };
   }
 
   /**

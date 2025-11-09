@@ -783,6 +783,13 @@ class Game {
         // Not dropping on a card - check if we can place on field
         // Only allow placing from player hand
         if (this.draggedCard3D.homeZone === 'playerHand') {
+          // Check if dropping back over hand area - if so, cancel the drag
+          if (this.isPositionInPlayerHandZone(x, y)) {
+            debugLogger.log('gameState', `Card dropped over hand area - returning to hand`, null);
+            this.cancelDrag();
+            return;
+          }
+
           const gameState = this.game.getState();
           const isAlreadySelected = gameState.phase === 'select_field' &&
             gameState.selectedCards.length > 0 &&
@@ -912,6 +919,23 @@ class Game {
   /**
    * Cancel drag and return card to hand
    */
+  /**
+   * Check if a screen position is over the player hand zone
+   */
+  isPositionInPlayerHandZone(x, y) {
+    // Player hand is at the bottom of the screen
+    // Based on LayoutManager: anchorPoint.y = viewportHeight - 170
+    const handY = this.renderer.displayHeight - 170;
+    const cardHeight = 140;
+    const cardWidth = 100;
+
+    // Check if y is in the hand area (with some tolerance)
+    const handMinY = handY - cardHeight / 2 - 20; // Add some tolerance above
+    const handMaxY = this.renderer.displayHeight; // Bottom of screen
+
+    return y >= handMinY && y <= handMaxY;
+  }
+
   cancelDrag() {
     if (!this.draggedCard3D) {
       return;
