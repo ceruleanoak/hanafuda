@@ -628,6 +628,25 @@ export class KoiKoiShop extends KoiKoi {
   }
 
   /**
+   * Override to skip yaku messages and koi-koi decisions in shop mode
+   */
+  updateYaku(player, deferDecision = false) {
+    // In shop mode, silently update yaku without showing traditional messages
+    const captured = player === 'player' ? this.playerCaptured : this.opponentCaptured;
+    const yaku = Yaku.checkYaku(captured, this.gameOptions);
+
+    if (player === 'player') {
+      this.playerYaku = yaku;
+    } else {
+      this.opponentYaku = yaku;
+    }
+
+    // Don't show traditional yaku messages - only win condition progress matters
+    // Don't trigger koi-koi decisions
+    return;
+  }
+
+  /**
    * Override to skip koi-koi decisions in shop mode
    */
   checkForKoikoiDecision(player) {
