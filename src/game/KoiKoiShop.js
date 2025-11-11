@@ -273,6 +273,10 @@ export class KoiKoiShop extends KoiKoi {
     // Deal 8 cards to opponent as normal
     this.opponentHand = this.deck.drawMultiple(8);
 
+    // Debug: verify player hand size
+    console.log(`[SHOP] Player hand initialized with ${this.playerHand.length} cards:`,
+                this.playerHand.map(c => c.name));
+
     // Check for Four of a Kind (instant win condition)
     this.checkFourOfAKind();
 

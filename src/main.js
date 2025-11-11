@@ -478,7 +478,7 @@ class Game {
       case 'easy_five_animals':
       case 'medium_seven_animals':
       case 'hard_nine_animals': {
-        const count = playerCaptured.filter(c => c.type === 'ANIMAL').length;
+        const count = playerCaptured.filter(c => c.type === 'animal').length;
         const target = condition.id.includes('five') ? 5 : condition.id.includes('seven') ? 7 : 9;
         return `Animals: ${count}/${target}`;
       }
@@ -486,20 +486,20 @@ class Game {
       case 'easy_five_ribbons':
       case 'medium_seven_ribbons':
       case 'hard_all_ribbons': {
-        const count = playerCaptured.filter(c => c.type === 'RIBBON').length;
+        const count = playerCaptured.filter(c => c.type === 'ribbon').length;
         const target = condition.id.includes('five') ? 5 : condition.id.includes('seven') ? 7 : 10;
         return `Ribbons: ${count}/${target}`;
       }
 
       case 'easy_ten_chaff':
       case 'hard_fifteen_chaff': {
-        const count = playerCaptured.filter(c => c.type === 'CHAFF').length;
+        const count = playerCaptured.filter(c => c.type === 'chaff').length;
         const target = condition.id.includes('ten') ? 10 : 15;
         return `Chaff: ${count}/${target}`;
       }
 
       case 'medium_two_brights': {
-        const count = playerCaptured.filter(c => c.type === 'BRIGHT').length;
+        const count = playerCaptured.filter(c => c.type === 'bright').length;
         return `Brights: ${count}/2`;
       }
 
