@@ -16,6 +16,7 @@
 import { Deck } from './Deck.js';
 import { SakuraYaku } from './SakuraYaku.js';
 import { CARD_TYPES } from '../data/cards.js';
+import { debugLogger } from '../utils/DebugLogger.js';
 
 export class Sakura {
   constructor(gameOptions = null) {
@@ -59,6 +60,12 @@ export class Sakura {
    * Start a new Sakura game
    */
   startNewGame(rounds = 6, playerCount = 2) {
+    debugLogger.log('sakura', `🌸 Starting new Sakura game`, {
+      rounds,
+      playerCount,
+      gajiCardId: this.GAJI_CARD_ID
+    });
+
     this.totalRounds = rounds;
     this.playerCount = playerCount;
     this.currentRound = 1;
@@ -329,46 +336,84 @@ export class Sakura {
    * Player selects a card from their hand
    */
   selectCard(card) {
+    debugLogger.log('sakura', `🌸 selectCard called`, {
+      cardId: card.id,
+      cardName: card.name,
+      phase: this.phase,
+      isGaji: this.isGaji(card)
+    });
+
     if (this.phase !== 'select_hand') {
+      debugLogger.log('sakura', `⚠️ Wrong phase for selectCard: ${this.phase}`);
       return false;
     }
 
-    // Check if card is Gaji (wild card)
+    // Check if card is Gaji (wild card) - only wild when IN HAND
     if (this.isGaji(card)) {
+      debugLogger.log('sakura', `⚡ Gaji played from hand - wild card mode`);
       this.handleGajiFromHand(card);
       return true;
     }
 
-    // Find matching cards on field
+    // Find matching cards on field (including Gaji if it's November and Gaji is on field)
     const matches = this.field.filter(fc => fc.month === card.month);
+
+    debugLogger.log('sakura', `🎴 Card ${card.name} matches found:`, {
+      matchCount: matches.length,
+      matches: matches.map(m => m.name),
+      fieldCards: this.field.map(f => f.name)
+    });
 
     // Remove card from hand
     this.playerHand = this.playerHand.filter(c => c.id !== card.id);
 
     if (matches.length === 0) {
       // No match - add card to field
+      debugLogger.log('sakura', `➕ No match - adding ${card.name} to field`);
       this.field.push(card);
       this.message = 'No match. Card added to field.';
       this.proceedToDrawPhase();
     } else if (matches.length === 1) {
       // Single match - auto capture
-      this.playerCaptured.push(card, matches[0]);
-      this.field = this.field.filter(c => c.id !== matches[0].id);
-      this.message = `Captured ${matches[0].month}!`;
+      const capturedCard = matches[0];
+      debugLogger.log('sakura', `✅ Single match - capturing ${capturedCard.name}`);
+      this.playerCaptured.push(card, capturedCard);
+      this.field = this.field.filter(c => c.id !== capturedCard.id);
+      this.message = `Captured ${capturedCard.month}!`;
+
+      // Update Gaji state if we captured Gaji from field
+      if (this.isGaji(capturedCard)) {
+        debugLogger.log('sakura', `⚡ Gaji captured from field by regular card`);
+        this.gajiState.location = 'player_captured';
+        this.gajiState.isWildCard = false;
+      }
+
       this.proceedToDrawPhase();
     } else if (matches.length === 2) {
       // Two matches - player must choose
+      debugLogger.log('sakura', `🎯 Two matches - player must choose`, {
+        options: matches.map(m => m.name)
+      });
       this.selectedCards = [card];
       this.drawnCardMatches = matches;
       this.phase = 'select_field';
       this.message = 'Choose which card to capture.';
     } else if (matches.length === 3) {
       // HIKI! Capture all 4 cards
+      debugLogger.log('sakura', `🎊 HIKI! All 4 ${card.month} cards captured`);
       this.announceHiki(card, matches);
       this.playerCaptured.push(card, ...matches);
       this.field = this.field.filter(c => !matches.includes(c));
       this.completedHikis.player.push(card.month);
       this.message = `HIKI! Captured all 4 ${card.month} cards!`;
+
+      // Update Gaji state if Hiki included Gaji
+      if (matches.some(m => this.isGaji(m))) {
+        debugLogger.log('sakura', `⚡ Hiki included Gaji`);
+        this.gajiState.location = 'player_captured';
+        this.gajiState.isWildCard = false;
+      }
+
       this.proceedToDrawPhase();
     }
 
@@ -379,15 +424,31 @@ export class Sakura {
    * Player selects a field card (when multiple matches exist)
    */
   selectFieldCard(fieldCard) {
+    debugLogger.log('sakura', `🎯 selectFieldCard called`, {
+      fieldCardId: fieldCard.id,
+      fieldCardName: fieldCard.name,
+      phase: this.phase
+    });
+
     if (this.phase !== 'select_field') {
+      debugLogger.log('sakura', `⚠️ Wrong phase for selectFieldCard: ${this.phase}`);
       return false;
     }
 
     const handCard = this.selectedCards[0];
 
+    debugLogger.log('sakura', `✅ Player chose ${fieldCard.name} to capture with ${handCard.name}`);
+
     // Capture both cards
     this.playerCaptured.push(handCard, fieldCard);
     this.field = this.field.filter(c => c.id !== fieldCard.id);
+
+    // Update Gaji state if we captured Gaji
+    if (this.isGaji(fieldCard)) {
+      debugLogger.log('sakura', `⚡ Gaji captured from field (player choice)`);
+      this.gajiState.location = 'player_captured';
+      this.gajiState.isWildCard = false;
+    }
 
     this.selectedCards = [];
     this.drawnCardMatches = [];
@@ -401,10 +462,16 @@ export class Sakura {
    * Proceed to draw phase (Phase 2)
    */
   proceedToDrawPhase() {
+    debugLogger.log('sakura', `📥 Proceeding to draw phase`, {
+      deckSize: this.deck.cards.length,
+      phase: this.phase
+    });
+
     this.turnPhase = 2;
     this.phase = 'drawing';
 
     if (this.deck.cards.length === 0) {
+      debugLogger.log('sakura', `⚠️ No cards in deck - skipping draw phase`);
       // No cards left in deck - skip draw phase
       this.endTurn();
       return;
@@ -412,10 +479,12 @@ export class Sakura {
 
     // Draw card
     this.drawnCard = this.deck.draw();
+    debugLogger.log('sakura', `🎴 Drew card: ${this.drawnCard.name} (ID: ${this.drawnCard.id})`);
     this.message = `Drew ${this.drawnCard.month}...`;
 
     // Check if drawn card is Gaji
     if (this.isGaji(this.drawnCard)) {
+      debugLogger.log('sakura', `⚡ Drew Gaji - wild card mode`);
       this.handleGajiDrawn();
       return;
     }
@@ -423,25 +492,50 @@ export class Sakura {
     // Find matches for drawn card
     const matches = this.field.filter(fc => fc.month === this.drawnCard.month);
 
+    debugLogger.log('sakura', `🎴 Drawn card ${this.drawnCard.name} matches:`, {
+      matchCount: matches.length,
+      matches: matches.map(m => m.name)
+    });
+
     if (matches.length === 0) {
       // No match - add to field
+      debugLogger.log('sakura', `➕ No match - adding drawn card to field`);
       this.field.push(this.drawnCard);
       this.message = 'No match. Card added to field.';
       this.drawnCard = null;
       this.endTurn();
     } else if (matches.length === 1) {
       // Single match - auto capture
-      this.playerCaptured.push(this.drawnCard, matches[0]);
-      this.field = this.field.filter(c => c.id !== matches[0].id);
-      this.message = `Captured ${matches[0].month}!`;
+      const capturedCard = matches[0];
+      debugLogger.log('sakura', `✅ Auto-capturing ${capturedCard.name} with drawn card`);
+      this.playerCaptured.push(this.drawnCard, capturedCard);
+      this.field = this.field.filter(c => c.id !== capturedCard.id);
+      this.message = `Captured ${capturedCard.month}!`;
+
+      // Update Gaji state if we captured Gaji
+      if (this.isGaji(capturedCard)) {
+        debugLogger.log('sakura', `⚡ Gaji captured from field by drawn card`);
+        this.gajiState.location = 'player_captured';
+        this.gajiState.isWildCard = false;
+      }
+
       this.drawnCard = null;
       this.endTurn();
     } else if (matches.length >= 2) {
       // Multiple matches - auto capture first match (standard rule)
       const chosen = matches[0];
+      debugLogger.log('sakura', `✅ Multiple matches - auto-capturing first: ${chosen.name}`);
       this.playerCaptured.push(this.drawnCard, chosen);
       this.field = this.field.filter(c => c.id !== chosen.id);
       this.message = `Captured ${chosen.month}!`;
+
+      // Update Gaji state if we captured Gaji
+      if (this.isGaji(chosen)) {
+        debugLogger.log('sakura', `⚡ Gaji captured from field by drawn card (multi-match)`);
+        this.gajiState.location = 'player_captured';
+        this.gajiState.isWildCard = false;
+      }
+
       this.drawnCard = null;
       this.endTurn();
     }
@@ -470,6 +564,13 @@ export class Sakura {
    * End current turn and switch players
    */
   endTurn() {
+    debugLogger.log('sakura', `🔄 Ending turn`, {
+      currentPlayer: this.currentPlayer,
+      playerHandSize: this.playerHand.length,
+      opponentHandSize: this.opponentHand.length,
+      deckSize: this.deck.cards.length
+    });
+
     this.turnPhase = 1;
 
     // Update yaku
@@ -477,6 +578,7 @@ export class Sakura {
 
     // Check if round should end
     if (this.shouldEndRound()) {
+      debugLogger.log('sakura', `🏁 Round should end`);
       this.endRound();
       return;
     }
@@ -484,17 +586,22 @@ export class Sakura {
     // Switch players
     this.currentPlayer = (this.currentPlayer === 'player') ? 'opponent' : 'player';
 
+    debugLogger.log('sakura', `👥 Switched to ${this.currentPlayer}`);
+
     if (this.currentPlayer === 'player') {
       // Check if player has any cards left
       if (this.playerHand.length === 0) {
+        debugLogger.log('sakura', `⚠️ Player has no cards - draw only`);
         // Player has no cards - skip to draw phase only
         this.phase = 'drawing';
         this.proceedToDrawPhase();
       } else {
+        debugLogger.log('sakura', `✋ Player's turn - select from hand`);
         this.phase = 'select_hand';
         this.message = 'Your turn! Select a card from your hand.';
       }
     } else {
+      debugLogger.log('sakura', `🤖 Opponent's turn starting`);
       this.phase = 'opponent_turn';
       this.message = "Opponent's turn...";
       setTimeout(() => this.opponentTurn(), 1000);
@@ -562,6 +669,11 @@ export class Sakura {
    * Handle Gaji played from hand
    */
   handleGajiFromHand(gajiCard) {
+    debugLogger.log('sakura', `⚡ handleGajiFromHand called`, {
+      gajiId: gajiCard.id,
+      fieldCards: this.field.map(c => c.name)
+    });
+
     // Remove Gaji from hand
     this.playerHand = this.playerHand.filter(c => c.id !== gajiCard.id);
 
@@ -570,7 +682,13 @@ export class Sakura {
       this.canGajiCapture(card, 'player')
     );
 
+    debugLogger.log('sakura', `⚡ Gaji valid targets:`, {
+      validTargetCount: validTargets.length,
+      validTargets: validTargets.map(t => t.name)
+    });
+
     if (validTargets.length === 0) {
+      debugLogger.log('sakura', `⚡ No valid Gaji targets - adding to field`);
       // No valid targets - Gaji goes to field
       this.field.push(gajiCard);
       this.gajiState.location = 'field';
@@ -586,11 +704,16 @@ export class Sakura {
     this.phase = 'gaji_selection';
     this.message = 'Gaji! Choose any card to capture.';
 
+    debugLogger.log('sakura', `⚡ Auto-selecting best Gaji target`);
+
     // For now, auto-select highest value card for player
     // (In full implementation, player would choose via UI)
     setTimeout(() => {
       const bestTarget = this.selectBestGajiTarget(validTargets, 'player');
+      debugLogger.log('sakura', `⚡ Best target selected: ${bestTarget.name}`);
       this.captureWithGaji(gajiCard, bestTarget);
+      // After capturing with Gaji from hand, proceed to draw phase
+      this.proceedToDrawPhase();
     }, 500);
   }
 
@@ -600,12 +723,23 @@ export class Sakura {
   handleGajiDrawn() {
     const gajiCard = this.drawnCard;
 
+    debugLogger.log('sakura', `⚡ handleGajiDrawn called`, {
+      gajiId: gajiCard.id,
+      fieldCards: this.field.map(c => c.name)
+    });
+
     // Get valid targets
     const validTargets = this.field.filter(card =>
       this.canGajiCapture(card, 'player')
     );
 
+    debugLogger.log('sakura', `⚡ Drawn Gaji valid targets:`, {
+      validTargetCount: validTargets.length,
+      validTargets: validTargets.map(t => t.name)
+    });
+
     if (validTargets.length === 0) {
+      debugLogger.log('sakura', `⚡ No valid targets for drawn Gaji - adding to field`);
       // No valid targets - Gaji goes to field
       this.field.push(gajiCard);
       this.gajiState.location = 'field';
@@ -620,9 +754,12 @@ export class Sakura {
     this.phase = 'gaji_selection';
     this.message = 'Drew Gaji! Choose any card to capture.';
 
+    debugLogger.log('sakura', `⚡ Auto-selecting best target for drawn Gaji`);
+
     // Auto-select for now
     setTimeout(() => {
       const bestTarget = this.selectBestGajiTarget(validTargets, 'player');
+      debugLogger.log('sakura', `⚡ Best target for drawn Gaji: ${bestTarget.name}`);
       this.captureWithGaji(gajiCard, bestTarget);
       this.drawnCard = null;
       this.endTurn();
@@ -633,6 +770,13 @@ export class Sakura {
    * Capture a card with Gaji
    */
   captureWithGaji(gajiCard, targetCard) {
+    debugLogger.log('sakura', `⚡ captureWithGaji called`, {
+      gajiId: gajiCard.id,
+      targetId: targetCard.id,
+      targetName: targetCard.name,
+      targetMonth: targetCard.month
+    });
+
     this.playerCaptured.push(gajiCard, targetCard);
     this.field = this.field.filter(c => c.id !== targetCard.id);
 
@@ -641,10 +785,13 @@ export class Sakura {
     this.gajiState.pairedWithMonth = targetCard.month;
     this.gajiState.isWildCard = false;
 
+    debugLogger.log('sakura', `⚡ Gaji paired with ${targetCard.month} for end-of-round bonus`);
+
     this.message = `Gaji captured ${targetCard.month}!`;
     this.selectedCards = [];
     this.drawnCardMatches = [];
-    this.phase = 'drawing';
+
+    debugLogger.log('sakura', `⚡ Gaji capture complete, proceeding to draw phase`);
   }
 
   /**
