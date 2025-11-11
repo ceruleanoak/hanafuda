@@ -506,11 +506,22 @@ export class KoiKoiShop extends KoiKoi {
   }
 
   /**
-   * Override to skip koi-koi decisions
+   * Override to skip koi-koi decisions in shop mode
    */
-  checkForNewYaku(player) {
+  checkForKoikoiDecision(player) {
     // In shop mode, we don't use the koi-koi system
     // Just continue playing until win condition is met or deck runs out
+    // Still update yaku for tracking purposes
+    const captured = player === 'player' ? this.playerCaptured : this.opponentCaptured;
+    const currentYaku = Yaku.checkYaku(captured, this.gameOptions);
+
+    if (player === 'player') {
+      this.playerYaku = currentYaku;
+    } else {
+      this.opponentYaku = currentYaku;
+    }
+
+    // Don't set waitingForDecision - just continue playing
     return;
   }
 
