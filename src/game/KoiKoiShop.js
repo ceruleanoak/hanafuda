@@ -309,39 +309,98 @@ export class KoiKoiShop extends KoiKoi {
    * Check if player has achieved their win condition
    */
   checkPlayerWinCondition() {
-    if (!this.selectedWinCondition) return false;
+    if (!this.selectedWinCondition) {
+      console.log('[WIN CONDITION] No win condition selected');
+      return false;
+    }
 
     const id = this.selectedWinCondition.id;
+    console.log(`[WIN CONDITION] Checking: ${this.selectedWinCondition.name} (${id})`);
+
+    let result = false;
 
     // Easy conditions
-    if (id === 'easy_animal_or_ribbon') return this.checkAnimalOrRibbonYaku();
-    if (id === 'easy_five_animals') return this.countCardsByType(CARD_TYPES.ANIMAL) >= 5;
-    if (id === 'easy_five_ribbons') return this.countCardsByType(CARD_TYPES.RIBBON) >= 5;
-    if (id === 'easy_any_special') return this.checkAnySpecialYaku();
-    if (id === 'easy_ten_chaff') return this.countCardsByType(CARD_TYPES.CHAFF) >= 10;
-    if (id === 'easy_any_sake') return this.checkAnySakeYaku();
-
+    if (id === 'easy_animal_or_ribbon') {
+      result = this.checkAnimalOrRibbonYaku();
+      console.log(`[WIN CONDITION] easy_animal_or_ribbon: ${result}`);
+    } else if (id === 'easy_five_animals') {
+      const count = this.countCardsByType(CARD_TYPES.ANIMAL);
+      result = count >= 5;
+      console.log(`[WIN CONDITION] easy_five_animals: ${count}/5 - ${result}`);
+    } else if (id === 'easy_five_ribbons') {
+      const count = this.countCardsByType(CARD_TYPES.RIBBON);
+      result = count >= 5;
+      console.log(`[WIN CONDITION] easy_five_ribbons: ${count}/5 - ${result}`);
+    } else if (id === 'easy_any_special') {
+      result = this.checkAnySpecialYaku();
+      console.log(`[WIN CONDITION] easy_any_special: ${result}`);
+    } else if (id === 'easy_ten_chaff') {
+      const count = this.countCardsByType(CARD_TYPES.CHAFF);
+      result = count >= 10;
+      console.log(`[WIN CONDITION] easy_ten_chaff: ${count}/10 - ${result}`);
+    } else if (id === 'easy_any_sake') {
+      result = this.checkAnySakeYaku();
+      console.log(`[WIN CONDITION] easy_any_sake: ${result}`);
+    }
     // Medium conditions
-    if (id === 'medium_three_months') return this.checkCompleteMonths(3);
-    if (id === 'medium_poetry_ribbons') return this.checkSpecificYaku('Poetry Ribbons');
-    if (id === 'medium_blue_ribbons') return this.checkSpecificYaku('Blue Ribbons');
-    if (id === 'medium_boar_deer_butterfly') return this.checkSpecificYaku('Boar-Deer-Butterfly');
-    if (id === 'medium_both_sake') return this.checkBothSakeYaku();
-    if (id === 'medium_seven_animals') return this.countCardsByType(CARD_TYPES.ANIMAL) >= 7;
-    if (id === 'medium_seven_ribbons') return this.countCardsByType(CARD_TYPES.RIBBON) >= 7;
-    if (id === 'medium_two_brights') return this.countCardsByType(CARD_TYPES.BRIGHT) >= 2;
-
+    else if (id === 'medium_three_months') {
+      result = this.checkCompleteMonths(3);
+    } else if (id === 'medium_poetry_ribbons') {
+      result = this.checkSpecificYaku('Poetry Ribbons');
+      console.log(`[WIN CONDITION] medium_poetry_ribbons: ${result}`);
+    } else if (id === 'medium_blue_ribbons') {
+      result = this.checkSpecificYaku('Blue Ribbons');
+      console.log(`[WIN CONDITION] medium_blue_ribbons: ${result}`);
+    } else if (id === 'medium_boar_deer_butterfly') {
+      result = this.checkSpecificYaku('Boar-Deer-Butterfly');
+      console.log(`[WIN CONDITION] medium_boar_deer_butterfly: ${result}`);
+    } else if (id === 'medium_both_sake') {
+      result = this.checkBothSakeYaku();
+      console.log(`[WIN CONDITION] medium_both_sake: ${result}`);
+    } else if (id === 'medium_seven_animals') {
+      const count = this.countCardsByType(CARD_TYPES.ANIMAL);
+      result = count >= 7;
+      console.log(`[WIN CONDITION] medium_seven_animals: ${count}/7 - ${result}`);
+    } else if (id === 'medium_seven_ribbons') {
+      const count = this.countCardsByType(CARD_TYPES.RIBBON);
+      result = count >= 7;
+      console.log(`[WIN CONDITION] medium_seven_ribbons: ${count}/7 - ${result}`);
+    } else if (id === 'medium_two_brights') {
+      const count = this.countCardsByType(CARD_TYPES.BRIGHT);
+      result = count >= 2;
+      console.log(`[WIN CONDITION] medium_two_brights: ${count}/2 - ${result}`);
+    }
     // Hard conditions
-    if (id === 'hard_block_opponent') return this.checkOpponentBlocked();
-    if (id === 'hard_three_brights') return this.checkSpecificYaku('Three Brights');
-    if (id === 'hard_four_months') return this.checkCompleteMonths(4);
-    if (id === 'hard_all_ribbons') return this.countCardsByType(CARD_TYPES.RIBBON) >= 10;
-    if (id === 'hard_nine_animals') return this.countCardsByType(CARD_TYPES.ANIMAL) >= 9;
-    if (id === 'hard_two_special_yaku') return this.checkTwoSpecialYaku();
-    if (id === 'hard_fifteen_chaff') return this.countCardsByType(CARD_TYPES.CHAFF) >= 15;
-    if (id === 'hard_speed_run') return this.checkSpeedRun();
+    else if (id === 'hard_block_opponent') {
+      result = this.checkOpponentBlocked();
+      console.log(`[WIN CONDITION] hard_block_opponent: ${result}`);
+    } else if (id === 'hard_three_brights') {
+      result = this.checkSpecificYaku('Three Brights');
+      console.log(`[WIN CONDITION] hard_three_brights: ${result}`);
+    } else if (id === 'hard_four_months') {
+      result = this.checkCompleteMonths(4);
+    } else if (id === 'hard_all_ribbons') {
+      const count = this.countCardsByType(CARD_TYPES.RIBBON);
+      result = count >= 10;
+      console.log(`[WIN CONDITION] hard_all_ribbons: ${count}/10 - ${result}`);
+    } else if (id === 'hard_nine_animals') {
+      const count = this.countCardsByType(CARD_TYPES.ANIMAL);
+      result = count >= 9;
+      console.log(`[WIN CONDITION] hard_nine_animals: ${count}/9 - ${result}`);
+    } else if (id === 'hard_two_special_yaku') {
+      result = this.checkTwoSpecialYaku();
+      console.log(`[WIN CONDITION] hard_two_special_yaku: ${result}`);
+    } else if (id === 'hard_fifteen_chaff') {
+      const count = this.countCardsByType(CARD_TYPES.CHAFF);
+      result = count >= 15;
+      console.log(`[WIN CONDITION] hard_fifteen_chaff: ${count}/15 - ${result}`);
+    } else if (id === 'hard_speed_run') {
+      result = this.checkSpeedRun();
+      console.log(`[WIN CONDITION] hard_speed_run: ${result}, deck size: ${this.deck.cards.length}`);
+    }
 
-    return false;
+    console.log(`[WIN CONDITION] Final result: ${result}`);
+    return result;
   }
 
   /**
@@ -387,13 +446,22 @@ export class KoiKoiShop extends KoiKoi {
 
     // Count how many months have all 4 cards
     let completeMonths = 0;
+    const completeMonthsList = [];
     for (const month in monthCounts) {
       if (monthCounts[month] === 4) {
         completeMonths++;
+        completeMonthsList.push(month);
       }
     }
 
-    return completeMonths >= requiredMonths;
+    console.log(`[WIN CONDITION] checkCompleteMonths(${requiredMonths}): ${completeMonths} complete months found`);
+    console.log('[WIN CONDITION] Month counts:', monthCounts);
+    console.log('[WIN CONDITION] Complete months:', completeMonthsList);
+    console.log('[WIN CONDITION] Player captured cards:', this.playerCaptured.map(c => `${c.name} (${c.month})`).join(', '));
+
+    const result = completeMonths >= requiredMonths;
+    console.log(`[WIN CONDITION] ${completeMonths}/${requiredMonths} complete months - ${result}`);
+    return result;
   }
 
   /**
@@ -472,10 +540,13 @@ export class KoiKoiShop extends KoiKoi {
    * Override end of turn to check win conditions instead of scores
    */
   endTurn() {
+    console.log('[SHOP] endTurn() called - checking win condition');
+
     // First check if player achieved their win condition
     if (this.checkPlayerWinCondition()) {
       this.gameOver = true;
       this.gameOverMessage = `Victory! You achieved: ${this.selectedWinCondition.name}`;
+      console.log('[SHOP] WIN CONDITION MET! Game over.');
       return;
     }
 

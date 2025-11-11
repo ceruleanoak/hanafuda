@@ -390,6 +390,9 @@ class Game {
    * Show the shop modal for Koi Koi Shop mode
    */
   showShopModal() {
+    // Hide win condition display from previous game when opening shop
+    this.hideActiveWinCondition();
+
     this.shopUI.initialize();
     this.shopUI.renderToModal(this.shopModal.querySelector('.shop-modal-content'));
     this.shopModal.classList.add('show');
@@ -1739,6 +1742,9 @@ class Game {
    * Display the round summary modal (extracted from showRoundSummary)
    */
   displayRoundSummaryModal(data) {
+    // Hide win condition display when showing round summary
+    this.hideActiveWinCondition();
+
     // Update title
     const title = document.getElementById('round-summary-title');
     if (data.isGameOver) {
