@@ -547,6 +547,7 @@ export class KoiKoiShop extends KoiKoi {
       this.gameOver = true;
       this.gameOverMessage = `Victory! You achieved: ${this.selectedWinCondition.name}`;
       console.log('[SHOP] WIN CONDITION MET! Game over.');
+      this.endShopGame(true, this.gameOverMessage);
       return;
     }
 
@@ -560,6 +561,7 @@ export class KoiKoiShop extends KoiKoi {
       if (nonSakeYaku.length > 0) {
         this.gameOver = true;
         this.gameOverMessage = `Defeat! Opponent completed a yaku: ${nonSakeYaku[0].name}`;
+        this.endShopGame(false, this.gameOverMessage);
         return;
       }
     }
@@ -569,11 +571,60 @@ export class KoiKoiShop extends KoiKoi {
       // Player didn't achieve their win condition
       this.gameOver = true;
       this.gameOverMessage = `Defeat! Failed to achieve: ${this.selectedWinCondition.name}`;
+      this.endShopGame(false, this.gameOverMessage);
       return;
     }
 
     // Continue with normal turn logic (no koi-koi decisions in shop mode)
     super.endTurn();
+  }
+
+  /**
+   * End the shop game and trigger round summary
+   */
+  endShopGame(victory, message) {
+    console.log(`[SHOP] endShopGame called - victory: ${victory}, message: ${message}`);
+
+    const playerYaku = Yaku.checkYaku(this.playerCaptured, this.gameOptions);
+    const opponentYaku = Yaku.checkYaku(this.opponentCaptured, this.gameOptions);
+
+    // Create round summary data for shop mode
+    const roundSummaryData = {
+      roundNumber: 1,
+      playerRoundScore: victory ? 1 : 0, // Victory = 1 point for display
+      opponentRoundScore: victory ? 0 : 1, // Loss = opponent gets 1 point
+      playerTotalScore: victory ? 1 : 0,
+      opponentTotalScore: victory ? 0 : 1,
+      playerYaku: playerYaku,
+      opponentYaku: opponentYaku,
+      playerScoreBreakdown: {
+        baseScore: victory ? 1 : 0,
+        koikoiPenalty: false,
+        autoDouble: false,
+        koikoiMultiplier: 0,
+        finalScore: victory ? 1 : 0
+      },
+      opponentScoreBreakdown: {
+        baseScore: victory ? 0 : 1,
+        koikoiPenalty: false,
+        autoDouble: false,
+        koikoiMultiplier: 0,
+        finalScore: victory ? 0 : 1
+      },
+      isGameOver: true,
+      totalRounds: 1,
+      shopMode: true,
+      winCondition: this.selectedWinCondition,
+      shopMessage: message
+    };
+
+    // Call the round summary callback
+    if (this.roundSummaryCallback) {
+      console.log('[SHOP] Calling roundSummaryCallback');
+      this.roundSummaryCallback(roundSummaryData);
+    } else {
+      console.warn('[SHOP] No roundSummaryCallback set!');
+    }
   }
 
   /**
