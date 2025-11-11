@@ -160,12 +160,12 @@ export class KoiKoi {
     // Determine hand size based on bomb variation
     const handSize = (this.gameOptions && this.gameOptions.get('bombVariationEnabled')) ? 10 : 8;
 
-    // Deal 8 cards to field (always 8)
-    this.field = this.deck.drawMultiple(8);
-
-    // Deal cards to each player (8 or 10 depending on variation)
+    // Deal cards to each player first (8 or 10 depending on variation)
     this.playerHand = this.deck.drawMultiple(handSize);
     this.opponentHand = this.deck.drawMultiple(handSize);
+
+    // Deal 8 cards to field LAST (traditional Hanafuda order)
+    this.field = this.deck.drawMultiple(8);
 
     // Check for Four of a Kind lucky hand (instant win with 6 points)
     const fourOfAKind = this.checkFourOfAKindInStartingHand();

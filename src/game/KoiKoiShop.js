@@ -261,18 +261,16 @@ export class KoiKoiShop extends KoiKoi {
       }
     });
 
-    // Now deal 8 cards to field (shop cards won't be included)
-    this.field = this.deck.drawMultiple(8);
-
-    // Create player hand: 4 shop cards + 4 random cards
+    // Create player hand FIRST: 4 shop cards + 4 random cards
     this.playerHand = [...this.shopCards];
-
-    // Add 4 random cards to player hand
     const randomCards = this.deck.drawMultiple(4);
     this.playerHand.push(...randomCards);
 
-    // Deal 8 cards to opponent as normal
+    // Deal 8 cards to opponent hand
     this.opponentHand = this.deck.drawMultiple(8);
+
+    // Deal 8 cards to field LAST (traditional Hanafuda order)
+    this.field = this.deck.drawMultiple(8);
 
     // Debug: verify player hand size
     console.log(`[SHOP] Player hand initialized with ${this.playerHand.length} cards:`,
