@@ -72,8 +72,9 @@ export class CardRenderer {
    * @param {boolean} isSelected - Whether card is selected
    * @param {boolean} isFaceDown - Whether card is face down
    * @param {number} opacity - Opacity (0-1), default 1
+   * @param {Object} pointValueOptions - Optional { enabled: boolean, getValue: (card) => number }
    */
-  drawCard(ctx, card, x, y, isSelected = false, isFaceDown = false, opacity = 1.0) {
+  drawCard(ctx, card, x, y, isSelected = false, isFaceDown = false, opacity = 1.0, pointValueOptions = null) {
     ctx.save();
 
     // Apply opacity
@@ -113,6 +114,12 @@ export class CardRenderer {
     } else if (hasImage && cardImage) {
       // Draw the card image
       ctx.drawImage(cardImage, x, y, this.cardWidth, this.cardHeight);
+
+      // Draw point value badge if enabled
+      if (pointValueOptions && pointValueOptions.enabled && !isFaceDown) {
+        const pointValue = pointValueOptions.getValue(card);
+        this.drawPointValueBadge(ctx, pointValue, x, y);
+      }
 
       // Selection border overlay
       if (isSelected) {
@@ -244,6 +251,144 @@ export class CardRenderer {
   }
 
   /**
+   * Draw point value badge on card (for Sakura mode)
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} pointValue - Point value to display
+   * @param {number} x - Card X position
+   * @param {number} y - Card Y position
+   */
+  drawPointValueBadge(ctx, pointValue, x, y) {
+    const badgeSize = 24;
+    const badgeX = x + this.cardWidth - badgeSize - 4;
+    const badgeY = y + 4;
+    const badgeRadius = badgeSize / 2;
+
+    // Choose badge color based on point value
+    let badgeColor, textColor;
+    if (pointValue === 0) {
+      badgeColor = '#757575'; // Gray for 0 points
+      textColor = '#ffffff';
+    } else if (pointValue === 1) {
+      badgeColor = '#4CAF50'; // Green for 1 point
+      textColor = '#ffffff';
+    } else if (pointValue === 5) {
+      badgeColor = '#2196F3'; // Blue for 5 points
+      textColor = '#ffffff';
+    } else if (pointValue === 20) {
+      badgeColor = '#FFC107'; // Gold for 20 points
+      textColor = '#000000';
+    } else {
+      badgeColor = '#9C27B0'; // Purple for other values
+      textColor = '#ffffff';
+    }
+
+    // Draw badge circle with shadow
+    ctx.save();
+
+    // Shadow
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetX = 1;
+    ctx.shadowOffsetY = 1;
+
+    // Circle background
+    ctx.fillStyle = badgeColor;
+    ctx.beginPath();
+    ctx.arc(badgeX + badgeRadius, badgeY + badgeRadius, badgeRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Reset shadow for text
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+
+    // Draw point value text
+    ctx.fillStyle = textColor;
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(pointValue.toString(), badgeX + badgeRadius, badgeY + badgeRadius);
+
+    ctx.restore();
+  }
+
+  /**
+   * Draw point value badge on scaled card (for Sakura mode with 3D cards)
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} pointValue - Point value to display
+   * @param {number} x - Card X position
+   * @param {number} y - Card Y position
+   * @param {number} scale - Card scale factor
+   */
+  drawPointValueBadgeScaled(ctx, pointValue, x, y, scale) {
+    const badgeSize = 24 * scale;
+    const scaledWidth = this.cardWidth * scale;
+    const badgeX = x + scaledWidth - badgeSize - (4 * scale);
+    const badgeY = y + (4 * scale);
+    const badgeRadius = badgeSize / 2;
+
+    // Choose badge color based on point value
+    let badgeColor, textColor;
+    if (pointValue === 0) {
+      badgeColor = '#757575'; // Gray for 0 points
+      textColor = '#ffffff';
+    } else if (pointValue === 1) {
+      badgeColor = '#4CAF50'; // Green for 1 point
+      textColor = '#ffffff';
+    } else if (pointValue === 5) {
+      badgeColor = '#2196F3'; // Blue for 5 points
+      textColor = '#ffffff';
+    } else if (pointValue === 20) {
+      badgeColor = '#FFC107'; // Gold for 20 points
+      textColor = '#000000';
+    } else {
+      badgeColor = '#9C27B0'; // Purple for other values
+      textColor = '#ffffff';
+    }
+
+    // Draw badge circle with shadow
+    ctx.save();
+
+    // Shadow
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 4 * scale;
+    ctx.shadowOffsetX = 1 * scale;
+    ctx.shadowOffsetY = 1 * scale;
+
+    // Circle background
+    ctx.fillStyle = badgeColor;
+    ctx.beginPath();
+    ctx.arc(badgeX + badgeRadius, badgeY + badgeRadius, badgeRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 1.5 * scale;
+    ctx.stroke();
+
+    // Reset shadow for text
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+
+    // Draw point value text
+    ctx.fillStyle = textColor;
+    ctx.font = `bold ${12 * scale}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(pointValue.toString(), badgeX + badgeRadius, badgeY + badgeRadius);
+
+    ctx.restore();
+  }
+
+  /**
    * Check if a point is inside a card's bounds
    */
   isPointInCard(x, y, cardX, cardY) {
@@ -320,8 +465,9 @@ export class CardRenderer {
    * @param {Card3D} card3D - Card3D instance
    * @param {boolean} isSelected - Whether card is selected
    * @param {number} opacity - Opacity (0-1), default 1
+   * @param {Object} pointValueOptions - Optional { enabled: boolean, getValue: (card) => number }
    */
-  drawCard3D(ctx, card3D, isSelected = false, opacity = 1.0) {
+  drawCard3D(ctx, card3D, isSelected = false, opacity = 1.0, pointValueOptions = null) {
     ctx.save();
 
     // Get scale based on Z position
@@ -401,6 +547,12 @@ export class CardRenderer {
     } else if (hasImage && cardImage) {
       // Draw the card image (scaled)
       ctx.drawImage(cardImage, x, y, scaledWidth, scaledHeight);
+
+      // Draw point value badge if enabled (needs to be before flip transformation is restored)
+      if (pointValueOptions && pointValueOptions.enabled && !isFaceDown) {
+        const pointValue = pointValueOptions.getValue(card);
+        this.drawPointValueBadgeScaled(ctx, pointValue, x, y, scale);
+      }
 
       // Selection border overlay
       if (isSelected) {

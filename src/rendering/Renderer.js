@@ -146,9 +146,24 @@ export class Renderer {
     // Get all visible cards sorted by render order
     const visibleCards = card3DManager.getVisibleCards();
 
+    // Determine if we should show point values (Sakura mode)
+    const pointValueOptions = gameState.isSakuraMode ? {
+      enabled: true,
+      getValue: (card) => {
+        // Sakura point values
+        const SAKURA_VALUES = {
+          'bright': 20,
+          'ribbon': 5,
+          'animal': 1,
+          'chaff': 0
+        };
+        return SAKURA_VALUES[card.type] || 0;
+      }
+    } : null;
+
     // Draw all visible cards
     visibleCards.forEach(card3D => {
-      this.cardRenderer.drawCard3D(this.ctx, card3D, false, card3D.opacity);
+      this.cardRenderer.drawCard3D(this.ctx, card3D, false, card3D.opacity, pointValueOptions);
     });
 
     // Draw deck counter - always show at fixed position
