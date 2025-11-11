@@ -352,7 +352,7 @@ export class KoiKoiShop extends KoiKoi {
    * Check if player has any animal or ribbon yaku
    */
   checkAnimalOrRibbonYaku() {
-    const yaku = Yaku.checkAllYaku(this.playerCaptured, this.gameOptions);
+    const yaku = Yaku.checkYaku(this.playerCaptured, this.gameOptions);
 
     // Check for animal yaku (5+ animals)
     const animalYaku = yaku.find(y => y.name === 'Animals');
@@ -397,7 +397,7 @@ export class KoiKoiShop extends KoiKoi {
    * Check if player has a specific yaku by name
    */
   checkSpecificYaku(yakuName) {
-    const yaku = Yaku.checkAllYaku(this.playerCaptured, this.gameOptions);
+    const yaku = Yaku.checkYaku(this.playerCaptured, this.gameOptions);
     return yaku.some(y => y.name === yakuName);
   }
 
@@ -405,7 +405,7 @@ export class KoiKoiShop extends KoiKoi {
    * Check if player has any special yaku
    */
   checkAnySpecialYaku() {
-    const yaku = Yaku.checkAllYaku(this.playerCaptured, this.gameOptions);
+    const yaku = Yaku.checkYaku(this.playerCaptured, this.gameOptions);
     const specialYaku = ['Poetry Ribbons', 'Blue Ribbons', 'Boar-Deer-Butterfly'];
     return yaku.some(y => specialYaku.includes(y.name));
   }
@@ -414,7 +414,7 @@ export class KoiKoiShop extends KoiKoi {
    * Check if player has any sake yaku
    */
   checkAnySakeYaku() {
-    const yaku = Yaku.checkAllYaku(this.playerCaptured, this.gameOptions);
+    const yaku = Yaku.checkYaku(this.playerCaptured, this.gameOptions);
     return yaku.some(y => y.name === 'Viewing Sake' || y.name === 'Moon Viewing Sake');
   }
 
@@ -422,7 +422,7 @@ export class KoiKoiShop extends KoiKoi {
    * Check if player has both sake yaku
    */
   checkBothSakeYaku() {
-    const yaku = Yaku.checkAllYaku(this.playerCaptured, this.gameOptions);
+    const yaku = Yaku.checkYaku(this.playerCaptured, this.gameOptions);
     const hasViewingSake = yaku.some(y => y.name === 'Viewing Sake');
     const hasMoonViewingSake = yaku.some(y => y.name === 'Moon Viewing Sake');
     return hasViewingSake && hasMoonViewingSake;
@@ -432,7 +432,7 @@ export class KoiKoiShop extends KoiKoi {
    * Check if player has two special yaku
    */
   checkTwoSpecialYaku() {
-    const yaku = Yaku.checkAllYaku(this.playerCaptured, this.gameOptions);
+    const yaku = Yaku.checkYaku(this.playerCaptured, this.gameOptions);
     const specialYaku = ['Poetry Ribbons', 'Blue Ribbons', 'Boar-Deer-Butterfly'];
     const completedSpecial = yaku.filter(y => specialYaku.includes(y.name));
     return completedSpecial.length >= 2;
@@ -442,9 +442,9 @@ export class KoiKoiShop extends KoiKoi {
    * Check if player won with any yaku before 10 cards remain in deck
    */
   checkSpeedRun() {
-    if (this.deck.cards.length >= 10) {
-      // Must complete before 10 cards remain
-      const yaku = Yaku.checkAllYaku(this.playerCaptured, this.gameOptions);
+    // Must complete BEFORE 10 cards remain (i.e., when deck has < 10 cards)
+    if (this.deck.cards.length < 10) {
+      const yaku = Yaku.checkYaku(this.playerCaptured, this.gameOptions);
       return yaku.length > 0;
     }
     return false;
@@ -454,7 +454,7 @@ export class KoiKoiShop extends KoiKoi {
    * Check if opponent has been blocked from all yaku (except sake cup)
    */
   checkOpponentBlocked() {
-    const yaku = Yaku.checkAllYaku(this.opponentCaptured, this.gameOptions);
+    const yaku = Yaku.checkYaku(this.opponentCaptured, this.gameOptions);
 
     // Filter out sake cup yaku (Viewing Sake and Moon Viewing Sake)
     const nonSakeYaku = yaku.filter(y =>
@@ -478,7 +478,7 @@ export class KoiKoiShop extends KoiKoi {
 
     // For hard mode, check if opponent completed any non-sake yaku (instant loss)
     if (this.selectedWinCondition.id === 'hard_block_opponent') {
-      const opponentYaku = Yaku.checkAllYaku(this.opponentCaptured, this.gameOptions);
+      const opponentYaku = Yaku.checkYaku(this.opponentCaptured, this.gameOptions);
       const nonSakeYaku = opponentYaku.filter(y =>
         y.name !== 'Viewing Sake' && y.name !== 'Moon Viewing Sake'
       );
