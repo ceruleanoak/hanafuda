@@ -13,6 +13,7 @@ export class ShopUI {
     this.selectedCards = [];
     this.shopDeck = [];
     this.faceUpCards = [];
+    this.winConditions = []; // Store the win conditions so they don't change on re-render
     this.isLocked = false;
     this.onComplete = null; // Callback when shop is complete
   }
@@ -26,11 +27,15 @@ export class ShopUI {
     this.selectedCards = [];
     this.isLocked = false;
 
+    // Generate win conditions once during initialization
+    this.winConditions = this.getRandomWinConditions();
+
     // Create a shuffled deck for the shop
     this.shopDeck = this.createShuffledDeck();
 
-    // Draw 3 face-up cards for the shop
+    // Draw 4 face-up cards for the shop
     this.faceUpCards = [
+      this.shopDeck.pop(),
       this.shopDeck.pop(),
       this.shopDeck.pop(),
       this.shopDeck.pop()
@@ -94,12 +99,14 @@ export class ShopUI {
     const selectedCard = this.faceUpCards[cardIndex];
     this.selectedCards.push(selectedCard);
 
-    // Replace the face-up card with a new one from the deck
-    if (this.shopDeck.length > 0) {
-      this.faceUpCards[cardIndex] = this.shopDeck.pop();
-    } else {
-      // No more cards in deck, remove this slot
-      this.faceUpCards[cardIndex] = null;
+    // Refresh ALL face-up cards after selection
+    for (let i = 0; i < this.faceUpCards.length; i++) {
+      if (this.shopDeck.length > 0) {
+        this.faceUpCards[i] = this.shopDeck.pop();
+      } else {
+        // No more cards in deck, remove this slot
+        this.faceUpCards[i] = null;
+      }
     }
 
     return { success: true, selectedCard };
@@ -130,7 +137,6 @@ export class ShopUI {
    */
   renderToModal(modalElement) {
     const state = this.getState();
-    const winConditions = this.getRandomWinConditions();
 
     let html = `
       <h2>Koi Koi Shop</h2>
@@ -141,8 +147,8 @@ export class ShopUI {
         <div class="win-conditions-list">
     `;
 
-    // Render win conditions
-    winConditions.forEach((condition, index) => {
+    // Render win conditions (use stored conditions, not new random ones)
+    this.winConditions.forEach((condition, index) => {
       const isSelected = state.selectedWinCondition?.id === condition.id;
       const isLocked = state.isLocked && !isSelected;
 
@@ -185,12 +191,7 @@ export class ShopUI {
       }
     });
 
-    // Render face-down deck pile
     html += `
-          <div class="shop-deck-pile">
-            <div class="deck-pile-image">🎴</div>
-            <p class="deck-pile-label">Deck</p>
-          </div>
         </div>
       </div>
 
@@ -229,20 +230,20 @@ export class ShopUI {
     `;
 
     modalElement.innerHTML = html;
-    this.attachEventListeners(modalElement, winConditions);
+    this.attachEventListeners(modalElement);
   }
 
   /**
    * Attach event listeners to the modal elements
    */
-  attachEventListeners(modalElement, winConditions) {
+  attachEventListeners(modalElement) {
     // Win condition selection
     const conditionCards = modalElement.querySelectorAll('.win-condition-card');
     conditionCards.forEach(card => {
       card.addEventListener('click', () => {
         if (!this.isLocked) {
           const conditionId = card.getAttribute('data-condition-id');
-          const condition = winConditions.find(c => c.id === conditionId);
+          const condition = this.winConditions.find(c => c.id === conditionId);
           this.selectWinCondition(condition);
           this.renderToModal(modalElement);
         }

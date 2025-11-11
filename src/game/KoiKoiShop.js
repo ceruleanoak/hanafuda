@@ -277,7 +277,7 @@ export class KoiKoiShop extends KoiKoi {
     this.checkFourOfAKind();
 
     // Set initial phase
-    this.phase = this.playerTurn ? 'select' : 'opponentTurn';
+    this.phase = this.playerTurn ? 'select_hand' : 'opponentTurn';
   }
 
   /**
