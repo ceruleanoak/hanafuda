@@ -252,13 +252,8 @@ export class KoiKoiShop extends KoiKoi {
    * Deal cards with custom player starting hand
    */
   dealWithCustomHand() {
-    // Deal 8 cards to field as normal
-    this.field = this.deck.drawMultiple(8);
-
-    // Create player hand: 4 shop cards + 4 random cards
-    this.playerHand = [...this.shopCards];
-
-    // Remove shop cards from deck so they don't appear elsewhere
+    // IMPORTANT: Remove shop cards from deck FIRST before dealing anything
+    // This prevents the shop cards from appearing in the field or opponent's hand
     this.shopCards.forEach(shopCard => {
       const index = this.deck.cards.findIndex(c => c.id === shopCard.id);
       if (index !== -1) {
@@ -266,12 +261,20 @@ export class KoiKoiShop extends KoiKoi {
       }
     });
 
-    // Add 4 random cards to player hand
+    // Create player hand FIRST: 4 shop cards + 4 random cards
+    this.playerHand = [...this.shopCards];
     const randomCards = this.deck.drawMultiple(4);
     this.playerHand.push(...randomCards);
 
-    // Deal 8 cards to opponent as normal
+    // Deal 8 cards to opponent hand
     this.opponentHand = this.deck.drawMultiple(8);
+
+    // Deal 8 cards to field LAST (traditional Hanafuda order)
+    this.field = this.deck.drawMultiple(8);
+
+    // Debug: verify player hand size
+    console.log(`[SHOP] Player hand initialized with ${this.playerHand.length} cards:`,
+                this.playerHand.map(c => c.name));
 
     // Check for Four of a Kind (instant win condition)
     this.checkFourOfAKind();
