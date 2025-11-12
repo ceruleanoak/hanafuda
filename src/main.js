@@ -61,6 +61,7 @@ class Game {
     this.matchGame = new MatchGame(this.gameOptions);
 
     this.shopGame = new KoiKoiShop(this.gameOptions);
+    this.shopGame.setRoundSummaryCallback((data) => this.showRoundSummary(data));
 
     // Set active game based on mode
     this.game = this.koikoiGame;
@@ -526,8 +527,40 @@ class Game {
       }
 
       case 'hard_speed_run': {
-        const remaining = state.deck?.length || 0;
-        return `Deck remaining: ${remaining}`;
+        const remaining = state.deck?.cards?.length || 0;
+        return `Deck remaining: ${remaining} (need yaku before 10)`;
+      }
+
+      case 'easy_animal_or_ribbon': {
+        const animals = playerCaptured.filter(c => c.type === 'animal').length;
+        const ribbons = playerCaptured.filter(c => c.type === 'ribbon').length;
+        return `Animals: ${animals}/5 or Ribbons: ${ribbons}/5`;
+      }
+
+      case 'easy_any_special':
+      case 'medium_poetry_ribbons':
+      case 'medium_blue_ribbons':
+      case 'medium_boar_deer_butterfly':
+      case 'hard_two_special_yaku': {
+        // Check which special yaku are complete
+        const specialYaku = ['Poetry Ribbons', 'Blue Ribbons', 'Boar-Deer-Butterfly'];
+        const completedSpecial = [];
+        // TODO: Would need to check yaku here, for now show general progress
+        return 'Check yaku progress...';
+      }
+
+      case 'easy_any_sake':
+      case 'medium_both_sake': {
+        return 'Need sake cup yaku...';
+      }
+
+      case 'hard_block_opponent': {
+        return 'Keep opponent from scoring yaku!';
+      }
+
+      case 'hard_three_brights': {
+        const brights = playerCaptured.filter(c => c.type === 'bright').length;
+        return `Brights: ${brights}/3 (excluding rain)`;
       }
 
       default:
@@ -1772,7 +1805,11 @@ class Game {
 
     // Update title
     const title = document.getElementById('round-summary-title');
-    if (data.isGameOver) {
+    if (data.shopMode) {
+      // Shop mode - show custom message
+      const victory = data.playerTotalScore > data.opponentTotalScore;
+      title.textContent = victory ? '🎉 Victory!' : '💀 Defeat';
+    } else if (data.isGameOver) {
       const winner = data.playerTotalScore > data.opponentTotalScore ? 'You Win!' :
                      data.opponentTotalScore > data.playerTotalScore ? 'Opponent Wins!' : 'Tie Game!';
       title.textContent = `Game Over - ${winner}`;
@@ -1791,6 +1828,15 @@ class Game {
     // Update yaku details
     const yakuDetails = document.getElementById('round-yaku-details');
     yakuDetails.innerHTML = '';
+
+    // Show shop mode message if present
+    if (data.shopMode && data.shopMessage) {
+      const shopMessageDiv = document.createElement('div');
+      shopMessageDiv.className = 'shop-end-message';
+      shopMessageDiv.style.cssText = 'margin: 1rem 0; padding: 1rem; background: rgba(255,255,255,0.1); border-radius: 8px; text-align: center; font-size: 1.1rem; font-weight: bold;';
+      shopMessageDiv.textContent = data.shopMessage;
+      yakuDetails.appendChild(shopMessageDiv);
+    }
 
     if (data.playerYaku.length > 0) {
       const playerSection = document.createElement('div');
