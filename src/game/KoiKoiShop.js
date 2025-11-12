@@ -244,7 +244,15 @@ export class KoiKoiShop extends KoiKoi {
     this.selectedMatch = null;
     this.gameOver = false;
     this.gameOverMessage = '';
-    this.playerTurn = true; // Player goes first in shop mode
+
+    // Determine who goes first (same logic as regular Koi Koi)
+    if (!this.firstPlayerThisGame) {
+      // First game: randomly choose (50/50)
+      this.firstPlayerThisGame = Math.random() < 0.5 ? 'player' : 'opponent';
+    }
+    this.currentPlayer = this.firstPlayerThisGame;
+
+    console.log(`[SHOP] ${this.currentPlayer} goes first`);
 
     this.dealWithCustomHand();
   }
@@ -280,8 +288,18 @@ export class KoiKoiShop extends KoiKoi {
     // Check for Four of a Kind (instant win condition)
     this.checkFourOfAKind();
 
-    // Set initial phase
-    this.phase = this.playerTurn ? 'select_hand' : 'opponentTurn';
+    // Set initial phase and trigger first turn based on who goes first
+    if (this.currentPlayer === 'player') {
+      this.phase = 'select_hand';
+      this.message = 'Select a card from your hand';
+      console.log('[SHOP] Player\'s turn - waiting for card selection');
+    } else {
+      this.phase = 'opponentTurn';
+      this.message = 'Opponent goes first...';
+      console.log('[SHOP] Opponent goes first - triggering opponentTurn()');
+      // Trigger opponent turn after short delay
+      setTimeout(() => this.opponentTurn(), 400);
+    }
   }
 
   /**
