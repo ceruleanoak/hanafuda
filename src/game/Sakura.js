@@ -1258,7 +1258,8 @@ export class Sakura {
       opponentPlayedCard: this.opponentPlayedCard,
 
       // Deck info
-      deckSize: this.deck.cards.length
+      deckSize: this.deck.cards.length,
+      deck: this.deck // Include full deck object for Card3D system
     };
   }
 

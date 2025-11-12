@@ -401,83 +401,89 @@ export class CardRenderer {
   drawElectricShimmer(ctx, x, y, width, height, scale) {
     ctx.save();
 
-    // Use time for animation
-    const time = Date.now() / 1000;
+    // Clip to card bounds to keep effect contained
+    ctx.beginPath();
+    ctx.rect(x, y, width, height);
+    ctx.clip();
+
+    // Use time for animation - 3x faster
+    const time = (Date.now() / 1000) * 3;
 
     // Draw multiple layers of shimmer
     const layers = 3;
     for (let layer = 0; layer < layers; layer++) {
-      const offset = layer * 2 * scale;
+      const offset = layer * 1 * scale; // Reduced offset
       const phaseShift = layer * Math.PI / 2;
 
-      // Animate the glow intensity
-      const pulseSpeed = 2 + layer * 0.5;
+      // Animate the glow intensity - faster
+      const pulseSpeed = (2 + layer * 0.5);
       const pulse = 0.5 + 0.5 * Math.sin(time * pulseSpeed + phaseShift);
 
-      // Create gradient for glow effect
+      // Create gradient for glow effect - tighter to card
       const gradient = ctx.createRadialGradient(
         x + width / 2, y + height / 2, 0,
-        x + width / 2, y + height / 2, Math.max(width, height) / 2 + offset
+        x + width / 2, y + height / 2, Math.max(width, height) / 2.5 // Tighter gradient
       );
 
-      const alpha = (0.15 + pulse * 0.1) * (1 - layer * 0.3);
+      const alpha = (0.1 + pulse * 0.08) * (1 - layer * 0.3); // Reduced alpha
       gradient.addColorStop(0, `rgba(255, 215, 0, 0)`);
-      gradient.addColorStop(0.7, `rgba(255, 215, 0, ${alpha})`);
+      gradient.addColorStop(0.8, `rgba(255, 215, 0, ${alpha})`);
       gradient.addColorStop(1, `rgba(255, 140, 0, 0)`);
 
       ctx.fillStyle = gradient;
-      ctx.fillRect(x - offset, y - offset, width + offset * 2, height + offset * 2);
+      ctx.fillRect(x, y, width, height); // No extension beyond card
     }
 
-    // Draw animated electric arcs around the border
-    const arcCount = 8;
+    // Draw animated electric arcs INSIDE the border
+    const arcCount = 12; // More arcs for smoother effect
     for (let i = 0; i < arcCount; i++) {
-      const angle = (i / arcCount) * Math.PI * 2 + time;
-      const arcPulse = Math.sin(time * 3 + i) * 0.5 + 0.5;
+      const arcPulse = Math.sin(time * 1.5 + i) * 0.5 + 0.5;
 
-      // Random-ish arc positions around the perimeter
+      // Arc positions just inside the perimeter
       const side = i % 4;
       let startX, startY, endX, endY;
+      const inset = 2 * scale; // Stay inside border
+      const arcLength = 5 * scale; // Shorter arcs
 
       switch(side) {
         case 0: // Top
           startX = x + (i / arcCount) * width * 4;
-          startY = y;
-          endX = startX + Math.sin(time * 4 + i) * 10 * scale;
-          endY = y - arcPulse * 15 * scale;
+          startY = y + inset;
+          endX = startX + Math.sin(time * 2 + i) * 3 * scale;
+          endY = y + arcPulse * arcLength;
           break;
         case 1: // Right
-          startX = x + width;
+          startX = x + width - inset;
           startY = y + (i / arcCount) * height * 4;
-          endX = x + width + arcPulse * 15 * scale;
-          endY = startY + Math.sin(time * 4 + i) * 10 * scale;
+          endX = x + width - arcPulse * arcLength;
+          endY = startY + Math.sin(time * 2 + i) * 3 * scale;
           break;
         case 2: // Bottom
           startX = x + (i / arcCount) * width * 4;
-          startY = y + height;
-          endX = startX + Math.sin(time * 4 + i) * 10 * scale;
-          endY = y + height + arcPulse * 15 * scale;
+          startY = y + height - inset;
+          endX = startX + Math.sin(time * 2 + i) * 3 * scale;
+          endY = y + height - arcPulse * arcLength;
           break;
         case 3: // Left
-          startX = x;
+          startX = x + inset;
           startY = y + (i / arcCount) * height * 4;
-          endX = x - arcPulse * 15 * scale;
-          endY = startY + Math.sin(time * 4 + i) * 10 * scale;
+          endX = x + arcPulse * arcLength;
+          endY = startY + Math.sin(time * 2 + i) * 3 * scale;
           break;
       }
 
       // Draw electric arc
-      ctx.strokeStyle = `rgba(255, 215, 0, ${arcPulse * 0.6})`;
-      ctx.lineWidth = (2 + arcPulse) * scale;
-      ctx.shadowColor = 'rgba(255, 215, 0, 0.8)';
-      ctx.shadowBlur = 8 * scale;
+      ctx.strokeStyle = `rgba(255, 215, 0, ${arcPulse * 0.5})`;
+      ctx.lineWidth = (1.5 + arcPulse * 0.5) * scale;
+      ctx.shadowColor = 'rgba(255, 215, 0, 0.6)';
+      ctx.shadowBlur = 4 * scale;
 
       ctx.beginPath();
       ctx.moveTo(startX, startY);
 
       // Bezier curve for lightning effect
-      const cpX = (startX + endX) / 2 + Math.sin(time * 5 + i) * 5 * scale;
-      const cpY = (startY + endY) / 2 + Math.cos(time * 5 + i) * 5 * scale;
+      const cpX = (startX + endX) / 2 + Math.sin(time * 3 + i) * 2 * scale;
+      const cpY = (startY + endY) / 2 + Math.cos(time * 3 + i) * 2 * scale;
       ctx.quadraticCurveTo(cpX, cpY, endX, endY);
       ctx.stroke();
     }
@@ -502,19 +508,20 @@ export class CardRenderer {
   drawElectricOverlay(ctx, x, y, width, height, scale) {
     ctx.save();
 
-    const time = Date.now() / 1000;
+    // 3x faster animation
+    const time = (Date.now() / 1000) * 3;
 
-    // Pulsing border glow
-    const borderPulse = 0.3 + 0.3 * Math.sin(time * 3);
+    // Pulsing border glow - faster
+    const borderPulse = 0.2 + 0.2 * Math.sin(time * 1.5);
 
-    // Draw glowing border
+    // Draw glowing border - thinner
     ctx.strokeStyle = `rgba(255, 215, 0, ${borderPulse})`;
-    ctx.lineWidth = 4 * scale;
-    ctx.shadowColor = 'rgba(255, 215, 0, 1)';
-    ctx.shadowBlur = 12 * scale;
+    ctx.lineWidth = 3 * scale;
+    ctx.shadowColor = 'rgba(255, 215, 0, 0.8)';
+    ctx.shadowBlur = 8 * scale;
     ctx.strokeRect(x, y, width, height);
 
-    // Draw corner sparks
+    // Draw corner sparks - faster
     const corners = [
       [x, y],
       [x + width, y],
@@ -523,12 +530,12 @@ export class CardRenderer {
     ];
 
     corners.forEach((corner, i) => {
-      const sparkPulse = Math.sin(time * 4 + i * Math.PI / 2);
+      const sparkPulse = Math.sin(time * 2 + i * Math.PI / 2);
       if (sparkPulse > 0.5) {
-        const sparkSize = (sparkPulse - 0.5) * 10 * scale;
-        ctx.fillStyle = `rgba(255, 255, 100, ${sparkPulse})`;
-        ctx.shadowColor = 'rgba(255, 255, 100, 1)';
-        ctx.shadowBlur = 15 * scale;
+        const sparkSize = (sparkPulse - 0.5) * 6 * scale; // Smaller sparks
+        ctx.fillStyle = `rgba(255, 255, 100, ${sparkPulse * 0.8})`;
+        ctx.shadowColor = 'rgba(255, 255, 100, 0.8)';
+        ctx.shadowBlur = 10 * scale;
 
         ctx.beginPath();
         ctx.arc(corner[0], corner[1], sparkSize, 0, Math.PI * 2);
