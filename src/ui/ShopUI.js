@@ -1,6 +1,6 @@
 /**
  * ShopUI - Manages the Koi Koi Shop interface
- * Handles win condition selection and card shopping
+ * Handles bonus chance selection and card shopping
  */
 
 import { WIN_CONDITIONS } from '../game/KoiKoiShop.js';
@@ -13,13 +13,13 @@ export class ShopUI {
     this.selectedCards = [];
     this.shopDeck = [];
     this.faceUpCards = [];
-    this.winConditions = []; // Store the win conditions so they don't change on re-render
+    this.winConditions = []; // Store the bonus chances so they don't change on re-render
     this.isLocked = false;
     this.onComplete = null; // Callback when shop is complete
   }
 
   /**
-   * Initialize the shop with random cards and win conditions
+   * Initialize the shop with random cards and bonus chances
    */
   initialize() {
     // Reset state
@@ -27,7 +27,7 @@ export class ShopUI {
     this.selectedCards = [];
     this.isLocked = false;
 
-    // Generate win conditions once during initialization
+    // Generate bonus chances once during initialization
     this.winConditions = this.getRandomWinConditions();
 
     // Create a shuffled deck for the shop
@@ -56,7 +56,7 @@ export class ShopUI {
   }
 
   /**
-   * Get 3 random win conditions (one from each difficulty)
+   * Get 3 random bonus chances (one from each difficulty)
    */
   getRandomWinConditions() {
     const conditions = Object.values(WIN_CONDITIONS);
@@ -72,7 +72,7 @@ export class ShopUI {
   }
 
   /**
-   * Select a win condition
+   * Select a bonus chance
    */
   selectWinCondition(condition) {
     this.selectedWinCondition = condition;
@@ -83,14 +83,14 @@ export class ShopUI {
    */
   selectShopCard(cardIndex) {
     if (!this.selectedWinCondition) {
-      return { success: false, error: 'Please select a win condition first' };
+      return { success: false, error: 'Please select a bonus chance first' };
     }
 
     if (this.selectedCards.length >= 4) {
       return { success: false, error: 'You have already selected 4 cards' };
     }
 
-    // Lock the win condition after first card selection
+    // Lock the bonus chance after first card selection
     if (this.selectedCards.length === 0) {
       this.isLocked = true;
     }
@@ -140,14 +140,14 @@ export class ShopUI {
 
     let html = `
       <h2>Koi Koi Shop</h2>
-      <p class="shop-instructions">Select a win condition and choose 4 cards to add to your starting hand.</p>
+      <p class="shop-instructions">Select a bonus chance and choose 4 cards to add to your starting hand.</p>
 
       <div class="win-conditions-section">
-        <h3>Select Your Win Condition</h3>
+        <h3>Select Your Bonus Chance</h3>
         <div class="win-conditions-list">
     `;
 
-    // Render win conditions (use stored conditions, not new random ones)
+    // Render bonus chances (use stored conditions, not new random ones)
     this.winConditions.forEach((condition, index) => {
       const isSelected = state.selectedWinCondition?.id === condition.id;
       const isLocked = state.isLocked && !isSelected;
@@ -171,7 +171,7 @@ export class ShopUI {
 
       <div class="shop-cards-section">
         <h3>Shop Cards (${state.remainingSelections} remaining)</h3>
-        <p class="shop-hint">${!state.selectedWinCondition ? 'Select a win condition to unlock the shop' : 'Click a card to add it to your hand'}</p>
+        <p class="shop-hint">${!state.selectedWinCondition ? 'Select a bonus chance to unlock the shop' : 'Click a card to add it to your hand'}</p>
 
         <div class="shop-cards-display">
     `;

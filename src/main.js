@@ -399,7 +399,7 @@ class Game {
    * Show the shop modal for Koi Koi Shop mode
    */
   showShopModal() {
-    // Hide win condition display from previous game when opening shop
+    // Hide bonus chance display from previous game when opening shop
     this.hideActiveWinCondition();
 
     this.shopUI.initialize();
@@ -415,12 +415,12 @@ class Game {
   }
 
   /**
-   * Start the shop game with selected cards and win condition
+   * Start the shop game with selected cards and bonus chance
    */
   startShopGame(selectedCards, winCondition) {
     this.hideShopModal();
 
-    // Start the shop game with the selected cards and win condition
+    // Start the shop game with the selected cards and bonus chance
     this.shopGame.startShopGame(selectedCards, winCondition);
 
     this.updateUI();
@@ -430,12 +430,12 @@ class Game {
     this.card3DManager.initializeFromGameState(this.game.getState(), true);
     debugLogger.log('3dCards', '✨ Card3D system initialized for shop game', null);
 
-    // Add the active win condition display to the page
+    // Add the active bonus chance display to the page
     this.showActiveWinCondition(winCondition);
   }
 
   /**
-   * Show the active win condition during gameplay
+   * Show the active bonus chance during gameplay
    */
   showActiveWinCondition(winCondition) {
     const element = document.getElementById('active-win-condition');
@@ -453,7 +453,7 @@ class Game {
   }
 
   /**
-   * Hide the active win condition display
+   * Hide the active bonus chance display
    */
   hideActiveWinCondition() {
     const element = document.getElementById('active-win-condition');
@@ -463,7 +463,7 @@ class Game {
   }
 
   /**
-   * Update the win condition progress display
+   * Update the bonus chance progress display
    */
   updateWinConditionProgress() {
     if (this.currentGameMode !== 'shop') return;
@@ -474,13 +474,13 @@ class Game {
     const state = this.game.getState();
     if (!state.selectedWinCondition) return;
 
-    // Get progress based on win condition type
+    // Get progress based on bonus chance type
     const progress = this.getWinConditionProgress(state);
     progressElement.textContent = progress;
   }
 
   /**
-   * Get progress text for the current win condition
+   * Get progress text for the current bonus chance
    */
   getWinConditionProgress(state) {
     const condition = state.selectedWinCondition;
@@ -488,31 +488,33 @@ class Game {
 
     switch (condition.id) {
       case 'easy_five_animals':
-      case 'medium_seven_animals':
-      case 'hard_nine_animals': {
+      case 'medium_seven_animals': {
         const count = playerCaptured.filter(c => c.type === 'animal').length;
-        const target = condition.id.includes('five') ? 5 : condition.id.includes('seven') ? 7 : 9;
+        const target = condition.id.includes('five') ? 5 : 7;
         return `Animals: ${count}/${target}`;
       }
 
       case 'easy_five_ribbons':
       case 'medium_seven_ribbons':
-      case 'hard_all_ribbons': {
+      case 'hard_eight_ribbons': {
         const count = playerCaptured.filter(c => c.type === 'ribbon').length;
-        const target = condition.id.includes('five') ? 5 : condition.id.includes('seven') ? 7 : 10;
+        const target = condition.id.includes('five') ? 5 : condition.id.includes('seven') ? 7 : 8;
         return `Ribbons: ${count}/${target}`;
       }
 
       case 'easy_ten_chaff':
-      case 'hard_fifteen_chaff': {
+      case 'medium_twelve_chaff':
+      case 'hard_fourteen_chaff': {
         const count = playerCaptured.filter(c => c.type === 'chaff').length;
-        const target = condition.id.includes('ten') ? 10 : 15;
+        const target = condition.id.includes('ten') ? 10 : condition.id.includes('twelve') ? 12 : 14;
         return `Chaff: ${count}/${target}`;
       }
 
-      case 'medium_two_brights': {
+      case 'easy_two_brights':
+      case 'hard_three_brights': {
         const count = playerCaptured.filter(c => c.type === 'bright').length;
-        return `Brights: ${count}/2`;
+        const target = condition.id.includes('two') ? 2 : 3;
+        return `Brights: ${count}/${target}`;
       }
 
       case 'medium_three_months':
@@ -556,11 +558,6 @@ class Game {
 
       case 'hard_block_opponent': {
         return 'Keep opponent from scoring yaku!';
-      }
-
-      case 'hard_three_brights': {
-        const brights = playerCaptured.filter(c => c.type === 'bright').length;
-        return `Brights: ${brights}/3 (excluding rain)`;
       }
 
       default:
@@ -718,7 +715,7 @@ class Game {
     // Save game mode to localStorage so it persists across browser refreshes
     localStorage.setItem('currentGameMode', mode);
 
-    // Hide win condition display when switching away from shop mode
+    // Hide bonus chance display when switching away from shop mode
     if (mode !== 'shop') {
       this.hideActiveWinCondition();
     }
@@ -747,7 +744,7 @@ class Game {
       document.getElementById('test-3d-btn').style.display = 'inline-block';
 
       // Update instructions
-      this.instructionsElement.textContent = 'Achieve your win condition!';
+      this.instructionsElement.textContent = 'Achieve your bonus chance!';
     } else if (mode === 'sakura') {
       this.game = this.sakuraGame;
 
@@ -1800,7 +1797,7 @@ class Game {
    * Display the round summary modal (extracted from showRoundSummary)
    */
   displayRoundSummaryModal(data) {
-    // Hide win condition display when showing round summary
+    // Hide bonus chance display when showing round summary
     this.hideActiveWinCondition();
 
     // Update title
@@ -1861,13 +1858,16 @@ class Game {
           breakdownDiv.innerHTML += '<br>• Koi-Koi penalty applied (didn\'t improve) = 0 pts';
         } else {
           breakdownDiv.innerHTML += `<br>• Base score: ${breakdown.baseScore} pts`;
+          if (breakdown.bonusPoints && breakdown.bonusPoints > 0) {
+            breakdownDiv.innerHTML += `<br>• Bonus chance (+${breakdown.bonusPoints} pts): ${breakdown.bonusChanceName}`;
+          }
           if (breakdown.autoDouble) {
             breakdownDiv.innerHTML += '<br>• Auto-double (7+ pts) ×2';
           }
           if (breakdown.koikoiMultiplier > 0) {
             breakdownDiv.innerHTML += `<br>• Koi-Koi bonus ×${breakdown.koikoiMultiplier} (opponent called koi-koi)`;
           }
-          if (breakdown.autoDouble || breakdown.koikoiMultiplier > 0) {
+          if (breakdown.autoDouble || breakdown.koikoiMultiplier > 0 || (breakdown.bonusPoints && breakdown.bonusPoints > 0)) {
             breakdownDiv.innerHTML += `<br>• <strong>Final: ${breakdown.finalScore} pts</strong>`;
           }
         }
@@ -2316,7 +2316,7 @@ class Game {
     }
     this.instructionsElement.textContent = state.message;
 
-    // Update win condition progress for shop mode
+    // Update bonus chance progress for shop mode
     if (this.currentGameMode === 'shop') {
       this.updateWinConditionProgress();
     }
