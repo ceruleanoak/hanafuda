@@ -500,15 +500,19 @@ export class Sakura {
     if (matches.length === 0) {
       // No match - add to field
       debugLogger.log('sakura', `➕ No match - adding drawn card to field`);
-      this.field.push(this.drawnCard);
+      const cardToAdd = this.drawnCard;
+      this.drawnCard = null; // Clear before adding to field for Card3D sync
+      this.field.push(cardToAdd);
       this.message = 'No match. Card added to field.';
-      this.drawnCard = null;
       this.endTurn();
     } else if (matches.length === 1) {
       // Single match - auto capture
       const capturedCard = matches[0];
+      const drawnCardRef = this.drawnCard;
+      this.drawnCard = null; // Clear before adding to captured for Card3D sync
+
       debugLogger.log('sakura', `✅ Auto-capturing ${capturedCard.name} with drawn card`);
-      this.playerCaptured.push(this.drawnCard, capturedCard);
+      this.playerCaptured.push(drawnCardRef, capturedCard);
       this.field = this.field.filter(c => c.id !== capturedCard.id);
       this.message = `Captured ${capturedCard.month}!`;
 
@@ -519,13 +523,15 @@ export class Sakura {
         this.gajiState.isWildCard = false;
       }
 
-      this.drawnCard = null;
       this.endTurn();
     } else if (matches.length >= 2) {
       // Multiple matches - auto capture first match (standard rule)
       const chosen = matches[0];
+      const drawnCardRef = this.drawnCard;
+      this.drawnCard = null; // Clear before adding to captured for Card3D sync
+
       debugLogger.log('sakura', `✅ Multiple matches - auto-capturing first: ${chosen.name}`);
-      this.playerCaptured.push(this.drawnCard, chosen);
+      this.playerCaptured.push(drawnCardRef, chosen);
       this.field = this.field.filter(c => c.id !== chosen.id);
       this.message = `Captured ${chosen.month}!`;
 
@@ -536,7 +542,6 @@ export class Sakura {
         this.gajiState.isWildCard = false;
       }
 
-      this.drawnCard = null;
       this.endTurn();
     }
 
@@ -741,11 +746,12 @@ export class Sakura {
     if (validTargets.length === 0) {
       debugLogger.log('sakura', `⚡ No valid targets for drawn Gaji - adding to field`);
       // No valid targets - Gaji goes to field
-      this.field.push(gajiCard);
+      const gajiCardRef = gajiCard;
+      this.drawnCard = null; // Clear before adding to field for Card3D sync
+      this.field.push(gajiCardRef);
       this.gajiState.location = 'field';
       this.gajiState.isWildCard = false;
       this.message = 'Drew Gaji but no valid targets. Card added to field.';
-      this.drawnCard = null;
       this.endTurn();
       return;
     }
@@ -760,8 +766,8 @@ export class Sakura {
     setTimeout(() => {
       const bestTarget = this.selectBestGajiTarget(validTargets, 'player');
       debugLogger.log('sakura', `⚡ Best target for drawn Gaji: ${bestTarget.name}`);
+      this.drawnCard = null; // Clear before capture for Card3D sync
       this.captureWithGaji(gajiCard, bestTarget);
-      this.drawnCard = null;
       this.endTurn();
     }, 500);
   }
@@ -916,9 +922,10 @@ export class Sakura {
 
     // Check if Gaji
     if (this.isGaji(this.drawnCard)) {
+      const gajiCardRef = this.drawnCard;
+      this.drawnCard = null; // Clear before handling Gaji for Card3D sync
       setTimeout(() => {
-        this.handleOpponentGajiDrawn(this.drawnCard, difficulty);
-        this.drawnCard = null;
+        this.handleOpponentGajiDrawn(gajiCardRef, difficulty);
         setTimeout(() => this.endTurn(), 500);
       }, 500);
       return;
@@ -928,17 +935,18 @@ export class Sakura {
     const matches = this.field.filter(fc => fc.month === this.drawnCard.month);
 
     setTimeout(() => {
+      const drawnCardRef = this.drawnCard;
+      this.drawnCard = null; // Clear before any zone changes for Card3D sync
+
       if (matches.length === 0) {
-        this.field.push(this.drawnCard);
+        this.field.push(drawnCardRef);
         this.message = 'Opponent drew - no match.';
       } else {
         const chosen = matches[0]; // Auto-capture first match
-        this.opponentCaptured.push(this.drawnCard, chosen);
+        this.opponentCaptured.push(drawnCardRef, chosen);
         this.field = this.field.filter(c => c.id !== chosen.id);
         this.message = `Opponent captured ${chosen.month}!`;
       }
-
-      this.drawnCard = null;
       setTimeout(() => this.endTurn(), 500);
     }, 500);
   }
