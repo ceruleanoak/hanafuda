@@ -146,9 +146,45 @@ export class Renderer {
     // Get all visible cards sorted by render order
     const visibleCards = card3DManager.getVisibleCards();
 
+    // Determine if we should show point values (Sakura mode)
+    const pointValueOptions = gameState.isSakuraMode ? {
+      enabled: true,
+      getValue: (card) => {
+        // Sakura point values
+        const SAKURA_VALUES = {
+          'bright': 20,
+          'ribbon': 5,
+          'animal': 1,
+          'chaff': 0
+        };
+        return SAKURA_VALUES[card.type] || 0;
+      }
+    } : null;
+
+    // Determine if we should show wild card effect (Sakura mode, Gaji card)
+    const wildCardOptions = gameState.isSakuraMode ? {
+      enabled: true,
+      isWildCard: (card) => {
+        // Gaji is the Lightning card (November chaff, ID 44)
+        const GAJI_CARD_ID = 44;
+
+        // Check if this is the Gaji card
+        if (card.id !== GAJI_CARD_ID) return false;
+
+        // Check Gaji state - only wild when in hand or just drawn
+        const gajiState = gameState.gajiState;
+        if (!gajiState) return false;
+
+        // Wild when in player's hand, opponent's hand (we can see it), or just drawn
+        return gajiState.location === 'player_hand' ||
+               gajiState.location === 'opponent_hand' ||
+               (gajiState.location === 'deck' && gameState.drawnCard && gameState.drawnCard.id === GAJI_CARD_ID);
+      }
+    } : null;
+
     // Draw all visible cards
     visibleCards.forEach(card3D => {
-      this.cardRenderer.drawCard3D(this.ctx, card3D, false, card3D.opacity);
+      this.cardRenderer.drawCard3D(this.ctx, card3D, false, card3D.opacity, pointValueOptions, wildCardOptions);
     });
 
     // Draw deck counter - always show at fixed position

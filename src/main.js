@@ -3,6 +3,7 @@
  */
 
 import { KoiKoi } from './game/KoiKoi.js';
+import { Sakura } from './game/Sakura.js';
 import { MatchGame } from './game/MatchGame.js';
 import { KoiKoiShop } from './game/KoiKoiShop.js';
 import { Renderer } from './rendering/Renderer.js';
@@ -45,7 +46,7 @@ class Game {
     this.gameOptions = new GameOptions();
 
     // Game mode tracking - restore from localStorage or default to 'koikoi'
-    this.currentGameMode = localStorage.getItem('currentGameMode') || 'koikoi'; // 'koikoi', 'match', or 'shop'
+    this.currentGameMode = localStorage.getItem('currentGameMode') || 'koikoi'; // 'koikoi', 'sakura', 'match', or 'shop'
     this.gameModeSelect = document.getElementById('game-mode-select');
 
     // Initialize all game types
@@ -53,6 +54,9 @@ class Game {
     this.koikoiGame.setUICallback((yaku, score) => this.showKoikoiDecision(yaku, score));
     this.koikoiGame.setRoundSummaryCallback((data) => this.showRoundSummary(data));
     this.koikoiGame.setOpponentKoikoiCallback(() => this.showOpponentKoikoiNotification());
+
+    this.sakuraGame = new Sakura(this.gameOptions);
+    this.sakuraGame.setRoundSummaryCallback((data) => this.showSakuraRoundSummary(data));
 
     this.matchGame = new MatchGame(this.gameOptions);
 
@@ -234,6 +238,10 @@ class Game {
       } else if (this.currentGameMode === 'shop') {
         // Switch to shop mode (this will show the shop)
         this.switchGameMode('shop');
+      } else if (this.currentGameMode === 'sakura') {
+        // Switch to Sakura mode
+        this.switchGameMode('sakura');
+        this.showRoundModal();
       } else {
         // Show round modal for Koi Koi
         this.showRoundModal();
@@ -686,6 +694,9 @@ class Game {
     if (this.currentGameMode === 'match') {
       // Match game doesn't use rounds - pass viewport dimensions
       this.game.startNewGame(false, this.renderer.displayWidth, this.renderer.displayHeight);
+    } else if (this.currentGameMode === 'sakura') {
+      // Sakura uses rounds (default 6 rounds)
+      this.game.startNewGame(rounds || 6);
     } else {
       // Koi Koi uses rounds
       this.game.startNewGame(rounds);
@@ -736,7 +747,18 @@ class Game {
       document.getElementById('test-3d-btn').style.display = 'inline-block';
 
       // Update instructions
-      this.instructionsElement.textContent = 'Achieve your bonus chance for extra points!';
+      this.instructionsElement.textContent = 'Achieve your win condition!';
+    } else if (mode === 'sakura') {
+      this.game = this.sakuraGame;
+
+      // Show score display for Sakura mode
+      document.getElementById('score').style.display = 'flex';
+      document.getElementById('options-btn').style.display = 'inline-block';
+      document.getElementById('variations-btn').style.display = 'none';
+      document.getElementById('test-3d-btn').style.display = 'inline-block';
+
+      // Update instructions
+      this.instructionsElement.textContent = 'Sakura (Hawaiian Hanafuda) - Click cards to select them';
     } else {
       this.game = this.koikoiGame;
 
@@ -796,6 +818,9 @@ class Game {
     } else if (mode === 'shop') {
       // For Shop mode, show the shop modal
       this.showShopModal();
+    } else if (mode === 'sakura') {
+      // For Sakura mode, show round modal
+      this.showRoundModal();
     } else {
       // For Koi Koi, show round modal
       this.showRoundModal();
@@ -1921,6 +1946,146 @@ class Game {
       this.card3DManager.initializeFromGameState(this.game.getState(), true);
       debugLogger.log('3dCards', '✨ Card3D system reinitialized for next round', null);
     }
+  }
+
+  /**
+   * Show Sakura round summary modal (custom for Sakura mode)
+   */
+  showSakuraRoundSummary(data) {
+    // Determine if game is over
+    const isGameOver = data.currentRound >= data.totalRounds;
+
+    // If game over, play animation first
+    if (isGameOver) {
+      if (data.playerMatchScore > data.opponentMatchScore) {
+        this.playRandomShowcaseAnimation();
+        this.audioManager.playWinMusic();
+      } else if (data.playerMatchScore < data.opponentMatchScore) {
+        this.playLosingAnimation();
+        this.audioManager.playLoseMusic();
+      } else {
+        this.playRandomShowcaseAnimation();
+      }
+
+      setTimeout(() => {
+        this.displaySakuraRoundSummaryModal(data, isGameOver);
+      }, 2500);
+    } else {
+      this.displaySakuraRoundSummaryModal(data, isGameOver);
+    }
+  }
+
+  /**
+   * Display Sakura round summary modal
+   */
+  displaySakuraRoundSummaryModal(data, isGameOver) {
+    // Update title
+    const title = document.getElementById('round-summary-title');
+    if (isGameOver) {
+      const winner = data.playerMatchScore > data.opponentMatchScore ? 'You Win!' :
+                     data.opponentMatchScore > data.playerMatchScore ? 'Opponent Wins!' : 'Tie Game!';
+      title.textContent = `Game Over - ${winner}`;
+    } else {
+      title.textContent = `Round ${data.currentRound} Complete!`;
+    }
+
+    // Update round scores
+    document.getElementById('player-round-points').textContent = data.playerRoundScore;
+    document.getElementById('opponent-round-points').textContent = data.opponentRoundScore;
+
+    // Update total scores
+    document.getElementById('player-total-points').textContent = data.playerMatchScore;
+    document.getElementById('opponent-total-points').textContent = data.opponentMatchScore;
+
+    // Update yaku details (Sakura-specific)
+    const yakuDetails = document.getElementById('round-yaku-details');
+    yakuDetails.innerHTML = '';
+
+    // Player section
+    const playerSection = document.createElement('div');
+    playerSection.innerHTML = '<h4>Your Score:</h4>';
+
+    const playerBreakdown = document.createElement('div');
+    playerBreakdown.className = 'score-breakdown-detail';
+    playerBreakdown.innerHTML = `
+      <strong>Base Points:</strong> ${data.playerBasePoints} pts<br>
+      ${data.playerYaku.length > 0 ? `<strong>Yaku (${data.playerYaku.length}):</strong>` : '<strong>No Yaku</strong>'}
+    `;
+
+    if (data.playerYaku.length > 0) {
+      const yakuList = document.createElement('div');
+      yakuList.className = 'yaku-list';
+      data.playerYaku.forEach(y => {
+        const yakuLine = document.createElement('div');
+        yakuLine.textContent = `• ${y.displayName} (-50 pts to opponent)`;
+        yakuList.appendChild(yakuLine);
+      });
+      playerBreakdown.appendChild(yakuList);
+    }
+
+    if (data.opponentYakuPenalty > 0) {
+      const penaltyDiv = document.createElement('div');
+      penaltyDiv.style.marginTop = '8px';
+      penaltyDiv.innerHTML = `<strong>Opponent Yaku Penalty:</strong> -${data.opponentYakuPenalty} pts`;
+      playerBreakdown.appendChild(penaltyDiv);
+    }
+
+    const totalDiv = document.createElement('div');
+    totalDiv.style.marginTop = '8px';
+    totalDiv.innerHTML = `<strong>Round Total:</strong> ${data.playerRoundScore} pts`;
+    playerBreakdown.appendChild(totalDiv);
+
+    playerSection.appendChild(playerBreakdown);
+    yakuDetails.appendChild(playerSection);
+
+    // Opponent section
+    const opponentSection = document.createElement('div');
+    opponentSection.style.marginTop = '16px';
+    opponentSection.innerHTML = '<h4>Opponent Score:</h4>';
+
+    const opponentBreakdown = document.createElement('div');
+    opponentBreakdown.className = 'score-breakdown-detail';
+    opponentBreakdown.innerHTML = `
+      <strong>Base Points:</strong> ${data.opponentBasePoints} pts<br>
+      ${data.opponentYaku.length > 0 ? `<strong>Yaku (${data.opponentYaku.length}):</strong>` : '<strong>No Yaku</strong>'}
+    `;
+
+    if (data.opponentYaku.length > 0) {
+      const yakuList = document.createElement('div');
+      yakuList.className = 'yaku-list';
+      data.opponentYaku.forEach(y => {
+        const yakuLine = document.createElement('div');
+        yakuLine.textContent = `• ${y.displayName} (-50 pts to you)`;
+        yakuList.appendChild(yakuLine);
+      });
+      opponentBreakdown.appendChild(yakuList);
+    }
+
+    if (data.playerYakuPenalty > 0) {
+      const penaltyDiv = document.createElement('div');
+      penaltyDiv.style.marginTop = '8px';
+      penaltyDiv.innerHTML = `<strong>Your Yaku Penalty:</strong> -${data.playerYakuPenalty} pts`;
+      opponentBreakdown.appendChild(penaltyDiv);
+    }
+
+    const opponentTotalDiv = document.createElement('div');
+    opponentTotalDiv.style.marginTop = '8px';
+    opponentTotalDiv.innerHTML = `<strong>Round Total:</strong> ${data.opponentRoundScore} pts`;
+    opponentBreakdown.appendChild(opponentTotalDiv);
+
+    opponentSection.appendChild(opponentBreakdown);
+    yakuDetails.appendChild(opponentSection);
+
+    // Update button text
+    const continueBtn = document.getElementById('continue-next-round');
+    if (isGameOver) {
+      continueBtn.textContent = 'Start New Game';
+    } else {
+      continueBtn.textContent = `Continue to Round ${data.currentRound + 1}`;
+    }
+
+    // Show modal
+    this.roundSummaryModal.classList.add('show');
   }
 
   /**
