@@ -72,8 +72,9 @@ export class CardRenderer {
    * @param {boolean} isSelected - Whether card is selected
    * @param {boolean} isFaceDown - Whether card is face down
    * @param {number} opacity - Opacity (0-1), default 1
+   * @param {Object} pointValueOptions - Optional { enabled: boolean, getValue: (card) => number }
    */
-  drawCard(ctx, card, x, y, isSelected = false, isFaceDown = false, opacity = 1.0) {
+  drawCard(ctx, card, x, y, isSelected = false, isFaceDown = false, opacity = 1.0, pointValueOptions = null) {
     ctx.save();
 
     // Apply opacity
@@ -113,6 +114,12 @@ export class CardRenderer {
     } else if (hasImage && cardImage) {
       // Draw the card image
       ctx.drawImage(cardImage, x, y, this.cardWidth, this.cardHeight);
+
+      // Draw point value badge if enabled
+      if (pointValueOptions && pointValueOptions.enabled && !isFaceDown) {
+        const pointValue = pointValueOptions.getValue(card);
+        this.drawPointValueBadge(ctx, pointValue, x, y);
+      }
 
       // Selection border overlay
       if (isSelected) {
@@ -244,6 +251,299 @@ export class CardRenderer {
   }
 
   /**
+   * Draw point value badge on card (for Sakura mode)
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} pointValue - Point value to display
+   * @param {number} x - Card X position
+   * @param {number} y - Card Y position
+   */
+  drawPointValueBadge(ctx, pointValue, x, y) {
+    const badgeSize = 24;
+    const badgeX = x + this.cardWidth - badgeSize - 4;
+    const badgeY = y + 4;
+    const badgeRadius = badgeSize / 2;
+
+    // Choose badge color based on point value
+    let badgeColor, textColor;
+    if (pointValue === 0) {
+      badgeColor = '#757575'; // Gray for 0 points
+      textColor = '#ffffff';
+    } else if (pointValue === 1) {
+      badgeColor = '#4CAF50'; // Green for 1 point
+      textColor = '#ffffff';
+    } else if (pointValue === 5) {
+      badgeColor = '#2196F3'; // Blue for 5 points
+      textColor = '#ffffff';
+    } else if (pointValue === 20) {
+      badgeColor = '#FFC107'; // Gold for 20 points
+      textColor = '#000000';
+    } else {
+      badgeColor = '#9C27B0'; // Purple for other values
+      textColor = '#ffffff';
+    }
+
+    // Draw badge circle with shadow
+    ctx.save();
+
+    // Shadow
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetX = 1;
+    ctx.shadowOffsetY = 1;
+
+    // Circle background
+    ctx.fillStyle = badgeColor;
+    ctx.beginPath();
+    ctx.arc(badgeX + badgeRadius, badgeY + badgeRadius, badgeRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Reset shadow for text
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+
+    // Draw point value text
+    ctx.fillStyle = textColor;
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(pointValue.toString(), badgeX + badgeRadius, badgeY + badgeRadius);
+
+    ctx.restore();
+  }
+
+  /**
+   * Draw point value badge on scaled card (for Sakura mode with 3D cards)
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} pointValue - Point value to display
+   * @param {number} x - Card X position
+   * @param {number} y - Card Y position
+   * @param {number} scale - Card scale factor
+   */
+  drawPointValueBadgeScaled(ctx, pointValue, x, y, scale) {
+    const badgeSize = 24 * scale;
+    const scaledWidth = this.cardWidth * scale;
+    const badgeX = x + scaledWidth - badgeSize - (4 * scale);
+    const badgeY = y + (4 * scale);
+    const badgeRadius = badgeSize / 2;
+
+    // Choose badge color based on point value
+    let badgeColor, textColor;
+    if (pointValue === 0) {
+      badgeColor = '#757575'; // Gray for 0 points
+      textColor = '#ffffff';
+    } else if (pointValue === 1) {
+      badgeColor = '#4CAF50'; // Green for 1 point
+      textColor = '#ffffff';
+    } else if (pointValue === 5) {
+      badgeColor = '#2196F3'; // Blue for 5 points
+      textColor = '#ffffff';
+    } else if (pointValue === 20) {
+      badgeColor = '#FFC107'; // Gold for 20 points
+      textColor = '#000000';
+    } else {
+      badgeColor = '#9C27B0'; // Purple for other values
+      textColor = '#ffffff';
+    }
+
+    // Draw badge circle with shadow
+    ctx.save();
+
+    // Shadow
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 4 * scale;
+    ctx.shadowOffsetX = 1 * scale;
+    ctx.shadowOffsetY = 1 * scale;
+
+    // Circle background
+    ctx.fillStyle = badgeColor;
+    ctx.beginPath();
+    ctx.arc(badgeX + badgeRadius, badgeY + badgeRadius, badgeRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 1.5 * scale;
+    ctx.stroke();
+
+    // Reset shadow for text
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+
+    // Draw point value text
+    ctx.fillStyle = textColor;
+    ctx.font = `bold ${12 * scale}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(pointValue.toString(), badgeX + badgeRadius, badgeY + badgeRadius);
+
+    ctx.restore();
+  }
+
+  /**
+   * Draw electric shimmer effect around card (for wild card in Sakura mode)
+   * Creates an animated yellow/gold electric aura
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} x - Card X position
+   * @param {number} y - Card Y position
+   * @param {number} width - Card width
+   * @param {number} height - Card height
+   * @param {number} scale - Card scale factor
+   */
+  drawElectricShimmer(ctx, x, y, width, height, scale) {
+    ctx.save();
+
+    // Use time for animation
+    const time = Date.now() / 1000;
+
+    // Draw multiple layers of shimmer
+    const layers = 3;
+    for (let layer = 0; layer < layers; layer++) {
+      const offset = layer * 2 * scale;
+      const phaseShift = layer * Math.PI / 2;
+
+      // Animate the glow intensity
+      const pulseSpeed = 2 + layer * 0.5;
+      const pulse = 0.5 + 0.5 * Math.sin(time * pulseSpeed + phaseShift);
+
+      // Create gradient for glow effect
+      const gradient = ctx.createRadialGradient(
+        x + width / 2, y + height / 2, 0,
+        x + width / 2, y + height / 2, Math.max(width, height) / 2 + offset
+      );
+
+      const alpha = (0.15 + pulse * 0.1) * (1 - layer * 0.3);
+      gradient.addColorStop(0, `rgba(255, 215, 0, 0)`);
+      gradient.addColorStop(0.7, `rgba(255, 215, 0, ${alpha})`);
+      gradient.addColorStop(1, `rgba(255, 140, 0, 0)`);
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(x - offset, y - offset, width + offset * 2, height + offset * 2);
+    }
+
+    // Draw animated electric arcs around the border
+    const arcCount = 8;
+    for (let i = 0; i < arcCount; i++) {
+      const angle = (i / arcCount) * Math.PI * 2 + time;
+      const arcPulse = Math.sin(time * 3 + i) * 0.5 + 0.5;
+
+      // Random-ish arc positions around the perimeter
+      const side = i % 4;
+      let startX, startY, endX, endY;
+
+      switch(side) {
+        case 0: // Top
+          startX = x + (i / arcCount) * width * 4;
+          startY = y;
+          endX = startX + Math.sin(time * 4 + i) * 10 * scale;
+          endY = y - arcPulse * 15 * scale;
+          break;
+        case 1: // Right
+          startX = x + width;
+          startY = y + (i / arcCount) * height * 4;
+          endX = x + width + arcPulse * 15 * scale;
+          endY = startY + Math.sin(time * 4 + i) * 10 * scale;
+          break;
+        case 2: // Bottom
+          startX = x + (i / arcCount) * width * 4;
+          startY = y + height;
+          endX = startX + Math.sin(time * 4 + i) * 10 * scale;
+          endY = y + height + arcPulse * 15 * scale;
+          break;
+        case 3: // Left
+          startX = x;
+          startY = y + (i / arcCount) * height * 4;
+          endX = x - arcPulse * 15 * scale;
+          endY = startY + Math.sin(time * 4 + i) * 10 * scale;
+          break;
+      }
+
+      // Draw electric arc
+      ctx.strokeStyle = `rgba(255, 215, 0, ${arcPulse * 0.6})`;
+      ctx.lineWidth = (2 + arcPulse) * scale;
+      ctx.shadowColor = 'rgba(255, 215, 0, 0.8)';
+      ctx.shadowBlur = 8 * scale;
+
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+
+      // Bezier curve for lightning effect
+      const cpX = (startX + endX) / 2 + Math.sin(time * 5 + i) * 5 * scale;
+      const cpY = (startY + endY) / 2 + Math.cos(time * 5 + i) * 5 * scale;
+      ctx.quadraticCurveTo(cpX, cpY, endX, endY);
+      ctx.stroke();
+    }
+
+    // Reset shadow
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+
+    ctx.restore();
+  }
+
+  /**
+   * Draw electric overlay on top of card (for wild card in Sakura mode)
+   * Adds a subtle electric glow over the card face
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} x - Card X position
+   * @param {number} y - Card Y position
+   * @param {number} width - Card width
+   * @param {number} height - Card height
+   * @param {number} scale - Card scale factor
+   */
+  drawElectricOverlay(ctx, x, y, width, height, scale) {
+    ctx.save();
+
+    const time = Date.now() / 1000;
+
+    // Pulsing border glow
+    const borderPulse = 0.3 + 0.3 * Math.sin(time * 3);
+
+    // Draw glowing border
+    ctx.strokeStyle = `rgba(255, 215, 0, ${borderPulse})`;
+    ctx.lineWidth = 4 * scale;
+    ctx.shadowColor = 'rgba(255, 215, 0, 1)';
+    ctx.shadowBlur = 12 * scale;
+    ctx.strokeRect(x, y, width, height);
+
+    // Draw corner sparks
+    const corners = [
+      [x, y],
+      [x + width, y],
+      [x + width, y + height],
+      [x, y + height]
+    ];
+
+    corners.forEach((corner, i) => {
+      const sparkPulse = Math.sin(time * 4 + i * Math.PI / 2);
+      if (sparkPulse > 0.5) {
+        const sparkSize = (sparkPulse - 0.5) * 10 * scale;
+        ctx.fillStyle = `rgba(255, 255, 100, ${sparkPulse})`;
+        ctx.shadowColor = 'rgba(255, 255, 100, 1)';
+        ctx.shadowBlur = 15 * scale;
+
+        ctx.beginPath();
+        ctx.arc(corner[0], corner[1], sparkSize, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+
+    // Reset shadow
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+
+    ctx.restore();
+  }
+
+  /**
    * Check if a point is inside a card's bounds
    */
   isPointInCard(x, y, cardX, cardY) {
@@ -320,8 +620,10 @@ export class CardRenderer {
    * @param {Card3D} card3D - Card3D instance
    * @param {boolean} isSelected - Whether card is selected
    * @param {number} opacity - Opacity (0-1), default 1
+   * @param {Object} pointValueOptions - Optional { enabled: boolean, getValue: (card) => number }
+   * @param {Object} wildCardOptions - Optional { enabled: boolean, isWildCard: (card) => boolean }
    */
-  drawCard3D(ctx, card3D, isSelected = false, opacity = 1.0) {
+  drawCard3D(ctx, card3D, isSelected = false, opacity = 1.0, pointValueOptions = null, wildCardOptions = null) {
     ctx.save();
 
     // Get scale based on Z position
@@ -348,6 +650,12 @@ export class CardRenderer {
     // Draw card thickness effect (before flip transform)
     const faceUp = card3D.faceUp;
     this.drawCardThickness(ctx, x, y, scaledWidth, scaledHeight, scale, faceUp);
+
+    // Check if this is a wild card (Gaji in Sakura mode)
+    const card = card3D.cardData;
+    const isWildCard = wildCardOptions && wildCardOptions.enabled &&
+                       wildCardOptions.isWildCard(card) &&
+                       faceUp >= 0.5; // Only show effect when face is visible
 
     // Handle face up/down blending
     // faceUp = 0 -> fully face down
@@ -399,8 +707,24 @@ export class CardRenderer {
         ctx.strokeRect(x, y, scaledWidth, scaledHeight);
       }
     } else if (hasImage && cardImage) {
+      // Draw electric shimmer effect for wild card (BEFORE card image)
+      if (isWildCard) {
+        this.drawElectricShimmer(ctx, x, y, scaledWidth, scaledHeight, scale);
+      }
+
       // Draw the card image (scaled)
       ctx.drawImage(cardImage, x, y, scaledWidth, scaledHeight);
+
+      // Draw point value badge if enabled (needs to be before flip transformation is restored)
+      if (pointValueOptions && pointValueOptions.enabled && !isFaceDown) {
+        const pointValue = pointValueOptions.getValue(card);
+        this.drawPointValueBadgeScaled(ctx, pointValue, x, y, scale);
+      }
+
+      // Draw electric overlay effect for wild card (AFTER card image, for extra glow)
+      if (isWildCard) {
+        this.drawElectricOverlay(ctx, x, y, scaledWidth, scaledHeight, scale);
+      }
 
       // Selection border overlay
       if (isSelected) {
