@@ -688,7 +688,6 @@ export class CardRenderer {
     }
 
     // Try to load image if available
-    const card = card3D.cardData;
     if (card.image && !this.imageCache.has(card.image) && !this.loadingImages.has(card.image) && !this.failedImages.has(card.image)) {
       this.loadImage(card.image).catch(() => {});
     }
