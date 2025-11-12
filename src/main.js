@@ -736,7 +736,7 @@ class Game {
       document.getElementById('test-3d-btn').style.display = 'inline-block';
 
       // Update instructions
-      this.instructionsElement.textContent = 'Achieve your win condition!';
+      this.instructionsElement.textContent = 'Achieve your bonus chance for extra points!';
     } else {
       this.game = this.koikoiGame;
 

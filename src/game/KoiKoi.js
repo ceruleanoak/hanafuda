@@ -1290,7 +1290,11 @@ export class KoiKoi {
    * Opponent AI turn - prioritizes matches and automatic bomb play
    */
   opponentTurn() {
+    console.log('[OPPONENT] opponentTurn() called');
+    console.log(`[OPPONENT] Hand size: ${this.opponentHand.length}, Deck size: ${this.deck.cards.length}`);
+
     if (this.opponentHand.length === 0 || this.deck.isEmpty()) {
+      console.log('[OPPONENT] Game over - hand or deck empty');
       this.endRound();
       return;
     }
@@ -1381,6 +1385,8 @@ export class KoiKoi {
     }
 
     const handCard = this.opponentHand[selectedCardIndex];
+    console.log(`[OPPONENT] Selected card: ${handCard.name} (index ${selectedCardIndex})`);
+    console.log(`[OPPONENT] Has match: ${selectedMatch ? selectedMatch.name : 'none'}`);
 
     // Show the opponent's card before processing
     this.phase = 'opponent_playing';
@@ -1388,8 +1394,10 @@ export class KoiKoi {
     this.message = `Opponent plays ${handCard.name}...`;
 
     setTimeout(() => {
+      console.log('[OPPONENT] Processing card play after timeout');
       // Remove from opponent's hand
       this.opponentHand.splice(selectedCardIndex, 1);
+      console.log(`[OPPONENT] Removed card from hand, new hand size: ${this.opponentHand.length}`);
 
       if (selectedMatch) {
         // Check for 4-card capture (celebrate scenario)
