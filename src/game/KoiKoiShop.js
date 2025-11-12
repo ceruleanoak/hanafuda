@@ -185,11 +185,12 @@ export class KoiKoiShop extends KoiKoi {
   }
 
   /**
-   * Start a new shop game with selected cards and win condition
+   * Start a new shop game with selected cards and bonus chance
    */
   startShopGame(selectedCards, winCondition) {
     this.shopCards = selectedCards;
     this.selectedWinCondition = winCondition;
+    this.bonusAwarded = false; // Track if bonus has been awarded
 
     // Always 1 round in shop mode
     this.totalRounds = 1;
@@ -537,41 +538,28 @@ export class KoiKoiShop extends KoiKoi {
   }
 
   /**
-   * Override end of turn to check win conditions instead of scores
+   * Override end of turn to check bonus chances and award bonus points
    */
   endTurn() {
-    console.log('[SHOP] endTurn() called - checking win condition');
+    console.log('[SHOP] endTurn() called - checking bonus chance');
 
-    // First check if player achieved their win condition
-    if (this.checkPlayerWinCondition()) {
-      this.gameOver = true;
-      this.gameOverMessage = `Victory! You achieved: ${this.selectedWinCondition.name}`;
-      console.log('[SHOP] WIN CONDITION MET! Game over.');
-      this.endShopGame(true, this.gameOverMessage);
-      return;
-    }
+    // Check if player achieved their bonus chance and hasn't been awarded yet
+    if (!this.bonusAwarded && this.checkPlayerWinCondition()) {
+      this.bonusAwarded = true;
 
-    // For hard mode, check if opponent completed any non-sake yaku (instant loss)
-    if (this.selectedWinCondition.id === 'hard_block_opponent') {
-      const opponentYaku = Yaku.checkYaku(this.opponentCaptured, this.gameOptions);
-      const nonSakeYaku = opponentYaku.filter(y =>
-        y.name !== 'Viewing Sake' && y.name !== 'Moon Viewing Sake'
-      );
+      // Award bonus points based on difficulty
+      const bonusPoints = this.selectedWinCondition.difficulty === 1 ? 3 :
+                         this.selectedWinCondition.difficulty === 2 ? 6 : 10;
 
-      if (nonSakeYaku.length > 0) {
-        this.gameOver = true;
-        this.gameOverMessage = `Defeat! Opponent completed a yaku: ${nonSakeYaku[0].name}`;
-        this.endShopGame(false, this.gameOverMessage);
-        return;
-      }
+      this.playerScore += bonusPoints;
+      this.message = `Bonus achieved! +${bonusPoints} points for: ${this.selectedWinCondition.name}`;
+      console.log(`[SHOP] BONUS ACHIEVED! Awarded ${bonusPoints} points. New score: ${this.playerScore}`);
     }
 
     // Check if deck is empty and both hands are empty (game over)
     if (this.deck.cards.length === 0 && this.playerHand.length === 0 && this.opponentHand.length === 0) {
-      // Player didn't achieve their win condition
-      this.gameOver = true;
-      this.gameOverMessage = `Defeat! Failed to achieve: ${this.selectedWinCondition.name}`;
-      this.endShopGame(false, this.gameOverMessage);
+      console.log('[SHOP] Game over - deck and hands empty');
+      this.endShopGame();
       return;
     }
 
@@ -580,42 +568,59 @@ export class KoiKoiShop extends KoiKoi {
   }
 
   /**
-   * End the shop game and trigger round summary
+   * End the shop game and trigger round summary with score comparison
    */
-  endShopGame(victory, message) {
-    console.log(`[SHOP] endShopGame called - victory: ${victory}, message: ${message}`);
+  endShopGame() {
+    console.log(`[SHOP] endShopGame called`);
+    console.log(`[SHOP] Final scores - Player: ${this.playerScore}, Opponent: ${this.opponentScore}`);
+    console.log(`[SHOP] Bonus achieved: ${this.bonusAwarded}`);
 
     const playerYaku = Yaku.checkYaku(this.playerCaptured, this.gameOptions);
     const opponentYaku = Yaku.checkYaku(this.opponentCaptured, this.gameOptions);
 
+    // Calculate round scores from yaku
+    const playerYakuScore = Yaku.calculateScore(playerYaku);
+    const opponentYakuScore = Yaku.calculateScore(opponentYaku);
+
+    // Determine message
+    let shopMessage = '';
+    if (this.bonusAwarded) {
+      const bonusPoints = this.selectedWinCondition.difficulty === 1 ? 3 :
+                         this.selectedWinCondition.difficulty === 2 ? 6 : 10;
+      shopMessage = `Bonus achieved! +${bonusPoints} points for: ${this.selectedWinCondition.name}`;
+    } else {
+      shopMessage = `Bonus chance not achieved: ${this.selectedWinCondition.name}`;
+    }
+
     // Create round summary data for shop mode
     const roundSummaryData = {
       roundNumber: 1,
-      playerRoundScore: victory ? 1 : 0, // Victory = 1 point for display
-      opponentRoundScore: victory ? 0 : 1, // Loss = opponent gets 1 point
-      playerTotalScore: victory ? 1 : 0,
-      opponentTotalScore: victory ? 0 : 1,
+      playerRoundScore: playerYakuScore,
+      opponentRoundScore: opponentYakuScore,
+      playerTotalScore: this.playerScore,
+      opponentTotalScore: this.opponentScore,
       playerYaku: playerYaku,
       opponentYaku: opponentYaku,
       playerScoreBreakdown: {
-        baseScore: victory ? 1 : 0,
+        baseScore: playerYakuScore,
         koikoiPenalty: false,
         autoDouble: false,
         koikoiMultiplier: 0,
-        finalScore: victory ? 1 : 0
+        finalScore: this.playerScore
       },
       opponentScoreBreakdown: {
-        baseScore: victory ? 0 : 1,
+        baseScore: opponentYakuScore,
         koikoiPenalty: false,
         autoDouble: false,
         koikoiMultiplier: 0,
-        finalScore: victory ? 0 : 1
+        finalScore: this.opponentScore
       },
       isGameOver: true,
       totalRounds: 1,
       shopMode: true,
-      winCondition: this.selectedWinCondition,
-      shopMessage: message
+      bonusChance: this.selectedWinCondition,
+      bonusAwarded: this.bonusAwarded,
+      shopMessage: shopMessage
     };
 
     // Call the round summary callback
