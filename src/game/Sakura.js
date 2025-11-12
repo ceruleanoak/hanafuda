@@ -1259,6 +1259,7 @@ export class Sakura {
 
       // Deck info
       deckSize: this.deck.cards.length,
+      deckCount: this.deck.count, // For renderer to display deck counter
       deck: this.deck // Include full deck object for Card3D system
     };
   }
