@@ -79,6 +79,13 @@ export const WIN_CONDITIONS = {
     difficulty: 1,
     stars: '★☆☆'
   },
+  EASY_TWO_FOUR_OF_A_KINDS: {
+    id: 'easy_two_four_of_a_kinds',
+    name: 'Two Four-of-a-Kinds',
+    description: 'Collect all 4 cards for any 2 different months',
+    difficulty: 1,
+    stars: '★☆☆'
+  },
 
   // MEDIUM Bonus Chances (★★☆) - Need some luck in addition to key cards
   MEDIUM_THREE_MONTHS: {
@@ -414,6 +421,9 @@ export class KoiKoiShop extends KoiKoi {
     } else if (id === 'easy_grass_ribbons') {
       result = this.checkGrassRibbons();
       console.log(`[BONUS CHANCE] easy_grass_ribbons: ${result}`);
+    } else if (id === 'easy_two_four_of_a_kinds') {
+      result = this.checkCompleteMonths(2);
+      console.log(`[BONUS CHANCE] easy_two_four_of_a_kinds: ${result}`);
     }
     // Medium conditions
     else if (id === 'medium_three_months') {
