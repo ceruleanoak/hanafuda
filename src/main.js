@@ -891,7 +891,7 @@ class Game {
 
     // Use 3D hit detection
     const card3D = this.card3DManager.getCardAtPosition(x, y);
-    if (card3D && (card3D.homeZone === 'playerHand' || card3D.homeZone === 'field')) {
+    if (card3D && card3D.homeZone === 'playerHand') {
       // Clear any hover state
       if (this.hoveredCard3D) {
         this.hoveredCard3D.setHovered(false);
