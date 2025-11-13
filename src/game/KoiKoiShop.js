@@ -151,6 +151,13 @@ export const WIN_CONDITIONS = {
     difficulty: 2,
     stars: '★★☆'
   },
+  MEDIUM_FLOWER_ENTHUSIAST: {
+    id: 'medium_flower_enthusiast',
+    name: 'Flower Enthusiast',
+    description: 'Collect chaff from February, April, May, June, July, and December',
+    difficulty: 2,
+    stars: '★★☆'
+  },
 
   // HARD Bonus Chances (★★★) - Need lots of luck and 3-4 right cards in hand
   HARD_BLOCK_OPPONENT: {
@@ -441,6 +448,9 @@ export class KoiKoiShop extends KoiKoi {
     } else if (id === 'medium_sugawara') {
       result = this.checkSugawara();
       console.log(`[BONUS CHANCE] medium_sugawara: ${result}`);
+    } else if (id === 'medium_flower_enthusiast') {
+      result = this.checkFlowerEnthusiast();
+      console.log(`[BONUS CHANCE] medium_flower_enthusiast: ${result}`);
     }
     // Hard conditions
     else if (id === 'hard_block_opponent') {
@@ -652,6 +662,16 @@ export class KoiKoiShop extends KoiKoi {
     const hasFebruaryAnimal = this.playerCaptured.some(card => card.name.includes('February - animal'));
     const hasMarchBright = this.playerCaptured.some(card => card.name.includes('March - bright'));
     return hasJanuaryBright && hasFebruaryAnimal && hasMarchBright;
+  }
+
+  /**
+   * Check if player has chaff from February, April, May, June, July, and December
+   */
+  checkFlowerEnthusiast() {
+    const requiredMonths = ['February', 'April', 'May', 'June', 'July', 'December'];
+    return requiredMonths.every(month =>
+      this.playerCaptured.some(card => card.month === month && card.type === CARD_TYPES.CHAFF)
+    );
   }
 
   /**
