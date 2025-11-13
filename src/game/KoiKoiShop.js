@@ -65,6 +65,27 @@ export const WIN_CONDITIONS = {
     difficulty: 1,
     stars: '★☆☆'
   },
+  EASY_FIVE_BIRDS: {
+    id: 'easy_five_birds',
+    name: 'Five Birds',
+    description: 'Collect the cuckoo, geese, and bush warbler',
+    difficulty: 1,
+    stars: '★☆☆'
+  },
+  EASY_GRASS_RIBBONS: {
+    id: 'easy_grass_ribbons',
+    name: 'Grass Ribbons',
+    description: 'Collect the ribbons for April, May, and July',
+    difficulty: 1,
+    stars: '★☆☆'
+  },
+  EASY_TWO_FOUR_OF_A_KINDS: {
+    id: 'easy_two_four_of_a_kinds',
+    name: 'Two Four-of-a-Kinds',
+    description: 'Collect all 4 cards for any 2 different months',
+    difficulty: 1,
+    stars: '★☆☆'
+  },
 
   // MEDIUM Bonus Chances (★★☆) - Need some luck in addition to key cards
   MEDIUM_THREE_MONTHS: {
@@ -123,6 +144,34 @@ export const WIN_CONDITIONS = {
     difficulty: 2,
     stars: '★★☆'
   },
+  MEDIUM_TALES_OF_ISE: {
+    id: 'medium_tales_of_ise',
+    name: 'Tales of Ise',
+    description: 'Collect the May animal (bridge), Rain Man, and sake cup',
+    difficulty: 2,
+    stars: '★★☆'
+  },
+  MEDIUM_SUGAWARA: {
+    id: 'medium_sugawara',
+    name: 'Sugawara',
+    description: 'Collect the January bright (crane), February animal (bush warbler), and March bright (curtain)',
+    difficulty: 2,
+    stars: '★★☆'
+  },
+  MEDIUM_FLOWER_ENTHUSIAST: {
+    id: 'medium_flower_enthusiast',
+    name: 'Flower Enthusiast',
+    description: 'Collect chaff from February, April, May, June, July, and December',
+    difficulty: 2,
+    stars: '★★☆'
+  },
+  MEDIUM_SIX_NOT_SEVEN: {
+    id: 'medium_six_not_seven',
+    name: 'Six, Not Seven',
+    description: 'End round with exactly 6 points',
+    difficulty: 2,
+    stars: '★★☆'
+  },
 
   // HARD Bonus Chances (★★★) - Need lots of luck and 3-4 right cards in hand
   HARD_BLOCK_OPPONENT: {
@@ -173,6 +222,27 @@ export const WIN_CONDITIONS = {
     description: 'Win with any yaku before 10 cards remain in the deck',
     difficulty: 3,
     stars: '★★★'
+  },
+  HARD_SEVEN_RED_RIBBONS: {
+    id: 'hard_seven_red_ribbons',
+    name: 'Seven Red Ribbons',
+    description: 'Collect all poetry ribbons and all 4 plain red ribbons',
+    difficulty: 3,
+    stars: '★★★'
+  },
+  HARD_HEART_OF_THE_CARDS: {
+    id: 'hard_heart_of_the_cards',
+    name: 'Heart of the Cards',
+    description: 'Discard 6 cards to the field',
+    difficulty: 3,
+    stars: '★★★'
+  },
+  HARD_HITCHCOCK: {
+    id: 'hard_hitchcock',
+    name: 'Hitchcock',
+    description: 'Collect no birds',
+    difficulty: 3,
+    stars: '★★★'
   }
 };
 
@@ -184,6 +254,7 @@ export class KoiKoiShop extends KoiKoi {
     this.selectedWinCondition = null;
     this.shopCards = []; // The 4 cards selected from the shop
     this.isShopMode = true;
+    this.playerFieldDiscards = 0; // Track cards player discarded to field
   }
 
   /**
@@ -246,6 +317,7 @@ export class KoiKoiShop extends KoiKoi {
     this.selectedMatch = null;
     this.gameOver = false;
     this.gameOverMessage = '';
+    this.playerFieldDiscards = 0; // Reset field discard counter
 
     // Determine who goes first (same logic as regular Koi Koi)
     if (!this.firstPlayerThisGame) {
@@ -366,6 +438,15 @@ export class KoiKoiShop extends KoiKoi {
     } else if (id === 'easy_any_sake') {
       result = this.checkAnySakeYaku();
       console.log(`[BONUS CHANCE] easy_any_sake: ${result}`);
+    } else if (id === 'easy_five_birds') {
+      result = this.checkFiveBirds();
+      console.log(`[BONUS CHANCE] easy_five_birds: ${result}`);
+    } else if (id === 'easy_grass_ribbons') {
+      result = this.checkGrassRibbons();
+      console.log(`[BONUS CHANCE] easy_grass_ribbons: ${result}`);
+    } else if (id === 'easy_two_four_of_a_kinds') {
+      result = this.checkCompleteMonths(2);
+      console.log(`[BONUS CHANCE] easy_two_four_of_a_kinds: ${result}`);
     }
     // Medium conditions
     else if (id === 'medium_three_months') {
@@ -394,6 +475,18 @@ export class KoiKoiShop extends KoiKoi {
       const count = this.countCardsByType(CARD_TYPES.CHAFF);
       result = count >= 12;
       console.log(`[BONUS CHANCE] medium_twelve_chaff: ${count}/12 - ${result}`);
+    } else if (id === 'medium_tales_of_ise') {
+      result = this.checkTalesOfIse();
+      console.log(`[BONUS CHANCE] medium_tales_of_ise: ${result}`);
+    } else if (id === 'medium_sugawara') {
+      result = this.checkSugawara();
+      console.log(`[BONUS CHANCE] medium_sugawara: ${result}`);
+    } else if (id === 'medium_flower_enthusiast') {
+      result = this.checkFlowerEnthusiast();
+      console.log(`[BONUS CHANCE] medium_flower_enthusiast: ${result}`);
+    } else if (id === 'medium_six_not_seven') {
+      result = this.checkSixNotSeven();
+      console.log(`[BONUS CHANCE] medium_six_not_seven: ${result}`);
     }
     // Hard conditions
     else if (id === 'hard_block_opponent') {
@@ -419,6 +512,15 @@ export class KoiKoiShop extends KoiKoi {
     } else if (id === 'hard_speed_run') {
       result = this.checkSpeedRun();
       console.log(`[BONUS CHANCE] hard_speed_run: ${result}, deck size: ${this.deck.cards.length}`);
+    } else if (id === 'hard_seven_red_ribbons') {
+      result = this.checkSevenRedRibbons();
+      console.log(`[BONUS CHANCE] hard_seven_red_ribbons: ${result}`);
+    } else if (id === 'hard_heart_of_the_cards') {
+      result = this.checkHeartOfTheCards();
+      console.log(`[BONUS CHANCE] hard_heart_of_the_cards: ${result}`);
+    } else if (id === 'hard_hitchcock') {
+      result = this.checkHitchcock();
+      console.log(`[BONUS CHANCE] hard_hitchcock: ${result}`);
     }
 
     console.log(`[BONUS CHANCE] Final result: ${result}`);
@@ -556,6 +658,119 @@ export class KoiKoiShop extends KoiKoi {
 
     // If opponent has any non-sake yaku, player fails this condition
     return nonSakeYaku.length === 0;
+  }
+
+  /**
+   * Check if player has the three bird cards: cuckoo, geese, and bush warbler
+   */
+  checkFiveBirds() {
+    const hasCuckoo = this.playerCaptured.some(card => card.name.includes('cuckoo'));
+    const hasGeese = this.playerCaptured.some(card => card.name.includes('geese'));
+    const hasBushWarbler = this.playerCaptured.some(card => card.name.includes('bush warbler'));
+    return hasCuckoo && hasGeese && hasBushWarbler;
+  }
+
+  /**
+   * Check if player has the ribbons for April, May, and July
+   */
+  checkGrassRibbons() {
+    const hasAprilRibbon = this.playerCaptured.some(card =>
+      card.month === 'April' && card.type === CARD_TYPES.RIBBON
+    );
+    const hasMayRibbon = this.playerCaptured.some(card =>
+      card.month === 'May' && card.type === CARD_TYPES.RIBBON
+    );
+    const hasJulyRibbon = this.playerCaptured.some(card =>
+      card.month === 'July' && card.type === CARD_TYPES.RIBBON
+    );
+    return hasAprilRibbon && hasMayRibbon && hasJulyRibbon;
+  }
+
+  /**
+   * Check if player has the May animal (bridge), Rain Man, and sake cup
+   */
+  checkTalesOfIse() {
+    const hasMayAnimal = this.playerCaptured.some(card => card.name.includes('May - animal'));
+    const hasRainMan = this.playerCaptured.some(card => card.name.includes('rain man'));
+    const hasSakeCup = this.playerCaptured.some(card => card.name.includes('sake cup'));
+    return hasMayAnimal && hasRainMan && hasSakeCup;
+  }
+
+  /**
+   * Check if player has January bright (crane), February animal (bush warbler), and March bright (curtain)
+   */
+  checkSugawara() {
+    const hasJanuaryBright = this.playerCaptured.some(card => card.name.includes('January - bright'));
+    const hasFebruaryAnimal = this.playerCaptured.some(card => card.name.includes('February - animal'));
+    const hasMarchBright = this.playerCaptured.some(card => card.name.includes('March - bright'));
+    return hasJanuaryBright && hasFebruaryAnimal && hasMarchBright;
+  }
+
+  /**
+   * Check if player has chaff from February, April, May, June, July, and December
+   */
+  checkFlowerEnthusiast() {
+    const requiredMonths = ['February', 'April', 'May', 'June', 'July', 'December'];
+    return requiredMonths.every(month =>
+      this.playerCaptured.some(card => card.month === month && card.type === CARD_TYPES.CHAFF)
+    );
+  }
+
+  /**
+   * Check if player has all seven red ribbons (3 poetry + 4 plain red)
+   */
+  checkSevenRedRibbons() {
+    const redRibbons = this.playerCaptured.filter(card =>
+      card.type === CARD_TYPES.RIBBON && card.ribbonColor === 'red'
+    );
+    // Need all 7 red ribbons: 3 poetry (Jan, Feb, Mar) + 4 plain (Apr, May, Jul, Nov)
+    return redRibbons.length >= 7;
+  }
+
+  /**
+   * Override autoMatchCard to track field discards
+   */
+  autoMatchCard(card) {
+    const fieldBefore = this.field.length;
+    const result = super.autoMatchCard(card);
+
+    // If field grew by 1, player discarded a card to field
+    if (result && this.field.length === fieldBefore + 1) {
+      this.playerFieldDiscards++;
+      console.log(`[SHOP] Player field discards: ${this.playerFieldDiscards}`);
+    }
+
+    return result;
+  }
+
+  /**
+   * Check if player has exactly 6 points from yaku
+   */
+  checkSixNotSeven() {
+    const yaku = Yaku.checkYaku(this.playerCaptured, this.gameOptions);
+    const score = Yaku.calculateScore(yaku);
+    return score === 6;
+  }
+
+  /**
+   * Check if player has discarded 6 cards to the field
+   */
+  checkHeartOfTheCards() {
+    // Track number of cards player discarded to field (played from hand without matching)
+    // This requires state tracking that is added in the constructor
+    return this.playerFieldDiscards >= 6;
+  }
+
+  /**
+   * Check if player has collected no bird cards
+   * Birds: crane, bush warbler, cuckoo, geese, swallow
+   */
+  checkHitchcock() {
+    const birdNames = ['crane', 'bush warbler', 'cuckoo', 'geese', 'swallow'];
+    const hasBirds = this.playerCaptured.some(card =>
+      birdNames.some(bird => card.name.includes(bird))
+    );
+    return !hasBirds;
   }
 
   /**
