@@ -94,6 +94,9 @@ class Game {
     this.card3DManager.initializeFromGameState(this.game.getState());
     debugLogger.log('3dCards', '✨ Card3D system initialized on page load', null);
 
+    // Set Card3D manager for game modes that need custom animations
+    this.sakuraGame.setCard3DManager(this.card3DManager);
+
     // Initialize Audio Manager
     this.audioManager = new AudioManager();
     this.audioManager.setEnabled(this.gameOptions.get('audioEnabled', true));

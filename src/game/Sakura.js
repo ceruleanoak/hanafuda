@@ -19,10 +19,11 @@ import { CARD_TYPES } from '../data/cards.js';
 import { debugLogger } from '../utils/DebugLogger.js';
 
 export class Sakura {
-  constructor(gameOptions = null) {
+  constructor(gameOptions = null, card3DManager = null) {
     this.deck = new Deck();
     this.yakuChecker = new SakuraYaku();
     this.gameOptions = gameOptions;
+    this.card3DManager = card3DManager;
 
     // Game configuration
     this.totalRounds = 6; // Standard Sakura match is 6 rounds
@@ -509,73 +510,194 @@ export class Sakura {
       return;
     }
 
-    // Draw card
-    this.drawnCard = this.deck.draw();
-    debugLogger.log('sakura', `🎴 Drew card: ${this.drawnCard.name} (ID: ${this.drawnCard.id})`);
-    this.message = `Drew ${this.drawnCard.month}...`;
+    this.message = 'Drawing card from deck...';
 
-    // Check if drawn card is Gaji
-    if (this.isGaji(this.drawnCard)) {
-      debugLogger.log('sakura', `⚡ Drew Gaji - wild card mode`);
-      this.handleGajiDrawn();
-      return;
-    }
+    // Brief delay to show the drawing action
+    setTimeout(() => {
+      // Draw card
+      this.drawnCard = this.deck.draw();
+      debugLogger.log('sakura', `🎴 Drew card: ${this.drawnCard.name} (ID: ${this.drawnCard.id})`);
+      this.message = `Drew ${this.drawnCard.month}...`;
 
-    // Find matches for drawn card
-    const matches = this.field.filter(fc => fc.month === this.drawnCard.month);
-
-    debugLogger.log('sakura', `🎴 Drawn card ${this.drawnCard.name} matches:`, {
-      matchCount: matches.length,
-      matches: matches.map(m => m.name)
-    });
-
-    if (matches.length === 0) {
-      // No match - add to field
-      debugLogger.log('sakura', `➕ No match - adding drawn card to field`);
-      const cardToAdd = this.drawnCard;
-      this.drawnCard = null; // Clear before adding to field for Card3D sync
-      this.field.push(cardToAdd);
-      this.message = 'No match. Card added to field.';
-      this.endTurn();
-    } else if (matches.length === 1) {
-      // Single match - auto capture
-      const capturedCard = matches[0];
-      const drawnCardRef = this.drawnCard;
-      this.drawnCard = null; // Clear before adding to captured for Card3D sync
-
-      debugLogger.log('sakura', `✅ Auto-capturing ${capturedCard.name} with drawn card`);
-      this.playerCaptured.push(drawnCardRef, capturedCard);
-      this.field = this.field.filter(c => c.id !== capturedCard.id);
-      this.message = `Captured ${capturedCard.month}!`;
-
-      // Update Gaji state if we captured Gaji
-      if (this.isGaji(capturedCard)) {
-        debugLogger.log('sakura', `⚡ Gaji captured from field by drawn card`);
-        this.gajiState.location = 'player_captured';
-        this.gajiState.isWildCard = false;
+      // Check if drawn card is Gaji
+      if (this.isGaji(this.drawnCard)) {
+        debugLogger.log('sakura', `⚡ Drew Gaji - wild card mode`);
+        this.handleGajiDrawn();
+        return;
       }
 
-      this.endTurn();
-    } else if (matches.length >= 2) {
-      // Multiple matches - auto capture first match (standard rule)
-      const chosen = matches[0];
-      const drawnCardRef = this.drawnCard;
-      this.drawnCard = null; // Clear before adding to captured for Card3D sync
+      // Find matches for drawn card
+      const matches = this.field.filter(fc => fc.month === this.drawnCard.month);
 
-      debugLogger.log('sakura', `✅ Multiple matches - auto-capturing first: ${chosen.name}`);
-      this.playerCaptured.push(drawnCardRef, chosen);
-      this.field = this.field.filter(c => c.id !== chosen.id);
-      this.message = `Captured ${chosen.month}!`;
+      debugLogger.log('sakura', `🎴 Drawn card ${this.drawnCard.name} matches:`, {
+        matchCount: matches.length,
+        matches: matches.map(m => m.name)
+      });
 
-      // Update Gaji state if we captured Gaji
-      if (this.isGaji(chosen)) {
-        debugLogger.log('sakura', `⚡ Gaji captured from field by drawn card (multi-match)`);
-        this.gajiState.location = 'player_captured';
-        this.gajiState.isWildCard = false;
+      if (matches.length === 0) {
+        // No match - add to field
+        this.phase = 'show_drawn';
+        this.message = `Drew ${this.drawnCard.month} - No match, adding to field...`;
+        debugLogger.log('sakura', `➕ No match - adding drawn card to field`);
+
+        setTimeout(() => {
+          const cardToAdd = this.drawnCard;
+          this.drawnCard = null; // Clear after animation completes
+          this.field.push(cardToAdd);
+          this.message = 'No match. Card added to field.';
+          this.endTurn();
+        }, 900);
+      } else if (matches.length === 1) {
+        // Single match - auto capture
+        this.phase = 'show_drawn';
+        const capturedCard = matches[0];
+        this.message = `Drew ${this.drawnCard.month} - Matching automatically...`;
+
+        debugLogger.log('sakura', `✅ Auto-capturing ${capturedCard.name} with drawn card`);
+
+        // Animate drawn card to field card position, then capture
+        if (this.card3DManager) {
+          const drawnCard3D = this.card3DManager.getCard(this.drawnCard);
+          const fieldCard3D = this.card3DManager.getCard(capturedCard);
+
+          if (drawnCard3D && fieldCard3D) {
+            // Wait a moment to show the drawn card, then animate to field card
+            setTimeout(() => {
+              drawnCard3D.tweenTo(
+                {
+                  x: fieldCard3D.homePosition.x,
+                  y: fieldCard3D.homePosition.y,
+                  z: fieldCard3D.homePosition.z + 5 // Slightly above
+                },
+                400,
+                'easeInOutQuad'
+              );
+
+              // After animation, update game state
+              drawnCard3D.onAnimationComplete = () => {
+                const drawnCardRef = this.drawnCard;
+                this.drawnCard = null; // Clear after animation
+
+                this.playerCaptured.push(drawnCardRef, capturedCard);
+                this.field = this.field.filter(c => c.id !== capturedCard.id);
+                this.message = `Captured ${capturedCard.month}!`;
+
+                // Update Gaji state if we captured Gaji
+                if (this.isGaji(capturedCard)) {
+                  debugLogger.log('sakura', `⚡ Gaji captured from field by drawn card`);
+                  this.gajiState.location = 'player_captured';
+                  this.gajiState.isWildCard = false;
+                }
+
+                // Wait for trick pile animation to complete
+                setTimeout(() => this.endTurn(), 500);
+              };
+            }, 400);
+          } else {
+            // Fallback if card3D not found
+            setTimeout(() => {
+              const drawnCardRef = this.drawnCard;
+              this.drawnCard = null;
+              this.playerCaptured.push(drawnCardRef, capturedCard);
+              this.field = this.field.filter(c => c.id !== capturedCard.id);
+              this.message = `Captured ${capturedCard.month}!`;
+              if (this.isGaji(capturedCard)) {
+                this.gajiState.location = 'player_captured';
+                this.gajiState.isWildCard = false;
+              }
+              this.endTurn();
+            }, 900);
+          }
+        } else {
+          // Fallback if card3DManager not available
+          setTimeout(() => {
+            const drawnCardRef = this.drawnCard;
+            this.drawnCard = null;
+            this.playerCaptured.push(drawnCardRef, capturedCard);
+            this.field = this.field.filter(c => c.id !== capturedCard.id);
+            this.message = `Captured ${capturedCard.month}!`;
+            if (this.isGaji(capturedCard)) {
+              this.gajiState.location = 'player_captured';
+              this.gajiState.isWildCard = false;
+            }
+            this.endTurn();
+          }, 900);
+        }
+      } else if (matches.length >= 2) {
+        // Multiple matches - auto capture first match (standard rule)
+        this.phase = 'show_drawn';
+        const chosen = matches[0];
+        this.message = `Drew ${this.drawnCard.month} - Multiple matches, capturing first...`;
+
+        debugLogger.log('sakura', `✅ Multiple matches - auto-capturing first: ${chosen.name}`);
+
+        // Animate drawn card to field card position, then capture
+        if (this.card3DManager) {
+          const drawnCard3D = this.card3DManager.getCard(this.drawnCard);
+          const fieldCard3D = this.card3DManager.getCard(chosen);
+
+          if (drawnCard3D && fieldCard3D) {
+            // Wait a moment to show the drawn card, then animate to field card
+            setTimeout(() => {
+              drawnCard3D.tweenTo(
+                {
+                  x: fieldCard3D.homePosition.x,
+                  y: fieldCard3D.homePosition.y,
+                  z: fieldCard3D.homePosition.z + 5
+                },
+                400,
+                'easeInOutQuad'
+              );
+
+              drawnCard3D.onAnimationComplete = () => {
+                const drawnCardRef = this.drawnCard;
+                this.drawnCard = null;
+
+                this.playerCaptured.push(drawnCardRef, chosen);
+                this.field = this.field.filter(c => c.id !== chosen.id);
+                this.message = `Captured ${chosen.month}!`;
+
+                if (this.isGaji(chosen)) {
+                  debugLogger.log('sakura', `⚡ Gaji captured from field by drawn card (multi-match)`);
+                  this.gajiState.location = 'player_captured';
+                  this.gajiState.isWildCard = false;
+                }
+
+                setTimeout(() => this.endTurn(), 500);
+              };
+            }, 400);
+          } else {
+            // Fallback
+            setTimeout(() => {
+              const drawnCardRef = this.drawnCard;
+              this.drawnCard = null;
+              this.playerCaptured.push(drawnCardRef, chosen);
+              this.field = this.field.filter(c => c.id !== chosen.id);
+              this.message = `Captured ${chosen.month}!`;
+              if (this.isGaji(chosen)) {
+                this.gajiState.location = 'player_captured';
+                this.gajiState.isWildCard = false;
+              }
+              this.endTurn();
+            }, 900);
+          }
+        } else {
+          // Fallback
+          setTimeout(() => {
+            const drawnCardRef = this.drawnCard;
+            this.drawnCard = null;
+            this.playerCaptured.push(drawnCardRef, chosen);
+            this.field = this.field.filter(c => c.id !== chosen.id);
+            this.message = `Captured ${chosen.month}!`;
+            if (this.isGaji(chosen)) {
+              this.gajiState.location = 'player_captured';
+              this.gajiState.isWildCard = false;
+            }
+            this.endTurn();
+          }, 900);
+        }
       }
-
-      this.endTurn();
-    }
+    }, 150);
 
     // Check for Hiki from drawn card
     // (This would happen if player captured 3 cards in Phase 1, then drew 4th)
@@ -770,13 +892,18 @@ export class Sakura {
     if (validTargets.length === 0) {
       debugLogger.log('sakura', `⚡ No valid targets for drawn Gaji - adding to field`);
       // No valid targets - Gaji goes to field
-      const gajiCardRef = gajiCard;
-      this.drawnCard = null; // Clear before adding to field for Card3D sync
-      this.field.push(gajiCardRef);
-      this.gajiState.location = 'field';
-      this.gajiState.isWildCard = false;
-      this.message = 'Drew Gaji but no valid targets. Card added to field.';
-      this.endTurn();
+      this.phase = 'show_drawn';
+      this.message = 'Drew Gaji - No valid targets, adding to field...';
+
+      setTimeout(() => {
+        const gajiCardRef = this.drawnCard;
+        this.drawnCard = null; // Clear after animation completes
+        this.field.push(gajiCardRef);
+        this.gajiState.location = 'field';
+        this.gajiState.isWildCard = false;
+        this.message = 'Drew Gaji but no valid targets. Card added to field.';
+        this.endTurn();
+      }, 900);
       return;
     }
 
@@ -941,9 +1068,9 @@ export class Sakura {
 
     // Check if Gaji
     if (this.isGaji(this.drawnCard)) {
-      const gajiCardRef = this.drawnCard;
-      this.drawnCard = null; // Clear before handling Gaji for Card3D sync
       setTimeout(() => {
+        const gajiCardRef = this.drawnCard;
+        this.drawnCard = null; // Clear after animation delay
         this.handleOpponentGajiDrawn(gajiCardRef, difficulty);
         setTimeout(() => this.endTurn(), 500);
       }, 500);
@@ -953,21 +1080,70 @@ export class Sakura {
     // Find matches
     const matches = this.field.filter(fc => fc.month === this.drawnCard.month);
 
-    setTimeout(() => {
-      const drawnCardRef = this.drawnCard;
-      this.drawnCard = null; // Clear before any zone changes for Card3D sync
-
-      if (matches.length === 0) {
+    if (matches.length === 0) {
+      // No match - add to field
+      setTimeout(() => {
+        const drawnCardRef = this.drawnCard;
+        this.drawnCard = null;
         this.field.push(drawnCardRef);
         this.message = 'Opponent drew - no match.';
+        setTimeout(() => this.endTurn(), 500);
+      }, 500);
+    } else {
+      // Match found - animate to field card then capture
+      const chosen = matches[0];
+
+      if (this.card3DManager) {
+        const drawnCard3D = this.card3DManager.getCard(this.drawnCard);
+        const fieldCard3D = this.card3DManager.getCard(chosen);
+
+        if (drawnCard3D && fieldCard3D) {
+          // Wait to show drawn card, then animate to field card
+          setTimeout(() => {
+            drawnCard3D.tweenTo(
+              {
+                x: fieldCard3D.homePosition.x,
+                y: fieldCard3D.homePosition.y,
+                z: fieldCard3D.homePosition.z + 5
+              },
+              400,
+              'easeInOutQuad'
+            );
+
+            drawnCard3D.onAnimationComplete = () => {
+              const drawnCardRef = this.drawnCard;
+              this.drawnCard = null;
+
+              this.opponentCaptured.push(drawnCardRef, chosen);
+              this.field = this.field.filter(c => c.id !== chosen.id);
+              this.message = `Opponent captured ${chosen.month}!`;
+
+              setTimeout(() => this.endTurn(), 500);
+            };
+          }, 300);
+        } else {
+          // Fallback
+          setTimeout(() => {
+            const drawnCardRef = this.drawnCard;
+            this.drawnCard = null;
+            this.opponentCaptured.push(drawnCardRef, chosen);
+            this.field = this.field.filter(c => c.id !== chosen.id);
+            this.message = `Opponent captured ${chosen.month}!`;
+            setTimeout(() => this.endTurn(), 500);
+          }, 500);
+        }
       } else {
-        const chosen = matches[0]; // Auto-capture first match
-        this.opponentCaptured.push(drawnCardRef, chosen);
-        this.field = this.field.filter(c => c.id !== chosen.id);
-        this.message = `Opponent captured ${chosen.month}!`;
+        // Fallback
+        setTimeout(() => {
+          const drawnCardRef = this.drawnCard;
+          this.drawnCard = null;
+          this.opponentCaptured.push(drawnCardRef, chosen);
+          this.field = this.field.filter(c => c.id !== chosen.id);
+          this.message = `Opponent captured ${chosen.month}!`;
+          setTimeout(() => this.endTurn(), 500);
+        }, 500);
       }
-      setTimeout(() => this.endTurn(), 500);
-    }, 500);
+    }
   }
 
   /**
@@ -1310,5 +1486,12 @@ export class Sakura {
    */
   setGajiSelectionCallback(callback) {
     this.gajiSelectionCallback = callback;
+  }
+
+  /**
+   * Set Card3D Manager for custom animations
+   */
+  setCard3DManager(card3DManager) {
+    this.card3DManager = card3DManager;
   }
 }
