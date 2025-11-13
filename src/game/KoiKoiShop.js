@@ -65,6 +65,20 @@ export const WIN_CONDITIONS = {
     difficulty: 1,
     stars: '★☆☆'
   },
+  EASY_FIVE_BIRDS: {
+    id: 'easy_five_birds',
+    name: 'Five Birds',
+    description: 'Collect the cuckoo, geese, and bush warbler',
+    difficulty: 1,
+    stars: '★☆☆'
+  },
+  EASY_GRASS_RIBBONS: {
+    id: 'easy_grass_ribbons',
+    name: 'Grass Ribbons',
+    description: 'Collect the ribbons for April, May, and July',
+    difficulty: 1,
+    stars: '★☆☆'
+  },
 
   // MEDIUM Bonus Chances (★★☆) - Need some luck in addition to key cards
   MEDIUM_THREE_MONTHS: {
@@ -120,6 +134,13 @@ export const WIN_CONDITIONS = {
     id: 'medium_twelve_chaff',
     name: 'Chaff Hoarder',
     description: 'Collect 12 or more chaff cards',
+    difficulty: 2,
+    stars: '★★☆'
+  },
+  MEDIUM_TALES_OF_ISE: {
+    id: 'medium_tales_of_ise',
+    name: 'Tales of Ise',
+    description: 'Collect the May animal (bridge), Rain Man, and sake cup',
     difficulty: 2,
     stars: '★★☆'
   },
@@ -366,6 +387,12 @@ export class KoiKoiShop extends KoiKoi {
     } else if (id === 'easy_any_sake') {
       result = this.checkAnySakeYaku();
       console.log(`[BONUS CHANCE] easy_any_sake: ${result}`);
+    } else if (id === 'easy_five_birds') {
+      result = this.checkFiveBirds();
+      console.log(`[BONUS CHANCE] easy_five_birds: ${result}`);
+    } else if (id === 'easy_grass_ribbons') {
+      result = this.checkGrassRibbons();
+      console.log(`[BONUS CHANCE] easy_grass_ribbons: ${result}`);
     }
     // Medium conditions
     else if (id === 'medium_three_months') {
@@ -394,6 +421,9 @@ export class KoiKoiShop extends KoiKoi {
       const count = this.countCardsByType(CARD_TYPES.CHAFF);
       result = count >= 12;
       console.log(`[BONUS CHANCE] medium_twelve_chaff: ${count}/12 - ${result}`);
+    } else if (id === 'medium_tales_of_ise') {
+      result = this.checkTalesOfIse();
+      console.log(`[BONUS CHANCE] medium_tales_of_ise: ${result}`);
     }
     // Hard conditions
     else if (id === 'hard_block_opponent') {
@@ -556,6 +586,42 @@ export class KoiKoiShop extends KoiKoi {
 
     // If opponent has any non-sake yaku, player fails this condition
     return nonSakeYaku.length === 0;
+  }
+
+  /**
+   * Check if player has the three bird cards: cuckoo, geese, and bush warbler
+   */
+  checkFiveBirds() {
+    const hasCuckoo = this.playerCaptured.some(card => card.name.includes('cuckoo'));
+    const hasGeese = this.playerCaptured.some(card => card.name.includes('geese'));
+    const hasBushWarbler = this.playerCaptured.some(card => card.name.includes('bush warbler'));
+    return hasCuckoo && hasGeese && hasBushWarbler;
+  }
+
+  /**
+   * Check if player has the ribbons for April, May, and July
+   */
+  checkGrassRibbons() {
+    const hasAprilRibbon = this.playerCaptured.some(card =>
+      card.month === 'April' && card.type === CARD_TYPES.RIBBON
+    );
+    const hasMayRibbon = this.playerCaptured.some(card =>
+      card.month === 'May' && card.type === CARD_TYPES.RIBBON
+    );
+    const hasJulyRibbon = this.playerCaptured.some(card =>
+      card.month === 'July' && card.type === CARD_TYPES.RIBBON
+    );
+    return hasAprilRibbon && hasMayRibbon && hasJulyRibbon;
+  }
+
+  /**
+   * Check if player has the May animal (bridge), Rain Man, and sake cup
+   */
+  checkTalesOfIse() {
+    const hasMayAnimal = this.playerCaptured.some(card => card.name.includes('May - animal'));
+    const hasRainMan = this.playerCaptured.some(card => card.name.includes('rain man'));
+    const hasSakeCup = this.playerCaptured.some(card => card.name.includes('sake cup'));
+    return hasMayAnimal && hasRainMan && hasSakeCup;
   }
 
   /**
