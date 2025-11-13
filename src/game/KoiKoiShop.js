@@ -485,8 +485,9 @@ export class KoiKoiShop extends KoiKoi {
       result = this.checkFlowerEnthusiast();
       console.log(`[BONUS CHANCE] medium_flower_enthusiast: ${result}`);
     } else if (id === 'medium_six_not_seven') {
-      result = this.checkSixNotSeven();
-      console.log(`[BONUS CHANCE] medium_six_not_seven: ${result}`);
+      // Six, Not Seven is checked at round end only, not during play
+      result = false;
+      console.log(`[BONUS CHANCE] medium_six_not_seven: deferred to round end`);
     }
     // Hard conditions
     else if (id === 'hard_block_opponent') {
@@ -519,8 +520,9 @@ export class KoiKoiShop extends KoiKoi {
       result = this.checkHeartOfTheCards();
       console.log(`[BONUS CHANCE] hard_heart_of_the_cards: ${result}`);
     } else if (id === 'hard_hitchcock') {
-      result = this.checkHitchcock();
-      console.log(`[BONUS CHANCE] hard_hitchcock: ${result}`);
+      // Hitchcock is checked at round end only, not during play
+      result = false;
+      console.log(`[BONUS CHANCE] hard_hitchcock: deferred to round end`);
     }
 
     console.log(`[BONUS CHANCE] Final result: ${result}`);
@@ -744,6 +746,20 @@ export class KoiKoiShop extends KoiKoi {
   }
 
   /**
+   * Override placeCardOnField to track field discards (manual selection)
+   */
+  placeCardOnField() {
+    const fieldBefore = this.field.length;
+    super.placeCardOnField();
+
+    // If field grew by 1, player discarded a card to field
+    if (this.field.length === fieldBefore + 1) {
+      this.playerFieldDiscards++;
+      console.log(`[SHOP] Player field discards: ${this.playerFieldDiscards}`);
+    }
+  }
+
+  /**
    * Check if player has exactly 6 points from yaku
    */
   checkSixNotSeven() {
@@ -822,7 +838,30 @@ export class KoiKoiShop extends KoiKoi {
 
     console.log(`[SHOP] Base yaku scores - Player: ${playerRoundScore}, Opponent: ${opponentRoundScore}`);
 
-    // Calculate bonus points (already added to this.playerScore in endTurn)
+    // Special checks for bonuses that are only evaluated at round end
+    if (!this.bonusAwarded) {
+      if (this.selectedWinCondition.id === 'medium_six_not_seven') {
+        if (playerRoundScore === 6) {
+          this.bonusAwarded = true;
+          const bonusPoints = 6;
+          this.playerScore += bonusPoints;
+          console.log(`[SHOP] Six, Not Seven BONUS ACHIEVED at round end! +${bonusPoints} points`);
+        } else {
+          console.log(`[SHOP] Six, Not Seven NOT achieved - score is ${playerRoundScore}, not 6`);
+        }
+      } else if (this.selectedWinCondition.id === 'hard_hitchcock') {
+        if (this.checkHitchcock()) {
+          this.bonusAwarded = true;
+          const bonusPoints = 10;
+          this.playerScore += bonusPoints;
+          console.log(`[SHOP] Hitchcock BONUS ACHIEVED at round end! +${bonusPoints} points`);
+        } else {
+          console.log(`[SHOP] Hitchcock NOT achieved - player captured birds`);
+        }
+      }
+    }
+
+    // Calculate bonus points (already added to this.playerScore in endTurn or above)
     const bonusPoints = this.bonusAwarded
       ? (this.selectedWinCondition.difficulty === 1 ? 3 :
          this.selectedWinCondition.difficulty === 2 ? 6 : 10)
