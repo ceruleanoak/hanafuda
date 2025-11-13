@@ -12,6 +12,8 @@ export class KoiKoi {
     this.deck = new Deck();
     this.totalRounds = 1;
     this.currentRound = 0;
+    this.playerScore = 0;
+    this.opponentScore = 0;
     this.animationQueue = [];
     this.isAnimating = false;
     this.gameOptions = gameOptions;
