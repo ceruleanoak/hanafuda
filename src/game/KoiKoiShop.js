@@ -194,6 +194,13 @@ export const WIN_CONDITIONS = {
     description: 'Win with any yaku before 10 cards remain in the deck',
     difficulty: 3,
     stars: '★★★'
+  },
+  HARD_SEVEN_RED_RIBBONS: {
+    id: 'hard_seven_red_ribbons',
+    name: 'Seven Red Ribbons',
+    description: 'Collect all poetry ribbons and all 4 plain red ribbons',
+    difficulty: 3,
+    stars: '★★★'
   }
 };
 
@@ -449,6 +456,9 @@ export class KoiKoiShop extends KoiKoi {
     } else if (id === 'hard_speed_run') {
       result = this.checkSpeedRun();
       console.log(`[BONUS CHANCE] hard_speed_run: ${result}, deck size: ${this.deck.cards.length}`);
+    } else if (id === 'hard_seven_red_ribbons') {
+      result = this.checkSevenRedRibbons();
+      console.log(`[BONUS CHANCE] hard_seven_red_ribbons: ${result}`);
     }
 
     console.log(`[BONUS CHANCE] Final result: ${result}`);
@@ -622,6 +632,17 @@ export class KoiKoiShop extends KoiKoi {
     const hasRainMan = this.playerCaptured.some(card => card.name.includes('rain man'));
     const hasSakeCup = this.playerCaptured.some(card => card.name.includes('sake cup'));
     return hasMayAnimal && hasRainMan && hasSakeCup;
+  }
+
+  /**
+   * Check if player has all seven red ribbons (3 poetry + 4 plain red)
+   */
+  checkSevenRedRibbons() {
+    const redRibbons = this.playerCaptured.filter(card =>
+      card.type === CARD_TYPES.RIBBON && card.ribbonColor === 'red'
+    );
+    // Need all 7 red ribbons: 3 poetry (Jan, Feb, Mar) + 4 plain (Apr, May, Jul, Nov)
+    return redRibbons.length >= 7;
   }
 
   /**
