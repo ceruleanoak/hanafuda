@@ -711,10 +711,14 @@ export class KoiKoi {
       // Check for koi-koi decision after drawn card capture
       this.checkForKoikoiDecision('player');
 
-      // Don't continue if waiting for koi-koi decision
+      // Don't continue if waiting for koi-koi decision or if round has ended
       if (this.koikoiState.waitingForDecision) {
         this.koikoiState.resumeAction = 'endTurn';
         return;
+      }
+
+      if (!this.koikoiState.roundActive) {
+        return; // Round has ended, stop execution
       }
 
       this.endTurn();
@@ -734,10 +738,14 @@ export class KoiKoi {
     // Check for koi-koi decision after drawn card capture
     this.checkForKoikoiDecision('player');
 
-    // Don't continue if waiting for koi-koi decision
+    // Don't continue if waiting for koi-koi decision or if round has ended
     if (this.koikoiState.waitingForDecision) {
       this.koikoiState.resumeAction = 'endTurn';
       return;
+    }
+
+    if (!this.koikoiState.roundActive) {
+      return; // Round has ended, stop execution
     }
 
     this.endTurn();
@@ -778,13 +786,17 @@ export class KoiKoi {
           this.playerCaptured.push(drawnCard, ...sameMonthOnField);
           this.checkForKoikoiDecision('player');
 
-          // Don't continue if waiting for koi-koi decision
+          // Don't continue if waiting for koi-koi decision or if round has ended
           if (this.koikoiState.waitingForDecision) {
             this.koikoiState.resumeAction = () => {
               this.drawnCard = null;
               this.endTurn();
             };
             return;
+          }
+
+          if (!this.koikoiState.roundActive) {
+            return; // Round has ended, stop execution
           }
 
           this.drawnCard = null;
@@ -811,13 +823,17 @@ export class KoiKoi {
             this.playerCaptured.push(drawnCard, ...sameMonthOnField);
             this.checkForKoikoiDecision('player');
 
-            // Don't continue if waiting for koi-koi decision
+            // Don't continue if waiting for koi-koi decision or if round has ended
             if (this.koikoiState.waitingForDecision) {
               this.koikoiState.resumeAction = () => {
                 this.drawnCard = null;
                 this.endTurn();
               };
               return;
+            }
+
+            if (!this.koikoiState.roundActive) {
+              return; // Round has ended, stop execution
             }
 
             this.drawnCard = null;
@@ -838,13 +854,17 @@ export class KoiKoi {
             this.playerCaptured.push(drawnCard, fieldCard);
             this.checkForKoikoiDecision('player');
 
-            // Don't continue if waiting for koi-koi decision
+            // Don't continue if waiting for koi-koi decision or if round has ended
             if (this.koikoiState.waitingForDecision) {
               this.koikoiState.resumeAction = () => {
                 this.drawnCard = null;
                 this.endTurn();
               };
               return;
+            }
+
+            if (!this.koikoiState.roundActive) {
+              return; // Round has ended, stop execution
             }
 
             this.drawnCard = null;
@@ -867,13 +887,17 @@ export class KoiKoi {
             this.playerCaptured.push(drawnCard, ...sameMonthOnField);
             this.checkForKoikoiDecision('player');
 
-            // Don't continue if waiting for koi-koi decision
+            // Don't continue if waiting for koi-koi decision or if round has ended
             if (this.koikoiState.waitingForDecision) {
               this.koikoiState.resumeAction = () => {
                 this.drawnCard = null;
                 this.endTurn();
               };
               return;
+            }
+
+            if (!this.koikoiState.roundActive) {
+              return; // Round has ended, stop execution
             }
 
             this.drawnCard = null;
@@ -888,13 +912,17 @@ export class KoiKoi {
             this.field.push(drawnCard);
             this.checkForKoikoiDecision('player');
 
-            // Don't continue if waiting for koi-koi decision
+            // Don't continue if waiting for koi-koi decision or if round has ended
             if (this.koikoiState.waitingForDecision) {
               this.koikoiState.resumeAction = () => {
                 this.drawnCard = null;
                 this.endTurn();
               };
               return;
+            }
+
+            if (!this.koikoiState.roundActive) {
+              return; // Round has ended, stop execution
             }
 
             this.drawnCard = null;
@@ -1499,13 +1527,17 @@ export class KoiKoi {
             this.opponentCaptured.push(drawnCard, ...sameMonthOnField);
             this.checkForKoikoiDecision('opponent');
 
-            // Don't continue if waiting for koi-koi decision
+            // Don't continue if waiting for koi-koi decision or if round has ended
             if (this.koikoiState.waitingForDecision) {
               this.koikoiState.resumeAction = () => {
                 this.drawnCard = null;
                 this.endTurn();
               };
               return;
+            }
+
+            if (!this.koikoiState.roundActive) {
+              return; // Round has ended, stop execution
             }
 
             this.drawnCard = null;
@@ -1528,13 +1560,17 @@ export class KoiKoi {
             this.opponentCaptured.push(drawnCard, bestMatch);
             this.checkForKoikoiDecision('opponent');
 
-            // Don't continue if waiting for koi-koi decision
+            // Don't continue if waiting for koi-koi decision or if round has ended
             if (this.koikoiState.waitingForDecision) {
               this.koikoiState.resumeAction = () => {
                 this.drawnCard = null;
                 this.endTurn();
               };
               return;
+            }
+
+            if (!this.koikoiState.roundActive) {
+              return; // Round has ended, stop execution
             }
 
             this.drawnCard = null;
@@ -1557,13 +1593,17 @@ export class KoiKoi {
             this.opponentCaptured.push(drawnCard, ...sameMonthOnField);
             this.checkForKoikoiDecision('opponent');
 
-            // Don't continue if waiting for koi-koi decision
+            // Don't continue if waiting for koi-koi decision or if round has ended
             if (this.koikoiState.waitingForDecision) {
               this.koikoiState.resumeAction = () => {
                 this.drawnCard = null;
                 this.endTurn();
               };
               return;
+            }
+
+            if (!this.koikoiState.roundActive) {
+              return; // Round has ended, stop execution
             }
 
             this.drawnCard = null;
@@ -1578,13 +1618,17 @@ export class KoiKoi {
             this.field.push(drawnCard);
             this.checkForKoikoiDecision('opponent');
 
-            // Don't continue if waiting for koi-koi decision
+            // Don't continue if waiting for koi-koi decision or if round has ended
             if (this.koikoiState.waitingForDecision) {
               this.koikoiState.resumeAction = () => {
                 this.drawnCard = null;
                 this.endTurn();
               };
               return;
+            }
+
+            if (!this.koikoiState.roundActive) {
+              return; // Round has ended, stop execution
             }
 
             this.drawnCard = null;
@@ -1599,6 +1643,9 @@ export class KoiKoi {
    * End round and calculate scores
    */
   endRound() {
+    // Mark round as no longer active to prevent further game actions
+    this.koikoiState.roundActive = false;
+
     const playerYaku = Yaku.checkYaku(this.playerCaptured, this.gameOptions);
     const opponentYaku = Yaku.checkYaku(this.opponentCaptured, this.gameOptions);
 
