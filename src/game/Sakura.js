@@ -333,15 +333,23 @@ export class Sakura {
   // ============================================================
 
   /**
-   * Player selects a card from their hand
+   * Player selects a card
+   * @param {Object} card - The card being selected
+   * @param {string} owner - The owner/zone of the card ('player', 'field', etc.)
    */
-  selectCard(card) {
+  selectCard(card, owner = 'player') {
     debugLogger.log('sakura', `🌸 selectCard called`, {
       cardId: card.id,
       cardName: card.name,
+      owner: owner,
       phase: this.phase,
       isGaji: this.isGaji(card)
     });
+
+    // Route to field card selection when clicking field cards
+    if (owner === 'field' && (this.phase === 'select_field' || this.phase === 'gaji_selection')) {
+      return this.selectFieldCard(card);
+    }
 
     if (this.phase !== 'select_hand') {
       debugLogger.log('sakura', `⚠️ Wrong phase for selectCard: ${this.phase}`);
@@ -421,7 +429,7 @@ export class Sakura {
   }
 
   /**
-   * Player selects a field card (when multiple matches exist)
+   * Player selects a field card (when multiple matches exist or using Gaji)
    */
   selectFieldCard(fieldCard) {
     debugLogger.log('sakura', `🎯 selectFieldCard called`, {
@@ -430,13 +438,37 @@ export class Sakura {
       phase: this.phase
     });
 
-    if (this.phase !== 'select_field') {
+    if (this.phase !== 'select_field' && this.phase !== 'gaji_selection') {
       debugLogger.log('sakura', `⚠️ Wrong phase for selectFieldCard: ${this.phase}`);
       return false;
     }
 
     const handCard = this.selectedCards[0];
 
+    // Check if this is a Gaji selection
+    if (this.phase === 'gaji_selection') {
+      debugLogger.log('sakura', `⚡ Player chose ${fieldCard.name} to capture with Gaji`);
+
+      // Verify this is a valid target
+      if (!this.drawnCardMatches.some(c => c.id === fieldCard.id)) {
+        debugLogger.log('sakura', `⚠️ Invalid Gaji target selected`);
+        return false;
+      }
+
+      // Check if Gaji was drawn (vs played from hand) - if drawn, need to clear drawnCard
+      const wasDrawn = this.drawnCard && this.drawnCard.id === handCard.id;
+      if (wasDrawn) {
+        this.drawnCard = null; // Clear before capture for Card3D sync
+        this.captureWithGaji(handCard, fieldCard);
+        this.endTurn(); // Drawn Gaji ends the turn
+      } else {
+        this.captureWithGaji(handCard, fieldCard);
+        this.proceedToDrawPhase(); // Hand Gaji proceeds to draw phase
+      }
+      return true;
+    }
+
+    // Regular field card selection (2 matches)
     debugLogger.log('sakura', `✅ Player chose ${fieldCard.name} to capture with ${handCard.name}`);
 
     // Capture both cards
@@ -709,17 +741,9 @@ export class Sakura {
     this.phase = 'gaji_selection';
     this.message = 'Gaji! Choose any card to capture.';
 
-    debugLogger.log('sakura', `⚡ Auto-selecting best Gaji target`);
-
-    // For now, auto-select highest value card for player
-    // (In full implementation, player would choose via UI)
-    setTimeout(() => {
-      const bestTarget = this.selectBestGajiTarget(validTargets, 'player');
-      debugLogger.log('sakura', `⚡ Best target selected: ${bestTarget.name}`);
-      this.captureWithGaji(gajiCard, bestTarget);
-      // After capturing with Gaji from hand, proceed to draw phase
-      this.proceedToDrawPhase();
-    }, 500);
+    debugLogger.log('sakura', `⚡ Player can now manually select Gaji target`, {
+      validTargetCount: validTargets.length
+    });
   }
 
   /**
@@ -757,19 +781,14 @@ export class Sakura {
     }
 
     // Player must choose which card to capture
+    this.selectedCards = [gajiCard]; // Store Gaji card for selectFieldCard
+    this.drawnCardMatches = validTargets; // Store valid targets
     this.phase = 'gaji_selection';
     this.message = 'Drew Gaji! Choose any card to capture.';
 
-    debugLogger.log('sakura', `⚡ Auto-selecting best target for drawn Gaji`);
-
-    // Auto-select for now
-    setTimeout(() => {
-      const bestTarget = this.selectBestGajiTarget(validTargets, 'player');
-      debugLogger.log('sakura', `⚡ Best target for drawn Gaji: ${bestTarget.name}`);
-      this.drawnCard = null; // Clear before capture for Card3D sync
-      this.captureWithGaji(gajiCard, bestTarget);
-      this.endTurn();
-    }, 500);
+    debugLogger.log('sakura', `⚡ Player can now manually select target for drawn Gaji`, {
+      validTargetCount: validTargets.length
+    });
   }
 
   /**
