@@ -1321,8 +1321,8 @@ export class KoiKoi {
     console.log('[OPPONENT] opponentTurn() called');
     console.log(`[OPPONENT] Hand size: ${this.opponentHand.length}, Deck size: ${this.deck.cards.length}`);
 
-    if (this.opponentHand.length === 0 || this.deck.isEmpty()) {
-      console.log('[OPPONENT] Game over - hand or deck empty');
+    if (this.opponentHand.length === 0) {
+      console.log('[OPPONENT] Game over - hand empty');
       this.endRound();
       return;
     }

@@ -133,7 +133,7 @@ export const WIN_CONDITIONS = {
   MEDIUM_SEVEN_RIBBONS: {
     id: 'medium_seven_ribbons',
     name: 'Ribbon Hoarder',
-    description: 'Collect 7 or more ribbon cards',
+    description: 'Collect 6 or more ribbon cards',
     difficulty: 2,
     stars: '★★☆'
   },
@@ -198,7 +198,7 @@ export const WIN_CONDITIONS = {
   HARD_EIGHT_RIBBONS: {
     id: 'hard_eight_ribbons',
     name: 'Ribbon Domination',
-    description: 'Collect 8 or more ribbon cards',
+    description: 'Collect 7 or more ribbon cards',
     difficulty: 3,
     stars: '★★★'
   },
@@ -469,8 +469,8 @@ export class KoiKoiShop extends KoiKoi {
       console.log(`[BONUS CHANCE] medium_seven_animals: ${count}/7 - ${result}`);
     } else if (id === 'medium_seven_ribbons') {
       const count = this.countCardsByType(CARD_TYPES.RIBBON);
-      result = count >= 7;
-      console.log(`[BONUS CHANCE] medium_seven_ribbons: ${count}/7 - ${result}`);
+      result = count >= 6;
+      console.log(`[BONUS CHANCE] medium_seven_ribbons: ${count}/6 - ${result}`);
     } else if (id === 'medium_twelve_chaff') {
       const count = this.countCardsByType(CARD_TYPES.CHAFF);
       result = count >= 12;
@@ -501,8 +501,8 @@ export class KoiKoiShop extends KoiKoi {
       result = this.checkCompleteMonths(4);
     } else if (id === 'hard_eight_ribbons') {
       const count = this.countCardsByType(CARD_TYPES.RIBBON);
-      result = count >= 8;
-      console.log(`[BONUS CHANCE] hard_eight_ribbons: ${count}/8 - ${result}`);
+      result = count >= 7;
+      console.log(`[BONUS CHANCE] hard_eight_ribbons: ${count}/7 - ${result}`);
     } else if (id === 'hard_two_special_yaku') {
       result = this.checkTwoSpecialYaku();
       console.log(`[BONUS CHANCE] hard_two_special_yaku: ${result}`);
@@ -825,6 +825,7 @@ export class KoiKoiShop extends KoiKoi {
    * End the shop game and trigger round summary with score comparison
    */
   endShopGame() {
+    this.gameOver = true;
     console.log(`[SHOP] endShopGame called`);
     console.log(`[SHOP] Current scores before yaku - Player: ${this.playerScore}, Opponent: ${this.opponentScore}`);
     console.log(`[SHOP] Bonus achieved: ${this.bonusAwarded}`);
