@@ -577,9 +577,11 @@ export class KoiKoiShop extends KoiKoi {
       console.log(`[SHOP] BONUS ACHIEVED! Awarded ${bonusPoints} points. New score: ${this.playerScore}`);
     }
 
-    // Check if deck is empty and both hands are empty (game over)
-    if (this.deck.cards.length === 0 && this.playerHand.length === 0 && this.opponentHand.length === 0) {
-      console.log('[SHOP] Game over - deck and hands empty');
+    // Check if both hands are empty (game over in shop mode)
+    // Note: We check hands only, not deck, because in shop mode the deck may still have cards
+    // when hands run out (parent's endTurn would call endRound, but we want endShopGame)
+    if (this.playerHand.length === 0 && this.opponentHand.length === 0) {
+      console.log('[SHOP] Game over - both hands empty');
       this.endShopGame();
       return;
     }
@@ -593,21 +595,64 @@ export class KoiKoiShop extends KoiKoi {
    */
   endShopGame() {
     console.log(`[SHOP] endShopGame called`);
-    console.log(`[SHOP] Final scores - Player: ${this.playerScore}, Opponent: ${this.opponentScore}`);
+    console.log(`[SHOP] Current scores before yaku - Player: ${this.playerScore}, Opponent: ${this.opponentScore}`);
     console.log(`[SHOP] Bonus achieved: ${this.bonusAwarded}`);
 
     const playerYaku = Yaku.checkYaku(this.playerCaptured, this.gameOptions);
     const opponentYaku = Yaku.checkYaku(this.opponentCaptured, this.gameOptions);
 
-    // Calculate round scores from yaku
-    const playerYakuScore = Yaku.calculateScore(playerYaku);
-    const opponentYakuScore = Yaku.calculateScore(opponentYaku);
+    // Calculate base round scores from yaku
+    let playerRoundScore = Yaku.calculateScore(playerYaku);
+    let opponentRoundScore = Yaku.calculateScore(opponentYaku);
 
-    // Calculate bonus points
+    console.log(`[SHOP] Base yaku scores - Player: ${playerRoundScore}, Opponent: ${opponentRoundScore}`);
+
+    // Calculate bonus points (already added to this.playerScore in endTurn)
     const bonusPoints = this.bonusAwarded
       ? (this.selectedWinCondition.difficulty === 1 ? 3 :
          this.selectedWinCondition.difficulty === 2 ? 6 : 10)
       : 0;
+
+    // Apply auto-double if enabled and score >= 7
+    const playerScoreBreakdown = {
+      baseScore: playerRoundScore,
+      bonusPoints: bonusPoints,
+      bonusChanceName: this.bonusAwarded ? this.selectedWinCondition.name : null,
+      koikoiPenalty: false,
+      autoDouble: false,
+      koikoiMultiplier: 0,
+      finalScore: 0  // Will be set below
+    };
+
+    const opponentScoreBreakdown = {
+      baseScore: opponentRoundScore,
+      koikoiPenalty: false,
+      autoDouble: false,
+      koikoiMultiplier: 0,
+      finalScore: 0  // Will be set below
+    };
+
+    // Apply auto-double for 7+ points (matching parent behavior)
+    if (this.gameOptions.get('autoDouble7Plus') && playerRoundScore >= 7) {
+      playerRoundScore *= 2;
+      playerScoreBreakdown.autoDouble = true;
+      console.log(`[SHOP] Player auto-double applied: ${playerScoreBreakdown.baseScore} × 2 = ${playerRoundScore}`);
+    }
+
+    if (this.gameOptions.get('autoDouble7Plus') && opponentRoundScore >= 7) {
+      opponentRoundScore *= 2;
+      opponentScoreBreakdown.autoDouble = true;
+      console.log(`[SHOP] Opponent auto-double applied: ${opponentScoreBreakdown.baseScore} × 2 = ${opponentRoundScore}`);
+    }
+
+    // Add yaku scores to total (bonus already added in endTurn)
+    this.playerScore += playerRoundScore;
+    this.opponentScore += opponentRoundScore;
+
+    playerScoreBreakdown.finalScore = this.playerScore;
+    opponentScoreBreakdown.finalScore = this.opponentScore;
+
+    console.log(`[SHOP] Final scores - Player: ${this.playerScore}, Opponent: ${this.opponentScore}`);
 
     // Determine message
     let shopMessage = '';
@@ -620,28 +665,14 @@ export class KoiKoiShop extends KoiKoi {
     // Create round summary data for shop mode
     const roundSummaryData = {
       roundNumber: 1,
-      playerRoundScore: playerYakuScore,
-      opponentRoundScore: opponentYakuScore,
+      playerRoundScore: playerRoundScore,
+      opponentRoundScore: opponentRoundScore,
       playerTotalScore: this.playerScore,
       opponentTotalScore: this.opponentScore,
       playerYaku: playerYaku,
       opponentYaku: opponentYaku,
-      playerScoreBreakdown: {
-        baseScore: playerYakuScore,
-        bonusPoints: bonusPoints,
-        bonusChanceName: this.bonusAwarded ? this.selectedWinCondition.name : null,
-        koikoiPenalty: false,
-        autoDouble: false,
-        koikoiMultiplier: 0,
-        finalScore: this.playerScore
-      },
-      opponentScoreBreakdown: {
-        baseScore: opponentYakuScore,
-        koikoiPenalty: false,
-        autoDouble: false,
-        koikoiMultiplier: 0,
-        finalScore: this.opponentScore
-      },
+      playerScoreBreakdown: playerScoreBreakdown,
+      opponentScoreBreakdown: opponentScoreBreakdown,
       isGameOver: true,
       totalRounds: 1,
       shopMode: true,
