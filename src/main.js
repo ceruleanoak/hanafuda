@@ -379,6 +379,9 @@ class Game {
   }
 
   showRoundModal() {
+    // Hide all other modals before showing this one
+    this.hideAllModals();
+
     // Show match options modal for match game
     if (this.currentGameMode === 'match') {
       this.showMatchOptionsModal();
@@ -402,6 +405,9 @@ class Game {
    * Show the shop modal for Koi Koi Shop mode
    */
   showShopModal() {
+    // Hide all other modals before showing this one
+    this.hideAllModals();
+
     // Hide bonus chance display from previous game when opening shop
     this.hideActiveWinCondition();
 
@@ -418,10 +424,25 @@ class Game {
   }
 
   /**
+   * Hide all modals to ensure clean state transitions
+   * This prevents multiple modals from being visible simultaneously
+   */
+  hideAllModals() {
+    this.roundModal.classList.remove('show');
+    this.shopModal.classList.remove('show');
+    this.optionsModal.classList.remove('show');
+    this.matchOptionsModal.classList.remove('show');
+    this.koikoiModal.classList.remove('show');
+    this.roundSummaryModal.classList.remove('show');
+    this.cardBackModal.classList.remove('show');
+    this.variationsModal.classList.remove('show');
+  }
+
+  /**
    * Start the shop game with selected cards and bonus chance
    */
   startShopGame(selectedCards, winCondition) {
-    this.hideShopModal();
+    this.hideAllModals();
 
     // Start the shop game with the selected cards and bonus chance
     this.shopGame.startShopGame(selectedCards, winCondition);
@@ -569,6 +590,9 @@ class Game {
   }
 
   showMatchOptionsModal() {
+    // Hide all other modals before showing this one
+    this.hideAllModals();
+
     // Load current bonus setting
     const bonusCheckbox = document.getElementById('bonus-multiplier-enabled');
     bonusCheckbox.checked = this.matchGame.bonusMultiplierEnabled;
@@ -590,7 +614,7 @@ class Game {
   startMatchGame() {
     const bonusEnabled = document.getElementById('bonus-multiplier-enabled').checked;
     const animEnabled = document.getElementById('match-animations-enabled').checked;
-    this.hideMatchOptionsModal();
+    this.hideAllModals();
 
     // Save animation setting to game options
     this.gameOptions.set('animationsEnabled', animEnabled);
@@ -689,7 +713,7 @@ class Game {
   }
 
   startNewGame(rounds) {
-    this.hideRoundModal();
+    this.hideAllModals();
 
     if (this.currentGameMode === 'match') {
       // Match game doesn't use rounds - pass viewport dimensions
@@ -713,6 +737,9 @@ class Game {
 
   switchGameMode(mode) {
     debugLogger.log('gameState', `Switching game mode to: ${mode}`, null);
+
+    // Hide all modals before switching game modes for clean state transition
+    this.hideAllModals();
 
     this.currentGameMode = mode;
     // Save game mode to localStorage so it persists across browser refreshes
@@ -1513,6 +1540,9 @@ class Game {
    * Show variations modal
    */
   showVariationsModal() {
+    // Hide all other modals before showing this one
+    this.hideAllModals();
+
     // Populate current values
     const options = this.gameOptions.getAll();
     document.getElementById('bomb-variation-enabled').checked = options.bombVariationEnabled;
@@ -1531,6 +1561,9 @@ class Game {
    * Show card back selection modal
    */
   showCardBackModal() {
+    // Hide all other modals before showing this one
+    this.hideAllModals();
+
     const grid = document.getElementById('card-back-grid');
     grid.innerHTML = ''; // Clear existing content
 
@@ -1642,6 +1675,9 @@ class Game {
    * Show options modal
    */
   showOptionsModal() {
+    // Hide all other modals before showing this one
+    this.hideAllModals();
+
     // Show different options based on game mode
     if (this.currentGameMode === 'match') {
       this.showMatchOptionsModal();
@@ -1736,6 +1772,9 @@ class Game {
    * Show koi-koi decision modal with yaku information
    */
   showKoikoiDecision(yaku, totalScore) {
+    // Hide all other modals before showing this one
+    this.hideAllModals();
+
     const yakuDisplay = document.getElementById('koikoi-yaku-display');
     yakuDisplay.innerHTML = '';
 
@@ -1800,6 +1839,9 @@ class Game {
    * Display the round summary modal (extracted from showRoundSummary)
    */
   displayRoundSummaryModal(data) {
+    // Hide all other modals before showing this one
+    this.hideAllModals();
+
     // Hide bonus chance display when showing round summary
     this.hideActiveWinCondition();
 
