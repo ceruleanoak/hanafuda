@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hanafuda Sound Board - Debug Tool</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #333;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: white;
+      text-align: center;
+      margin-bottom: 10px;
+      font-size: 2.5rem;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .subtitle {
+      color: rgba(255,255,255,0.9);
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 1.1rem;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 25px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+
+    .sound-section {
+      margin-bottom: 30px;
+    }
+
+    .sound-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .sound-title {
+      font-size: 1.5rem;
+      color: #667eea;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #ccc;
+    }
+
+    .status-indicator.loading {
+      background: #fbbf24;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .status-indicator.success {
+      background: #10b981;
+    }
+
+    .status-indicator.error {
+      background: #ef4444;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .path-info {
+      background: #f3f4f6;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 15px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9rem;
+      word-break: break-all;
+    }
+
+    .path-label {
+      font-weight: bold;
+      color: #6b7280;
+      margin-bottom: 5px;
+    }
+
+    .path-value {
+      color: #1f2937;
+    }
+
+    .error-message {
+      background: #fee2e2;
+      border-left: 4px solid #ef4444;
+      padding: 12px;
+      border-radius: 4px;
+      margin-top: 10px;
+      color: #991b1b;
+      font-size: 0.9rem;
+    }
+
+    .success-message {
+      background: #d1fae5;
+      border-left: 4px solid #10b981;
+      padding: 12px;
+      border-radius: 4px;
+      margin-top: 10px;
+      color: #065f46;
+      font-size: 0.9rem;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      flex: 1;
+      min-width: 120px;
+      padding: 15px 25px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-play {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-stop {
+      background: linear-gradient(135deg, #f87171 0%, #dc2626 100%);
+      color: white;
+    }
+
+    .btn-reload {
+      background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+      color: white;
+    }
+
+    .controls {
+      background: #f9fafb;
+      padding: 15px;
+      border-radius: 8px;
+      margin-top: 15px;
+    }
+
+    .volume-control {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .volume-control label {
+      font-weight: 600;
+      color: #4b5563;
+      min-width: 70px;
+    }
+
+    input[type="range"] {
+      flex: 1;
+      height: 6px;
+      border-radius: 3px;
+      background: #d1d5db;
+      outline: none;
+      -webkit-appearance: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #667eea;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #667eea;
+      cursor: pointer;
+      border: none;
+    }
+
+    .volume-value {
+      font-weight: 600;
+      color: #667eea;
+      min-width: 45px;
+      text-align: right;
+    }
+
+    .debug-section {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 2px solid #e5e7eb;
+    }
+
+    .debug-title {
+      font-size: 1.2rem;
+      color: #4b5563;
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+
+    .path-test {
+      background: #f3f4f6;
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.85rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .test-result {
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+    }
+
+    .test-result.ok {
+      background: #10b981;
+      color: white;
+    }
+
+    .test-result.fail {
+      background: #ef4444;
+      color: white;
+    }
+
+    .test-result.testing {
+      background: #fbbf24;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎵 Hanafuda Sound Board</h1>
+    <p class="subtitle">Audio Testing & Debugging Tool</p>
+
+    <div class="card">
+      <!-- Win Sound Section -->
+      <div class="sound-section">
+        <h2 class="sound-title">
+          <span class="status-indicator" id="win-status"></span>
+          🎉 Win Sound
+        </h2>
+
+        <div class="path-info">
+          <div class="path-label">Expected Path:</div>
+          <div class="path-value" id="win-path">/assets/audio/hanafuda-win.mp3</div>
+        </div>
+
+        <div class="button-group">
+          <button class="btn-play" onclick="playWin()">▶ Play Win</button>
+          <button class="btn-stop" onclick="stopAll()">⏹ Stop</button>
+          <button class="btn-reload" onclick="reloadWin()">🔄 Reload</button>
+        </div>
+
+        <div id="win-message"></div>
+      </div>
+
+      <hr style="border: none; border-top: 2px solid #e5e7eb; margin: 30px 0;">
+
+      <!-- Lose Sound Section -->
+      <div class="sound-section">
+        <h2 class="sound-title">
+          <span class="status-indicator" id="lose-status"></span>
+          😢 Lose Sound
+        </h2>
+
+        <div class="path-info">
+          <div class="path-label">Expected Path (from AudioManager):</div>
+          <div class="path-value" id="lose-path">/assets/audio/hanafuda-lose.mp3</div>
+        </div>
+
+        <div class="button-group">
+          <button class="btn-play" onclick="playLose()">▶ Play Lose</button>
+          <button class="btn-stop" onclick="stopAll()">⏹ Stop</button>
+          <button class="btn-reload" onclick="reloadLose()">🔄 Reload</button>
+        </div>
+
+        <div id="lose-message"></div>
+      </div>
+
+      <!-- Volume Control -->
+      <div class="controls">
+        <div class="volume-control">
+          <label for="volume">Volume:</label>
+          <input type="range" id="volume" min="0" max="100" value="50">
+          <span class="volume-value" id="volume-value">50%</span>
+        </div>
+      </div>
+
+      <!-- Debug Section -->
+      <div class="debug-section">
+        <h3 class="debug-title">🔍 Path Testing</h3>
+        <p style="color: #6b7280; margin-bottom: 15px; font-size: 0.9rem;">
+          Testing different path variations to identify 404 errors:
+        </p>
+        <div id="path-tests"></div>
+        <button class="btn-reload" style="margin-top: 15px; width: 100%;" onclick="testAllPaths()">
+          🧪 Run Path Tests
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Audio elements
+    let winAudio = null;
+    let loseAudio = null;
+
+    // Paths to test
+    const testPaths = {
+      win: [
+        '/assets/audio/hanafuda-win.mp3',
+        '/assets/audio/hanafuda win.mp3',
+        'assets/audio/hanafuda-win.mp3',
+        '../assets/hanafuda-win.mp3'
+      ],
+      lose: [
+        '/assets/audio/hanafuda-lose.mp3',
+        '/assets/audio/hanafuda lose.mp3',
+        '/assets/audio/hanafuda-loose.mp3',
+        'assets/audio/hanafuda-lose.mp3',
+        '../assets/hanafuda-lose.mp3'
+      ]
+    };
+
+    // Initialize audio
+    function initAudio() {
+      loadWin();
+      loadLose();
+    }
+
+    function loadWin() {
+      updateStatus('win', 'loading');
+      showMessage('win', '');
+
+      winAudio = new Audio('/assets/audio/hanafuda-win.mp3');
+      winAudio.volume = document.getElementById('volume').value / 100;
+
+      winAudio.addEventListener('canplaythrough', () => {
+        updateStatus('win', 'success');
+        showMessage('win', 'Win sound loaded successfully!', 'success');
+      });
+
+      winAudio.addEventListener('error', (e) => {
+        updateStatus('win', 'error');
+        const errorMsg = getAudioErrorMessage(winAudio.error);
+        showMessage('win', `Failed to load win sound: ${errorMsg}`, 'error');
+      });
+    }
+
+    function loadLose() {
+      updateStatus('lose', 'loading');
+      showMessage('lose', '');
+
+      loseAudio = new Audio('/assets/audio/hanafuda-lose.mp3');
+      loseAudio.volume = document.getElementById('volume').value / 100;
+
+      loseAudio.addEventListener('canplaythrough', () => {
+        updateStatus('lose', 'success');
+        showMessage('lose', 'Lose sound loaded successfully!', 'success');
+      });
+
+      loseAudio.addEventListener('error', (e) => {
+        updateStatus('lose', 'error');
+        const errorMsg = getAudioErrorMessage(loseAudio.error);
+        showMessage('lose', `Failed to load lose sound: ${errorMsg}`, 'error');
+      });
+    }
+
+    function getAudioErrorMessage(error) {
+      if (!error) return 'Unknown error';
+
+      switch (error.code) {
+        case 1: return 'MEDIA_ERR_ABORTED: Audio loading was aborted';
+        case 2: return 'MEDIA_ERR_NETWORK: Network error occurred';
+        case 3: return 'MEDIA_ERR_DECODE: Audio decoding failed';
+        case 4: return 'MEDIA_ERR_SRC_NOT_SUPPORTED: Audio file not found (404) or format not supported';
+        default: return `Error code ${error.code}`;
+      }
+    }
+
+    function playWin() {
+      if (!winAudio) {
+        showMessage('win', 'Win audio not loaded yet!', 'error');
+        return;
+      }
+
+      stopAll();
+      winAudio.currentTime = 0;
+      winAudio.play().catch(err => {
+        showMessage('win', `Playback failed: ${err.message}`, 'error');
+      });
+    }
+
+    function playLose() {
+      if (!loseAudio) {
+        showMessage('lose', 'Lose audio not loaded yet!', 'error');
+        return;
+      }
+
+      stopAll();
+      loseAudio.currentTime = 0;
+      loseAudio.play().catch(err => {
+        showMessage('lose', `Playback failed: ${err.message}`, 'error');
+      });
+    }
+
+    function stopAll() {
+      if (winAudio && !winAudio.paused) {
+        winAudio.pause();
+        winAudio.currentTime = 0;
+      }
+      if (loseAudio && !loseAudio.paused) {
+        loseAudio.pause();
+        loseAudio.currentTime = 0;
+      }
+    }
+
+    function reloadWin() {
+      if (winAudio) {
+        winAudio.pause();
+        winAudio = null;
+      }
+      loadWin();
+    }
+
+    function reloadLose() {
+      if (loseAudio) {
+        loseAudio.pause();
+        loseAudio = null;
+      }
+      loadLose();
+    }
+
+    function updateStatus(type, status) {
+      const indicator = document.getElementById(`${type}-status`);
+      indicator.className = `status-indicator ${status}`;
+    }
+
+    function showMessage(type, message, messageType) {
+      const messageDiv = document.getElementById(`${type}-message`);
+      if (!message) {
+        messageDiv.innerHTML = '';
+        return;
+      }
+
+      const className = messageType === 'success' ? 'success-message' : 'error-message';
+      messageDiv.innerHTML = `<div class="${className}">${message}</div>`;
+    }
+
+    // Volume control
+    document.getElementById('volume').addEventListener('input', (e) => {
+      const volume = e.target.value / 100;
+      document.getElementById('volume-value').textContent = e.target.value + '%';
+
+      if (winAudio) winAudio.volume = volume;
+      if (loseAudio) loseAudio.volume = volume;
+    });
+
+    // Path testing
+    async function testPath(path) {
+      return new Promise((resolve) => {
+        const audio = new Audio(path);
+
+        const timeout = setTimeout(() => {
+          resolve(false);
+        }, 3000);
+
+        audio.addEventListener('canplaythrough', () => {
+          clearTimeout(timeout);
+          resolve(true);
+        });
+
+        audio.addEventListener('error', () => {
+          clearTimeout(timeout);
+          resolve(false);
+        });
+      });
+    }
+
+    async function testAllPaths() {
+      const container = document.getElementById('path-tests');
+      container.innerHTML = '<p style="color: #6b7280; font-style: italic;">Testing paths...</p>';
+
+      let results = '';
+
+      // Test win paths
+      results += '<div style="margin-bottom: 15px;"><strong style="color: #667eea;">Win Sound Paths:</strong></div>';
+      for (const path of testPaths.win) {
+        results += `<div class="path-test">
+          <span>${path}</span>
+          <span class="test-result testing">Testing...</span>
+        </div>`;
+      }
+
+      // Test lose paths
+      results += '<div style="margin: 20px 0 15px;"><strong style="color: #667eea;">Lose Sound Paths:</strong></div>';
+      for (const path of testPaths.lose) {
+        results += `<div class="path-test">
+          <span>${path}</span>
+          <span class="test-result testing">Testing...</span>
+        </div>`;
+      }
+
+      container.innerHTML = results;
+
+      // Actually test each path
+      const pathElements = container.querySelectorAll('.path-test');
+      const allPaths = [...testPaths.win, ...testPaths.lose];
+
+      for (let i = 0; i < allPaths.length; i++) {
+        const success = await testPath(allPaths[i]);
+        const resultSpan = pathElements[i].querySelector('.test-result');
+        resultSpan.className = `test-result ${success ? 'ok' : 'fail'}`;
+        resultSpan.textContent = success ? '✓ OK' : '✗ 404';
+      }
+    }
+
+    // Initialize on load
+    window.addEventListener('load', () => {
+      initAudio();
+      testAllPaths();
+    });
+  </script>
+</body>
+</html>
