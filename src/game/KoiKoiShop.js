@@ -144,6 +144,13 @@ export const WIN_CONDITIONS = {
     difficulty: 2,
     stars: '★★☆'
   },
+  MEDIUM_SUGAWARA: {
+    id: 'medium_sugawara',
+    name: 'Sugawara',
+    description: 'Collect the January bright (crane), February animal (bush warbler), and March bright (curtain)',
+    difficulty: 2,
+    stars: '★★☆'
+  },
 
   // HARD Bonus Chances (★★★) - Need lots of luck and 3-4 right cards in hand
   HARD_BLOCK_OPPONENT: {
@@ -431,6 +438,9 @@ export class KoiKoiShop extends KoiKoi {
     } else if (id === 'medium_tales_of_ise') {
       result = this.checkTalesOfIse();
       console.log(`[BONUS CHANCE] medium_tales_of_ise: ${result}`);
+    } else if (id === 'medium_sugawara') {
+      result = this.checkSugawara();
+      console.log(`[BONUS CHANCE] medium_sugawara: ${result}`);
     }
     // Hard conditions
     else if (id === 'hard_block_opponent') {
@@ -632,6 +642,16 @@ export class KoiKoiShop extends KoiKoi {
     const hasRainMan = this.playerCaptured.some(card => card.name.includes('rain man'));
     const hasSakeCup = this.playerCaptured.some(card => card.name.includes('sake cup'));
     return hasMayAnimal && hasRainMan && hasSakeCup;
+  }
+
+  /**
+   * Check if player has January bright (crane), February animal (bush warbler), and March bright (curtain)
+   */
+  checkSugawara() {
+    const hasJanuaryBright = this.playerCaptured.some(card => card.name.includes('January - bright'));
+    const hasFebruaryAnimal = this.playerCaptured.some(card => card.name.includes('February - animal'));
+    const hasMarchBright = this.playerCaptured.some(card => card.name.includes('March - bright'));
+    return hasJanuaryBright && hasFebruaryAnimal && hasMarchBright;
   }
 
   /**
