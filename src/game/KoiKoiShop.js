@@ -165,6 +165,13 @@ export const WIN_CONDITIONS = {
     difficulty: 2,
     stars: '★★☆'
   },
+  MEDIUM_SIX_NOT_SEVEN: {
+    id: 'medium_six_not_seven',
+    name: 'Six, Not Seven',
+    description: 'End round with exactly 6 points',
+    difficulty: 2,
+    stars: '★★☆'
+  },
 
   // HARD Bonus Chances (★★★) - Need lots of luck and 3-4 right cards in hand
   HARD_BLOCK_OPPONENT: {
@@ -222,6 +229,20 @@ export const WIN_CONDITIONS = {
     description: 'Collect all poetry ribbons and all 4 plain red ribbons',
     difficulty: 3,
     stars: '★★★'
+  },
+  HARD_HEART_OF_THE_CARDS: {
+    id: 'hard_heart_of_the_cards',
+    name: 'Heart of the Cards',
+    description: 'Discard 6 cards to the field',
+    difficulty: 3,
+    stars: '★★★'
+  },
+  HARD_HITCHCOCK: {
+    id: 'hard_hitchcock',
+    name: 'Hitchcock',
+    description: 'Collect no birds',
+    difficulty: 3,
+    stars: '★★★'
   }
 };
 
@@ -233,6 +254,7 @@ export class KoiKoiShop extends KoiKoi {
     this.selectedWinCondition = null;
     this.shopCards = []; // The 4 cards selected from the shop
     this.isShopMode = true;
+    this.playerFieldDiscards = 0; // Track cards player discarded to field
   }
 
   /**
@@ -295,6 +317,7 @@ export class KoiKoiShop extends KoiKoi {
     this.selectedMatch = null;
     this.gameOver = false;
     this.gameOverMessage = '';
+    this.playerFieldDiscards = 0; // Reset field discard counter
 
     // Determine who goes first (same logic as regular Koi Koi)
     if (!this.firstPlayerThisGame) {
@@ -461,6 +484,9 @@ export class KoiKoiShop extends KoiKoi {
     } else if (id === 'medium_flower_enthusiast') {
       result = this.checkFlowerEnthusiast();
       console.log(`[BONUS CHANCE] medium_flower_enthusiast: ${result}`);
+    } else if (id === 'medium_six_not_seven') {
+      result = this.checkSixNotSeven();
+      console.log(`[BONUS CHANCE] medium_six_not_seven: ${result}`);
     }
     // Hard conditions
     else if (id === 'hard_block_opponent') {
@@ -489,6 +515,12 @@ export class KoiKoiShop extends KoiKoi {
     } else if (id === 'hard_seven_red_ribbons') {
       result = this.checkSevenRedRibbons();
       console.log(`[BONUS CHANCE] hard_seven_red_ribbons: ${result}`);
+    } else if (id === 'hard_heart_of_the_cards') {
+      result = this.checkHeartOfTheCards();
+      console.log(`[BONUS CHANCE] hard_heart_of_the_cards: ${result}`);
+    } else if (id === 'hard_hitchcock') {
+      result = this.checkHitchcock();
+      console.log(`[BONUS CHANCE] hard_hitchcock: ${result}`);
     }
 
     console.log(`[BONUS CHANCE] Final result: ${result}`);
@@ -693,6 +725,52 @@ export class KoiKoiShop extends KoiKoi {
     );
     // Need all 7 red ribbons: 3 poetry (Jan, Feb, Mar) + 4 plain (Apr, May, Jul, Nov)
     return redRibbons.length >= 7;
+  }
+
+  /**
+   * Override autoMatchCard to track field discards
+   */
+  autoMatchCard(card) {
+    const fieldBefore = this.field.length;
+    const result = super.autoMatchCard(card);
+
+    // If field grew by 1, player discarded a card to field
+    if (result && this.field.length === fieldBefore + 1) {
+      this.playerFieldDiscards++;
+      console.log(`[SHOP] Player field discards: ${this.playerFieldDiscards}`);
+    }
+
+    return result;
+  }
+
+  /**
+   * Check if player has exactly 6 points from yaku
+   */
+  checkSixNotSeven() {
+    const yaku = Yaku.checkYaku(this.playerCaptured, this.gameOptions);
+    const score = Yaku.calculateScore(yaku);
+    return score === 6;
+  }
+
+  /**
+   * Check if player has discarded 6 cards to the field
+   */
+  checkHeartOfTheCards() {
+    // Track number of cards player discarded to field (played from hand without matching)
+    // This requires state tracking that is added in the constructor
+    return this.playerFieldDiscards >= 6;
+  }
+
+  /**
+   * Check if player has collected no bird cards
+   * Birds: crane, bush warbler, cuckoo, geese, swallow
+   */
+  checkHitchcock() {
+    const birdNames = ['crane', 'bush warbler', 'cuckoo', 'geese', 'swallow'];
+    const hasBirds = this.playerCaptured.some(card =>
+      birdNames.some(bird => card.name.includes(bird))
+    );
+    return !hasBirds;
   }
 
   /**
