@@ -1407,54 +1407,66 @@ export class Sakura {
       return;
     }
 
-    // Find matches
-    const matches = this.field.filter(fc => fc.month === this.drawnCard.month);
+    // Delay processing until card animation arrives at drawnCard zone
+    // The animation system (synchronize) needs time to animate deck→drawnCard
+    // Typical animation duration is 300-800ms, use 850ms to be safe
+    setTimeout(() => {
+      // Find matches
+      const matches = this.field.filter(fc => fc.month === this.drawnCard.month);
 
-    if (matches.length === 0) {
-      // No match - add to field
-      // Wait for draw animation to complete, then move to field
-      // Keep card in drawnCard zone until we add it to field so synchronize
-      // can properly detect the zone transition and animate it
-      setTimeout(() => {
-        const drawnCardRef = this.drawnCard;
-        // Add to field FIRST, then clear drawnCard so synchronize detects the zone change
-        this.field.push(drawnCardRef);
-        this.drawnCard = null;
-        this.message = `Player ${this.currentPlayerIndex + 1} drew - no match.`;
-        setTimeout(() => this.endTurn(), 500);
-      }, 500);
-    } else {
-      // Match found - animate to field card then capture
-      const chosen = matches[0];
+      if (matches.length === 0) {
+        // No match - add to field with display delay
+        // Card is now visible at drawnCard, show it briefly before moving to field
+        // Match player draw timing (500ms + 900ms = 1400ms total)
+        setTimeout(() => {
+          this.field.push(this.drawnCard);
+          this.drawnCard = null;
+          this.message = `Player ${this.currentPlayerIndex + 1} placed card on field`;
+          setTimeout(() => this.endTurn(), 500);
+        }, 550);
+      } else {
+        // Match found - animate to field card then capture
+        const chosen = matches[0];
 
-      if (this.card3DManager) {
-        const drawnCard3D = this.card3DManager.getCard(this.drawnCard);
-        const fieldCard3D = this.card3DManager.getCard(chosen);
+        if (this.card3DManager) {
+          const drawnCard3D = this.card3DManager.getCard(this.drawnCard);
+          const fieldCard3D = this.card3DManager.getCard(chosen);
 
-        if (drawnCard3D && fieldCard3D) {
-          // Wait to show drawn card, then animate to field card
-          setTimeout(() => {
-            drawnCard3D.tweenTo(
-              {
-                x: fieldCard3D.homePosition.x,
-                y: fieldCard3D.homePosition.y,
-                z: fieldCard3D.homePosition.z + 5
-              },
-              400,
-              'easeInOutQuad'
-            );
+          if (drawnCard3D && fieldCard3D) {
+            // Wait to show drawn card, then animate to field card
+            setTimeout(() => {
+              drawnCard3D.tweenTo(
+                {
+                  x: fieldCard3D.homePosition.x,
+                  y: fieldCard3D.homePosition.y,
+                  z: fieldCard3D.homePosition.z + 5
+                },
+                400,
+                'easeInOutQuad'
+              );
 
-            drawnCard3D.onAnimationComplete = () => {
+              drawnCard3D.onAnimationComplete = () => {
+                const drawnCardRef = this.drawnCard;
+                this.drawnCard = null;
+
+                currentPlayer.captured.push(drawnCardRef, chosen);
+                this.field = this.field.filter(c => c.id !== chosen.id);
+                this.message = `Player ${this.currentPlayerIndex + 1} captured ${chosen.month}!`;
+
+                setTimeout(() => this.endTurn(), 500);
+              };
+            }, 300);
+          } else {
+            // Fallback
+            setTimeout(() => {
               const drawnCardRef = this.drawnCard;
               this.drawnCard = null;
-
               currentPlayer.captured.push(drawnCardRef, chosen);
               this.field = this.field.filter(c => c.id !== chosen.id);
               this.message = `Player ${this.currentPlayerIndex + 1} captured ${chosen.month}!`;
-
               setTimeout(() => this.endTurn(), 500);
-            };
-          }, 300);
+            }, 500);
+          }
         } else {
           // Fallback
           setTimeout(() => {
@@ -1466,18 +1478,8 @@ export class Sakura {
             setTimeout(() => this.endTurn(), 500);
           }, 500);
         }
-      } else {
-        // Fallback
-        setTimeout(() => {
-          const drawnCardRef = this.drawnCard;
-          this.drawnCard = null;
-          currentPlayer.captured.push(drawnCardRef, chosen);
-          this.field = this.field.filter(c => c.id !== chosen.id);
-          this.message = `Player ${this.currentPlayerIndex + 1} captured ${chosen.month}!`;
-          setTimeout(() => this.endTurn(), 500);
-        }, 500);
       }
-    }
+    }, 850);  // Close outer setTimeout waiting for card to arrive at drawnCard
   }
 
   /**
