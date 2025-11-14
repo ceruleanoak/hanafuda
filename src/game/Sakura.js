@@ -5,12 +5,12 @@
  *
  * Key differences from Koi-Koi:
  * - No koi-koi continuation mechanic
- * - Different card point values (Ribbons=5, Animals=1, Chaff=0, Brights=20)
+ * - Different card point values (Brights=20, Ribbons=10, Animals=5, Chaff=0)
  * - Hiki (suit capture) rule
  * - Gaji (Lightning wild card) system
  * - Yaku subtract 50 points from opponents (instead of adding to player)
  * - Two-phase turn structure (hand card → draw card)
- * - Variable player count (2-4 players, we implement 2-player)
+ * - Variable player count (2-4 players, currently extended to support multi-player)
  */
 
 import { Deck } from './Deck.js';
@@ -28,18 +28,27 @@ export class Sakura {
     // Game configuration
     this.totalRounds = 6; // Standard Sakura match is 6 rounds
     this.currentRound = 0;
-    this.playerCount = 2; // We implement 2-player mode
+    this.playerCount = 2; // Default to 2 players, can be set via startNewGame
 
     // Card values in Sakura (different from Koi-Koi)
     this.SAKURA_CARD_VALUES = {
       [CARD_TYPES.BRIGHT]: 20,  // All brights = 20 points
-      [CARD_TYPES.RIBBON]: 5,   // All ribbons = 5 points
-      [CARD_TYPES.ANIMAL]: 1,   // All animals = 1 point
+      [CARD_TYPES.RIBBON]: 10,  // All ribbons = 10 points (corrected from 5)
+      [CARD_TYPES.ANIMAL]: 5,   // All animals = 5 points (corrected from 1)
       [CARD_TYPES.CHAFF]: 0     // All chaff = 0 points
     };
 
     // Gaji (Lightning wild card) - November 4th card
     this.GAJI_CARD_ID = 44; // November - chaff
+
+    // Variant tracking - loaded from gameOptions
+    this.variants = {
+      chitsiobiki: false,         // Three-of-a-kind trade
+      victoryScoring: false,      // Count wins instead of cumulative points
+      basaChu: false,             // Basa & Chu multipliers
+      bothPlayersScore: false,    // Both players score (no penalties)
+      oibana: false               // Auction variant
+    };
 
     // Animation queue
     this.animationQueue = [];
@@ -50,6 +59,9 @@ export class Sakura {
     this.hikiAnnouncementCallback = null;
     this.gajiSelectionCallback = null;
 
+    // Initialize game state before reset
+    this.dealerIndex = 0;
+
     this.reset();
   }
 
@@ -58,21 +70,54 @@ export class Sakura {
   // ============================================================
 
   /**
+   * Update game options (called when variants are changed)
+   */
+  updateOptions(gameOptions) {
+    this.gameOptions = gameOptions;
+    // Load variant options
+    if (gameOptions) {
+      this.variants.chitsiobiki = gameOptions.get('chitsiobikiEnabled') || false;
+      this.variants.victoryScoring = gameOptions.get('victoryScoringEnabled') || false;
+      this.variants.basaChu = gameOptions.get('basaChuEnabled') || false;
+      this.variants.bothPlayersScore = gameOptions.get('bothPlayersScoreEnabled') || false;
+      this.variants.oibana = gameOptions.get('oibanaEnabled') || false;
+    }
+  }
+
+  /**
    * Start a new Sakura game
+   * @param {number} rounds - Number of rounds to play (default 6)
+   * @param {number} playerCount - Number of players (2, 3, or 4)
    */
   startNewGame(rounds = 6, playerCount = 2) {
     debugLogger.log('sakura', `🌸 Starting new Sakura game`, {
       rounds,
       playerCount,
-      gajiCardId: this.GAJI_CARD_ID
+      gajiCardId: this.GAJI_CARD_ID,
+      variants: this.variants
     });
+
+    // Validate playerCount
+    if (![2, 3, 4].includes(playerCount)) {
+      console.warn(`Invalid player count ${playerCount}, defaulting to 2`);
+      playerCount = 2;
+    }
 
     this.totalRounds = rounds;
     this.playerCount = playerCount;
     this.currentRound = 1;
-    this.playerMatchScore = 0;
-    this.opponentMatchScore = 0;
-    this.dealer = 'player'; // First game: random dealer (simplified to player)
+    this.dealerIndex = 0; // Player 0 (dealer) starts the game
+    this.currentPlayerIndex = 0; // Dealer plays first
+
+    // Load variants from gameOptions if available
+    if (this.gameOptions) {
+      this.variants.chitsiobiki = this.gameOptions.get('chitsiobikiEnabled') || false;
+      this.variants.victoryScoring = this.gameOptions.get('victoryScoringEnabled') || false;
+      this.variants.basaChu = this.gameOptions.get('basaChuEnabled') || false;
+      this.variants.bothPlayersScore = this.gameOptions.get('bothPlayersScoreEnabled') || false;
+      this.variants.oibana = this.gameOptions.get('oibanaEnabled') || false;
+    }
+
     this.reset();
   }
 
@@ -82,38 +127,53 @@ export class Sakura {
   reset() {
     this.deck.reset();
 
+    // Initialize player array (if not already initialized)
+    if (!this.players || this.players.length !== this.playerCount) {
+      this.players = [];
+      for (let i = 0; i < this.playerCount; i++) {
+        this.players[i] = {
+          hand: [],
+          captured: [],
+          yaku: null,
+          matchScore: 0,
+          roundWins: 0,
+          isHuman: (i === 0), // Player 0 is always the human
+          difficulty: 'normal'  // AI difficulty for non-human players
+        };
+      }
+    }
+
     // Card zones
     this.field = [];
-    this.playerHand = [];
-    this.opponentHand = [];
-    this.playerCaptured = [];
-    this.opponentCaptured = [];
 
-    // Yaku tracking
-    this.playerYaku = [];
-    this.opponentYaku = [];
+    // Reset player hands and captured
+    for (let i = 0; i < this.playerCount; i++) {
+      this.players[i].hand = [];
+      this.players[i].captured = [];
+      this.players[i].yaku = null;
+    }
 
-    // Hiki tracking (which suits have been completely captured)
-    this.completedHikis = {
-      player: [], // Array of month names
-      opponent: []
-    };
+    // Hiki tracking - one array per player
+    this.completedHikis = [];
+    for (let i = 0; i < this.playerCount; i++) {
+      this.completedHikis[i] = [];
+    }
 
     // Gaji tracking
     this.gajiState = {
-      location: null, // 'deck', 'player_hand', 'opponent_hand', 'field', 'player_captured', 'opponent_captured'
+      location: null, // 'deck', 'player_X_hand', 'field', 'player_X_captured'
       pairedWithMonth: null, // If captured with Gaji, which month was paired
       isWildCard: false // Is Gaji currently acting as a wild card?
     };
 
     // Turn state
-    this.currentPlayer = this.dealer;
-    this.phase = (this.dealer === 'player') ? 'select_hand' : 'opponent_turn';
+    this.currentPlayerIndex = this.dealerIndex; // Dealer plays first
+    this.phase = (this.currentPlayerIndex === 0) ? 'select_hand' : 'opponent_turn';
     this.turnPhase = 1; // Phase 1: play from hand, Phase 2: draw from deck
     this.selectedCards = [];
     this.drawnCard = null;
     this.drawnCardMatches = [];
-    this.opponentPlayedCard = null;
+    this.lastPlayedCard = null; // Last card played by current player
 
     // Game flow
     this.gameOver = false;
@@ -125,7 +185,9 @@ export class Sakura {
 
   /**
    * Deal cards based on player count
-   * For 2 players: 10 cards each, 8 field cards
+   * 2 players: 10 cards each, 8 field cards
+   * 3 players: 7 cards each, 6 field cards
+   * 4 players: 5 cards each, 8 field cards
    */
   deal() {
     const dealingRules = {
@@ -136,13 +198,20 @@ export class Sakura {
 
     const rules = dealingRules[this.playerCount];
 
-    // Deal half of field cards
+    // Deal half of field cards first
     const halfFieldSize = Math.floor(rules.fieldSize / 2);
     this.field = this.deck.drawMultiple(halfFieldSize);
 
-    // Deal hand cards
-    this.playerHand = this.deck.drawMultiple(rules.handSize);
-    this.opponentHand = this.deck.drawMultiple(rules.handSize);
+    // Deal hand cards to each player in turn order (starting with dealer)
+    for (let i = 0; i < rules.handSize; i++) {
+      for (let p = 0; p < this.playerCount; p++) {
+        const playerIndex = (this.dealerIndex + p) % this.playerCount;
+        const card = this.deck.draw();
+        if (card) {
+          this.players[playerIndex].hand.push(card);
+        }
+      }
+    }
 
     // Deal remaining field cards
     const remainingFieldCards = rules.fieldSize - halfFieldSize;
@@ -152,17 +221,16 @@ export class Sakura {
     this.checkInitialFieldHiki();
 
     // Check for Chitsiobiki (three-of-a-kind trade)
-    // For simplicity, we auto-trade if AI has 3 of a kind
     this.checkChitsiobiki();
 
     // Locate Gaji card
     this.locateGaji();
 
     // Set initial message
-    if (this.currentPlayer === 'player') {
+    if (this.currentPlayerIndex === 0) {
       this.message = 'Your turn! Select a card from your hand.';
     } else {
-      this.message = "Opponent's turn...";
+      this.message = `Player ${this.currentPlayerIndex + 1}'s turn...`;
     }
   }
 
@@ -177,20 +245,18 @@ export class Sakura {
       suitCounts[card.month] = (suitCounts[card.month] || 0) + 1;
     });
 
-    // Check for complete suits (all 4 cards)
+    // Check for complete suits (all 4 cards on field)
     for (let month in suitCounts) {
       if (suitCounts[month] === 4) {
         // Dealer captures all 4 cards
         const capturedCards = this.field.filter(c => c.month === month);
+        this.players[this.dealerIndex].captured.push(...capturedCards);
+        this.completedHikis[this.dealerIndex].push(month);
 
-        if (this.dealer === 'player') {
-          this.playerCaptured.push(...capturedCards);
-          this.completedHikis.player.push(month);
+        if (this.dealerIndex === 0) {
           this.message = `Initial Hiki! You captured all 4 ${month} cards!`;
         } else {
-          this.opponentCaptured.push(...capturedCards);
-          this.completedHikis.opponent.push(month);
-          this.message = `Initial Hiki! Opponent captured all 4 ${month} cards!`;
+          this.message = `Initial Hiki! Player ${this.dealerIndex + 1} captured all 4 ${month} cards!`;
         }
 
         // Remove captured cards from field
@@ -204,50 +270,38 @@ export class Sakura {
    * If a player has 3 cards of same suit in starting hand, they can trade one
    */
   checkChitsiobiki() {
-    // Check player hand
-    const playerSuitCounts = {};
-    this.playerHand.forEach(card => {
-      playerSuitCounts[card.month] = (playerSuitCounts[card.month] || []);
-      playerSuitCounts[card.month].push(card);
-    });
+    // Check each player's hand for Chitsiobiki
+    for (let playerIndex = 0; playerIndex < this.playerCount; playerIndex++) {
+      const hand = this.players[playerIndex].hand;
+      const suitCounts = {};
 
-    for (let month in playerSuitCounts) {
-      if (playerSuitCounts[month].length === 3) {
-        // Player has option to trade - for simplicity, we keep highest value card
-        // and trade the lowest value card
-        const cards = playerSuitCounts[month];
-        cards.sort((a, b) => this.getCardValue(b) - this.getCardValue(a));
-        const cardToTrade = cards[2]; // Lowest value
+      // Count cards by suit
+      hand.forEach(card => {
+        suitCounts[card.month] = (suitCounts[card.month] || []);
+        suitCounts[card.month].push(card);
+      });
 
-        // Trade card with deck
-        const newCard = this.deck.draw();
-        this.playerHand = this.playerHand.filter(c => c.id !== cardToTrade.id);
-        this.playerHand.push(newCard);
-        this.deck.cards.push(cardToTrade); // Return card to deck
-        this.deck.shuffle();
+      // Check for 3-of-a-kind suits
+      for (let month in suitCounts) {
+        if (suitCounts[month].length === 3) {
+          // Trade the lowest value card
+          const cards = suitCounts[month];
+          cards.sort((a, b) => this.getCardValue(b) - this.getCardValue(a));
+          const cardToTrade = cards[2]; // Lowest value
 
-        this.message = `Chitsiobiki! You traded a ${month} card for a new card.`;
-      }
-    }
+          // Trade card with deck
+          const newCard = this.deck.draw();
+          this.players[playerIndex].hand = hand.filter(c => c.id !== cardToTrade.id);
+          this.players[playerIndex].hand.push(newCard);
+          this.deck.cards.push(cardToTrade);
+          this.deck.shuffle();
 
-    // Check opponent hand (auto-trade for AI)
-    const opponentSuitCounts = {};
-    this.opponentHand.forEach(card => {
-      opponentSuitCounts[card.month] = (opponentSuitCounts[card.month] || []);
-      opponentSuitCounts[card.month].push(card);
-    });
-
-    for (let month in opponentSuitCounts) {
-      if (opponentSuitCounts[month].length === 3) {
-        const cards = opponentSuitCounts[month];
-        cards.sort((a, b) => this.getCardValue(b) - this.getCardValue(a));
-        const cardToTrade = cards[2];
-
-        const newCard = this.deck.draw();
-        this.opponentHand = this.opponentHand.filter(c => c.id !== cardToTrade.id);
-        this.opponentHand.push(newCard);
-        this.deck.cards.push(cardToTrade);
-        this.deck.shuffle();
+          if (playerIndex === 0) {
+            this.message = `Chitsiobiki! You traded a ${month} card for a new card.`;
+          } else {
+            this.message = `Chitsiobiki! Player ${playerIndex + 1} traded a card.`;
+          }
+        }
       }
     }
   }
@@ -263,25 +317,36 @@ export class Sakura {
       return;
     }
 
-    // Check where Gaji is located
-    if (this.playerHand.find(c => c.id === this.GAJI_CARD_ID)) {
-      this.gajiState.location = 'player_hand';
-      this.gajiState.isWildCard = true;
-    } else if (this.opponentHand.find(c => c.id === this.GAJI_CARD_ID)) {
-      this.gajiState.location = 'opponent_hand';
-      this.gajiState.isWildCard = true;
-    } else if (this.field.find(c => c.id === this.GAJI_CARD_ID)) {
+    // Check where Gaji is located (check hands first)
+    for (let i = 0; i < this.playerCount; i++) {
+      if (this.players[i].hand.find(c => c.id === this.GAJI_CARD_ID)) {
+        this.gajiState.location = `player_${i}_hand`;
+        this.gajiState.isWildCard = true;
+        return;
+      }
+    }
+
+    // Check field
+    if (this.field.find(c => c.id === this.GAJI_CARD_ID)) {
       this.gajiState.location = 'field';
       this.gajiState.isWildCard = false; // Not wild when on field
-    } else if (this.deck.cards.find(c => c.id === this.GAJI_CARD_ID)) {
+      return;
+    }
+
+    // Check deck
+    if (this.deck.cards.find(c => c.id === this.GAJI_CARD_ID)) {
       this.gajiState.location = 'deck';
       this.gajiState.isWildCard = false; // Will become wild when drawn
-    } else if (this.playerCaptured.find(c => c.id === this.GAJI_CARD_ID)) {
-      this.gajiState.location = 'player_captured';
-      this.gajiState.isWildCard = false;
-    } else if (this.opponentCaptured.find(c => c.id === this.GAJI_CARD_ID)) {
-      this.gajiState.location = 'opponent_captured';
-      this.gajiState.isWildCard = false;
+      return;
+    }
+
+    // Check captured cards
+    for (let i = 0; i < this.playerCount; i++) {
+      if (this.players[i].captured.find(c => c.id === this.GAJI_CARD_ID)) {
+        this.gajiState.location = `player_${i}_captured`;
+        this.gajiState.isWildCard = false;
+        return;
+      }
     }
   }
 
@@ -289,17 +354,27 @@ export class Sakura {
    * Find the Gaji card object
    */
   findGajiCard() {
-    // Search all locations for Gaji
-    const allCards = [
-      ...this.playerHand,
-      ...this.opponentHand,
-      ...this.field,
-      ...this.deck.cards,
-      ...this.playerCaptured,
-      ...this.opponentCaptured
-    ];
+    // Search all player hands
+    for (let i = 0; i < this.playerCount; i++) {
+      const card = this.players[i].hand.find(c => c.id === this.GAJI_CARD_ID);
+      if (card) return card;
+    }
 
-    return allCards.find(c => c.id === this.GAJI_CARD_ID);
+    // Search field
+    const fieldCard = this.field.find(c => c.id === this.GAJI_CARD_ID);
+    if (fieldCard) return fieldCard;
+
+    // Search deck
+    const deckCard = this.deck.cards.find(c => c.id === this.GAJI_CARD_ID);
+    if (deckCard) return deckCard;
+
+    // Search all captured cards
+    for (let i = 0; i < this.playerCount; i++) {
+      const card = this.players[i].captured.find(c => c.id === this.GAJI_CARD_ID);
+      if (card) return card;
+    }
+
+    return null;
   }
 
   /**
@@ -327,6 +402,195 @@ export class Sakura {
     return capturedCards.reduce((total, card) => {
       return total + this.getCardValue(card);
     }, 0);
+  }
+
+  // ============================================================
+  // HELPER METHODS FOR MULTI-PLAYER
+  // ============================================================
+
+  /**
+   * Get current player object
+   */
+  getCurrentPlayer() {
+    return this.players[this.currentPlayerIndex];
+  }
+
+  /**
+   * Get current player's hand
+   */
+  getCurrentPlayerHand() {
+    return this.getCurrentPlayer().hand;
+  }
+
+  /**
+   * Get current player's captured cards
+   */
+  getCurrentPlayerCaptured() {
+    return this.getCurrentPlayer().captured;
+  }
+
+  /**
+   * Check if current player is human
+   */
+  isCurrentPlayerHuman() {
+    return this.getCurrentPlayer().isHuman;
+  }
+
+  // ============================================================
+  // BACKWARD COMPATIBILITY ACCESSORS
+  // These map old playerHand/opponentHand naming to player array
+  // ============================================================
+
+  /**
+   * Get player 0 (human) hand - backward compatibility
+   */
+  get playerHand() {
+    return this.players[0]?.hand || [];
+  }
+
+  set playerHand(value) {
+    if (this.players[0]) {
+      this.players[0].hand = value;
+    }
+  }
+
+  /**
+   * Get player 1 (opponent) hand - backward compatibility
+   */
+  get opponentHand() {
+    return this.players[1]?.hand || [];
+  }
+
+  set opponentHand(value) {
+    if (this.players[1]) {
+      this.players[1].hand = value;
+    }
+  }
+
+  /**
+   * Get player 0 (human) captured - backward compatibility
+   */
+  get playerCaptured() {
+    return this.players[0]?.captured || [];
+  }
+
+  set playerCaptured(value) {
+    if (this.players[0]) {
+      this.players[0].captured = value;
+    }
+  }
+
+  /**
+   * Get player 1 (opponent) captured - backward compatibility
+   */
+  get opponentCaptured() {
+    return this.players[1]?.captured || [];
+  }
+
+  set opponentCaptured(value) {
+    if (this.players[1]) {
+      this.players[1].captured = value;
+    }
+  }
+
+  /**
+   * Get player 0 yaku - backward compatibility
+   */
+  get playerYaku() {
+    return this.players[0]?.yaku || null;
+  }
+
+  set playerYaku(value) {
+    if (this.players[0]) {
+      this.players[0].yaku = value;
+    }
+  }
+
+  /**
+   * Get player 1 yaku - backward compatibility
+   */
+  get opponentYaku() {
+    return this.players[1]?.yaku || null;
+  }
+
+  set opponentYaku(value) {
+    if (this.players[1]) {
+      this.players[1].yaku = value;
+    }
+  }
+
+  /**
+   * Get player 0 match score - backward compatibility
+   */
+  get playerMatchScore() {
+    return this.players[0]?.matchScore || 0;
+  }
+
+  set playerMatchScore(value) {
+    if (this.players[0]) {
+      this.players[0].matchScore = value;
+    }
+  }
+
+  /**
+   * Get player 1 match score - backward compatibility
+   */
+  get opponentMatchScore() {
+    return this.players[1]?.matchScore || 0;
+  }
+
+  set opponentMatchScore(value) {
+    if (this.players[1]) {
+      this.players[1].matchScore = value;
+    }
+  }
+
+  /**
+   * Get player round wins - backward compatibility
+   */
+  get playerRoundWins() {
+    return this.players[0]?.roundWins || 0;
+  }
+
+  set playerRoundWins(value) {
+    if (this.players[0]) {
+      this.players[0].roundWins = value;
+    }
+  }
+
+  /**
+   * Get opponent round wins - backward compatibility
+   */
+  get opponentRoundWins() {
+    return this.players[1]?.roundWins || 0;
+  }
+
+  set opponentRoundWins(value) {
+    if (this.players[1]) {
+      this.players[1].roundWins = value;
+    }
+  }
+
+  /**
+   * Get dealer string for backward compatibility
+   */
+  get dealer() {
+    return this.dealerIndex === 0 ? 'player' : 'opponent';
+  }
+
+  set dealer(value) {
+    this.dealerIndex = (value === 'player') ? 0 : 1;
+  }
+
+  /**
+   * Get currentPlayer string for backward compatibility
+   */
+  get currentPlayer() {
+    return this.currentPlayerIndex === 0 ? 'player' : 'opponent';
+  }
+
+  set currentPlayer(value) {
+    this.currentPlayerIndex = (value === 'player') ? 0 : 1;
   }
 
   // ============================================================
@@ -413,7 +677,7 @@ export class Sakura {
       this.announceHiki(card, matches);
       this.playerCaptured.push(card, ...matches);
       this.field = this.field.filter(c => !matches.includes(c));
-      this.completedHikis.player.push(card.month);
+      this.completedHikis[0].push(card.month);
       this.message = `HIKI! Captured all 4 ${card.month} cards!`;
 
       // Update Gaji state if Hiki included Gaji
@@ -714,25 +978,24 @@ export class Sakura {
     const playerCardsOfMonth = this.playerCaptured.filter(c => c.month === month);
 
     if (playerCardsOfMonth.length === 4) {
-      this.completedHikis.player.push(month);
+      this.completedHikis[0].push(month);
       this.message = `HIKI! Completed all 4 ${month} cards!`;
     }
   }
 
   /**
-   * End current turn and switch players
+   * End current turn and advance to next player
    */
   endTurn() {
-    debugLogger.log('sakura', `🔄 Ending turn`, {
-      currentPlayer: this.currentPlayer,
-      playerHandSize: this.playerHand.length,
-      opponentHandSize: this.opponentHand.length,
+    debugLogger.log('sakura', `🔄 Ending turn for player ${this.currentPlayerIndex}`, {
+      currentPlayerIndex: this.currentPlayerIndex,
+      handSizes: this.players.map((p, i) => `P${i}: ${p.hand.length}`).join(', '),
       deckSize: this.deck.cards.length
     });
 
     this.turnPhase = 1;
 
-    // Update yaku
+    // Update yaku for current player
     this.updateYaku();
 
     // Check if round should end
@@ -742,27 +1005,26 @@ export class Sakura {
       return;
     }
 
-    // Switch players
-    this.currentPlayer = (this.currentPlayer === 'player') ? 'opponent' : 'player';
+    // Advance to next player
+    this.currentPlayerIndex = (this.currentPlayerIndex + 1) % this.playerCount;
 
-    debugLogger.log('sakura', `👥 Switched to ${this.currentPlayer}`);
+    debugLogger.log('sakura', `👥 Advanced to player ${this.currentPlayerIndex}`);
 
-    if (this.currentPlayer === 'player') {
-      // Check if player has any cards left
-      if (this.playerHand.length === 0) {
-        debugLogger.log('sakura', `⚠️ Player has no cards - draw only`);
-        // Player has no cards - skip to draw phase only
-        this.phase = 'drawing';
-        this.proceedToDrawPhase();
-      } else {
-        debugLogger.log('sakura', `✋ Player's turn - select from hand`);
-        this.phase = 'select_hand';
-        this.message = 'Your turn! Select a card from your hand.';
-      }
+    // Check if current player has cards in hand
+    if (this.players[this.currentPlayerIndex].hand.length === 0) {
+      debugLogger.log('sakura', `⚠️ Player ${this.currentPlayerIndex} has no cards - draw phase only`);
+      this.phase = 'drawing';
+      this.proceedToDrawPhase();
+    } else if (this.players[this.currentPlayerIndex].isHuman) {
+      // Human player's turn
+      debugLogger.log('sakura', `✋ Player ${this.currentPlayerIndex} (human) - select from hand`);
+      this.phase = 'select_hand';
+      this.message = 'Your turn! Select a card from your hand.';
     } else {
-      debugLogger.log('sakura', `🤖 Opponent's turn starting`);
+      // AI player's turn
+      debugLogger.log('sakura', `🤖 Player ${this.currentPlayerIndex} (AI) turn starting`);
       this.phase = 'opponent_turn';
-      this.message = "Opponent's turn...";
+      this.message = `Player ${this.currentPlayerIndex + 1}'s turn...`;
       setTimeout(() => this.opponentTurn(), 1000);
     }
   }
@@ -771,12 +1033,10 @@ export class Sakura {
    * Check if round should end
    */
   shouldEndRound() {
-    // Round ends when all hands are empty and deck is empty
-    return (
-      this.playerHand.length === 0 &&
-      this.opponentHand.length === 0 &&
-      this.deck.cards.length === 0
-    );
+    // Round ends when all players' hands are empty and deck is empty
+    const allHandsEmpty = this.players.every(p => p.hand.length === 0);
+    const deckEmpty = this.deck.cards.length === 0;
+    return allHandsEmpty && deckEmpty;
   }
 
   // ============================================================
@@ -798,18 +1058,21 @@ export class Sakura {
   /**
    * Check if a player can use Gaji to capture a card
    * (Cannot capture from completed Hiki or complete own Hiki with Gaji)
+   * @param {Object} targetCard - The card to potentially capture with Gaji
+   * @param {number} playerIndex - Index of the player using Gaji
    */
-  canGajiCapture(targetCard, player) {
+  canGajiCapture(targetCard, playerIndex) {
     const month = targetCard.month;
 
     // Check if any player has completed this suit (Hiki)
-    if (this.completedHikis.player.includes(month) ||
-        this.completedHikis.opponent.includes(month)) {
-      return false;
+    for (let i = 0; i < this.playerCount; i++) {
+      if (this.completedHikis[i].includes(month)) {
+        return false; // Cannot capture from completed Hiki
+      }
     }
 
-    // Check if using Gaji would complete a Hiki
-    const captured = (player === 'player') ? this.playerCaptured : this.opponentCaptured;
+    // Check if using Gaji would complete a Hiki for this player
+    const captured = this.players[playerIndex].captured;
     const suitCount = captured.filter(c => c.month === month).length;
 
     if (suitCount === 3) {
@@ -948,10 +1211,16 @@ export class Sakura {
 
   /**
    * Select best target for Gaji (AI helper)
+   * @param {Array} validTargets - Valid cards to capture with Gaji
+   * @param {number|string} playerIndex - Player index (0,1,2,3) or legacy 'player'/'opponent'
    */
-  selectBestGajiTarget(validTargets, player) {
+  selectBestGajiTarget(validTargets, playerIndex) {
+    // Support legacy 'player'/'opponent' strings for backward compatibility
+    if (playerIndex === 'player') playerIndex = 0;
+    if (playerIndex === 'opponent') playerIndex = 1;
+
     // Prioritize completing yaku
-    const captured = (player === 'player') ? this.playerCaptured : this.opponentCaptured;
+    const captured = this.players[playerIndex].captured;
 
     for (let target of validTargets) {
       if (this.yakuChecker.wouldCompleteYaku(target, captured)) {
@@ -995,23 +1264,25 @@ export class Sakura {
   // ============================================================
 
   /**
-   * Execute opponent's turn
+   * Execute opponent's turn (works for any player index via currentPlayerIndex)
    */
   opponentTurn() {
     if (this.phase !== 'opponent_turn') {
       return;
     }
 
+    const currentPlayer = this.getCurrentPlayer();
+
     // Get AI difficulty
     const difficulty = this.gameOptions?.get('aiDifficulty') || 'normal';
 
     // Phase 1: Play from hand
-    if (this.opponentHand.length > 0) {
+    if (currentPlayer.hand.length > 0) {
       const chosenCard = this.selectOpponentCard(difficulty);
-      this.opponentPlayedCard = chosenCard;
+      this.lastPlayedCard = chosenCard;
 
       // Remove from hand
-      this.opponentHand = this.opponentHand.filter(c => c.id !== chosenCard.id);
+      currentPlayer.hand = currentPlayer.hand.filter(c => c.id !== chosenCard.id);
 
       // Check if Gaji
       if (this.isGaji(chosenCard)) {
@@ -1024,26 +1295,26 @@ export class Sakura {
 
       if (matches.length === 0) {
         this.field.push(chosenCard);
-        this.message = `Opponent played ${chosenCard.month}.`;
+        this.message = `Player ${this.currentPlayerIndex + 1} played ${chosenCard.month}.`;
       } else if (matches.length === 1) {
-        this.opponentCaptured.push(chosenCard, matches[0]);
+        currentPlayer.captured.push(chosenCard, matches[0]);
         this.field = this.field.filter(c => c.id !== matches[0].id);
-        this.message = `Opponent captured ${matches[0].month}!`;
+        this.message = `Player ${this.currentPlayerIndex + 1} captured ${matches[0].month}!`;
       } else if (matches.length === 2) {
         // AI chooses highest value card
-        const chosen = this.selectBestCapture(matches, 'opponent');
-        this.opponentCaptured.push(chosenCard, chosen);
+        const chosen = this.selectBestCapture(matches, this.currentPlayerIndex);
+        currentPlayer.captured.push(chosenCard, chosen);
         this.field = this.field.filter(c => c.id !== chosen.id);
-        this.message = `Opponent captured ${chosen.month}!`;
+        this.message = `Player ${this.currentPlayerIndex + 1} captured ${chosen.month}!`;
       } else if (matches.length === 3) {
         // HIKI!
-        this.opponentCaptured.push(chosenCard, ...matches);
+        currentPlayer.captured.push(chosenCard, ...matches);
         this.field = this.field.filter(c => !matches.includes(c));
-        this.completedHikis.opponent.push(chosenCard.month);
-        this.message = `Opponent HIKI! Captured all 4 ${chosenCard.month} cards!`;
+        this.completedHikis[this.currentPlayerIndex].push(chosenCard.month);
+        this.message = `Player ${this.currentPlayerIndex + 1} HIKI! Captured all 4 ${chosenCard.month} cards!`;
       }
 
-      this.opponentPlayedCard = null;
+      this.lastPlayedCard = null;
 
       // Delay before draw phase
       setTimeout(() => this.opponentDrawPhase(difficulty), 800);
@@ -1054,9 +1325,11 @@ export class Sakura {
   }
 
   /**
-   * Opponent draw phase
+   * Opponent draw phase (works for any player via currentPlayerIndex)
    */
   opponentDrawPhase(difficulty) {
+    const currentPlayer = this.getCurrentPlayer();
+
     if (this.deck.cards.length === 0) {
       this.endTurn();
       return;
@@ -1064,7 +1337,7 @@ export class Sakura {
 
     // Draw card
     this.drawnCard = this.deck.draw();
-    this.message = `Opponent drew ${this.drawnCard.month}...`;
+    this.message = `Player ${this.currentPlayerIndex + 1} drew ${this.drawnCard.month}...`;
 
     // Check if Gaji
     if (this.isGaji(this.drawnCard)) {
@@ -1086,7 +1359,7 @@ export class Sakura {
         const drawnCardRef = this.drawnCard;
         this.drawnCard = null;
         this.field.push(drawnCardRef);
-        this.message = 'Opponent drew - no match.';
+        this.message = `Player ${this.currentPlayerIndex + 1} drew - no match.`;
         setTimeout(() => this.endTurn(), 500);
       }, 500);
     } else {
@@ -1114,9 +1387,9 @@ export class Sakura {
               const drawnCardRef = this.drawnCard;
               this.drawnCard = null;
 
-              this.opponentCaptured.push(drawnCardRef, chosen);
+              currentPlayer.captured.push(drawnCardRef, chosen);
               this.field = this.field.filter(c => c.id !== chosen.id);
-              this.message = `Opponent captured ${chosen.month}!`;
+              this.message = `Player ${this.currentPlayerIndex + 1} captured ${chosen.month}!`;
 
               setTimeout(() => this.endTurn(), 500);
             };
@@ -1126,9 +1399,9 @@ export class Sakura {
           setTimeout(() => {
             const drawnCardRef = this.drawnCard;
             this.drawnCard = null;
-            this.opponentCaptured.push(drawnCardRef, chosen);
+            currentPlayer.captured.push(drawnCardRef, chosen);
             this.field = this.field.filter(c => c.id !== chosen.id);
-            this.message = `Opponent captured ${chosen.month}!`;
+            this.message = `Player ${this.currentPlayerIndex + 1} captured ${chosen.month}!`;
             setTimeout(() => this.endTurn(), 500);
           }, 500);
         }
@@ -1137,9 +1410,9 @@ export class Sakura {
         setTimeout(() => {
           const drawnCardRef = this.drawnCard;
           this.drawnCard = null;
-          this.opponentCaptured.push(drawnCardRef, chosen);
+          currentPlayer.captured.push(drawnCardRef, chosen);
           this.field = this.field.filter(c => c.id !== chosen.id);
-          this.message = `Opponent captured ${chosen.month}!`;
+          this.message = `Player ${this.currentPlayerIndex + 1} captured ${chosen.month}!`;
           setTimeout(() => this.endTurn(), 500);
         }, 500);
       }
@@ -1147,7 +1420,7 @@ export class Sakura {
   }
 
   /**
-   * Select card for opponent to play (AI strategy)
+   * Select card for opponent to play (AI strategy) - works with any player via currentPlayerIndex
    */
   selectOpponentCard(difficulty) {
     if (difficulty === 'easy') {
@@ -1163,14 +1436,16 @@ export class Sakura {
    * Easy AI: Random card
    */
   selectOpponentCardEasy() {
-    return this.opponentHand[Math.floor(Math.random() * this.opponentHand.length)];
+    const currentPlayer = this.getCurrentPlayer();
+    return currentPlayer.hand[Math.floor(Math.random() * currentPlayer.hand.length)];
   }
 
   /**
    * Medium AI: Prioritize matches and high value
    */
   selectOpponentCardMedium() {
-    const scoredMoves = this.opponentHand.map(card => {
+    const currentPlayer = this.getCurrentPlayer();
+    const scoredMoves = currentPlayer.hand.map(card => {
       let score = 0;
       const matches = this.field.filter(fc => fc.month === card.month);
 
@@ -1178,7 +1453,7 @@ export class Sakura {
         score = -10; // Avoid discarding if possible
       } else if (matches.length === 1) {
         score = this.getCardValue(matches[0]);
-        if (this.yakuChecker.wouldHelpYaku(matches[0], this.opponentCaptured)) {
+        if (this.yakuChecker.wouldHelpYaku(matches[0], currentPlayer.captured)) {
           score += 20;
         }
       } else if (matches.length === 2) {
@@ -1194,18 +1469,27 @@ export class Sakura {
     });
 
     scoredMoves.sort((a, b) => b.score - a.score);
-    return scoredMoves[0].card;
+    return scoredMoves.length > 0 ? scoredMoves[0].card : currentPlayer.hand[0];
   }
 
   /**
    * Hard AI: Full yaku awareness and blocking
    */
   selectOpponentCardHard() {
-    // Check for blocking opportunities
-    const playerYakuProgress = this.yakuChecker.analyzeYakuProgress(this.playerCaptured);
+    const currentPlayer = this.getCurrentPlayer();
+
+    // For multi-player hard AI, check all players' yaku progress (not just player 0)
+    // In 2-player, only player 0 has complex yaku to block
+    // In 3+ players, use medium strategy (simplified AI)
+    if (this.playerCount > 2) {
+      return this.selectOpponentCardMedium();
+    }
+
+    // 2-player hard mode: Block player 0's yaku attempts
+    const playerYakuProgress = this.yakuChecker.analyzeYakuProgress(this.players[0].captured);
 
     // Try to block player's yaku attempts
-    for (let card of this.opponentHand) {
+    for (let card of currentPlayer.hand) {
       const matches = this.field.filter(fc => fc.month === card.month);
       for (let match of matches) {
         for (let yakuKey in playerYakuProgress) {
@@ -1224,9 +1508,15 @@ export class Sakura {
 
   /**
    * Select best capture from multiple options
+   * @param {Array} matches - Possible cards to capture
+   * @param {number|string} playerIndex - Player index (0,1,2,3) or legacy 'player'/'opponent'
    */
-  selectBestCapture(matches, player) {
-    const captured = (player === 'player') ? this.playerCaptured : this.opponentCaptured;
+  selectBestCapture(matches, playerIndex) {
+    // Support legacy 'player'/'opponent' strings for backward compatibility
+    if (playerIndex === 'player') playerIndex = 0;
+    if (playerIndex === 'opponent') playerIndex = 1;
+
+    const captured = this.players[playerIndex].captured;
 
     // Prioritize yaku completion
     for (let match of matches) {
@@ -1248,60 +1538,62 @@ export class Sakura {
   }
 
   /**
-   * Handle opponent Gaji from hand
+   * Handle opponent Gaji from hand (works for any player)
    */
   handleOpponentGajiFromHand(gajiCard, difficulty) {
+    const currentPlayer = this.getCurrentPlayer();
     const validTargets = this.field.filter(card =>
-      this.canGajiCapture(card, 'opponent')
+      this.canGajiCapture(card, this.currentPlayerIndex)
     );
 
     if (validTargets.length === 0) {
       this.field.push(gajiCard);
       this.gajiState.location = 'field';
       this.gajiState.isWildCard = false;
-      this.message = 'Opponent played Gaji - no valid targets.';
+      this.message = `Player ${this.currentPlayerIndex + 1} played Gaji - no valid targets.`;
       setTimeout(() => this.opponentDrawPhase(difficulty), 800);
       return;
     }
 
-    const bestTarget = this.selectBestGajiTarget(validTargets, 'opponent');
-    this.opponentCaptured.push(gajiCard, bestTarget);
+    const bestTarget = this.selectBestGajiTarget(validTargets, this.currentPlayerIndex);
+    currentPlayer.captured.push(gajiCard, bestTarget);
     this.field = this.field.filter(c => c.id !== bestTarget.id);
 
-    this.gajiState.location = 'opponent_captured';
+    this.gajiState.location = `player_${this.currentPlayerIndex}_captured`;
     this.gajiState.pairedWithMonth = bestTarget.month;
     this.gajiState.isWildCard = false;
 
-    this.message = `Opponent used Gaji to capture ${bestTarget.month}!`;
+    this.message = `Player ${this.currentPlayerIndex + 1} used Gaji to capture ${bestTarget.month}!`;
 
     setTimeout(() => this.opponentDrawPhase(difficulty), 800);
   }
 
   /**
-   * Handle opponent Gaji drawn
+   * Handle opponent Gaji drawn (works for any player)
    */
   handleOpponentGajiDrawn(gajiCard, difficulty) {
+    const currentPlayer = this.getCurrentPlayer();
     const validTargets = this.field.filter(card =>
-      this.canGajiCapture(card, 'opponent')
+      this.canGajiCapture(card, this.currentPlayerIndex)
     );
 
     if (validTargets.length === 0) {
       this.field.push(gajiCard);
       this.gajiState.location = 'field';
       this.gajiState.isWildCard = false;
-      this.message = 'Opponent drew Gaji - no valid targets.';
+      this.message = `Player ${this.currentPlayerIndex + 1} drew Gaji - no valid targets.`;
       return;
     }
 
-    const bestTarget = this.selectBestGajiTarget(validTargets, 'opponent');
-    this.opponentCaptured.push(gajiCard, bestTarget);
+    const bestTarget = this.selectBestGajiTarget(validTargets, this.currentPlayerIndex);
+    currentPlayer.captured.push(gajiCard, bestTarget);
     this.field = this.field.filter(c => c.id !== bestTarget.id);
 
-    this.gajiState.location = 'opponent_captured';
+    this.gajiState.location = `player_${this.currentPlayerIndex}_captured`;
     this.gajiState.pairedWithMonth = bestTarget.month;
     this.gajiState.isWildCard = false;
 
-    this.message = `Opponent drew Gaji and captured ${bestTarget.month}!`;
+    this.message = `Player ${this.currentPlayerIndex + 1} drew Gaji and captured ${bestTarget.month}!`;
   }
 
   // ============================================================
@@ -1309,15 +1601,16 @@ export class Sakura {
   // ============================================================
 
   /**
-   * Update yaku for both players
+   * Update yaku for all players
    */
   updateYaku() {
-    this.playerYaku = this.yakuChecker.detectYaku(this.playerCaptured);
-    this.opponentYaku = this.yakuChecker.detectYaku(this.opponentCaptured);
+    for (let i = 0; i < this.playerCount; i++) {
+      this.players[i].yaku = this.yakuChecker.detectYaku(this.players[i].captured);
+    }
   }
 
   /**
-   * End the round and calculate scores
+   * End the round and calculate scores (supports N players)
    */
   endRound() {
     this.roundEnded = true;
@@ -1329,50 +1622,113 @@ export class Sakura {
     // Update yaku one final time
     this.updateYaku();
 
-    // Calculate base points
-    const playerBasePoints = this.calculateBasePoints(this.playerCaptured);
-    const opponentBasePoints = this.calculateBasePoints(this.opponentCaptured);
+    // Calculate scores for all players
+    const playerScores = [];
+    for (let i = 0; i < this.playerCount; i++) {
+      const basePoints = this.calculateBasePoints(this.players[i].captured);
+      const yakuPenalty = this.yakuChecker.calculatePenalty(this.players[i].yaku);
 
-    // Calculate yaku penalties
-    const playerYakuPenalty = this.yakuChecker.calculatePenalty(this.playerYaku);
-    const opponentYakuPenalty = this.yakuChecker.calculatePenalty(this.opponentYaku);
+      let roundScore;
+      if (this.variants.bothPlayersScore) {
+        // Both Players Score variant: Yaku awards bonus (50 per yaku)
+        const yakuBonus = this.players[i].yaku.length * 50;
+        roundScore = basePoints + yakuBonus;
+      } else {
+        // Standard Sakura: Only subtract opponent penalties
+        // Calculate all other players' combined penalties
+        let totalOtherPenalties = 0;
+        for (let j = 0; j < this.playerCount; j++) {
+          if (j !== i) {
+            totalOtherPenalties += this.yakuChecker.calculatePenalty(this.players[j].yaku);
+          }
+        }
+        roundScore = basePoints - totalOtherPenalties;
+      }
 
-    // Apply penalties (each player's yaku subtracts from opponent)
-    const playerRoundScore = playerBasePoints - opponentYakuPenalty;
-    const opponentRoundScore = opponentBasePoints - playerYakuPenalty;
+      playerScores.push({
+        playerIndex: i,
+        basePoints,
+        yakuPenalty,
+        yaku: this.players[i].yaku,
+        roundScore,
+        isHuman: this.players[i].isHuman
+      });
+    }
+
+    // Determine round winner (highest score, dealer wins ties)
+    let maxScore = Math.max(...playerScores.map(s => s.roundScore));
+    let winners = playerScores.filter(s => s.roundScore === maxScore);
+
+    let roundWinnerIndex;
+    if (winners.length === 1) {
+      roundWinnerIndex = winners[0].playerIndex;
+    } else {
+      // Tie - dealer wins among tied players
+      roundWinnerIndex = winners.find(w => w.playerIndex === this.dealerIndex)?.playerIndex ?? winners[0].playerIndex;
+    }
 
     // Update match scores
-    this.playerMatchScore += playerRoundScore;
-    this.opponentMatchScore += opponentRoundScore;
+    for (let i = 0; i < this.playerCount; i++) {
+      const score = playerScores[i];
 
-    // Determine round winner
-    let roundWinner = null;
-    if (playerRoundScore > opponentRoundScore) {
-      roundWinner = 'player';
-    } else if (opponentRoundScore > playerRoundScore) {
-      roundWinner = 'opponent';
-    } else {
-      // Tie - dealer wins
-      roundWinner = this.dealer;
+      if (this.variants.victoryScoring) {
+        // Victory Scoring: Track wins for this player
+        let wins = 0;
+        if (i === roundWinnerIndex) {
+          if (this.variants.basaChu) {
+            // Basa (100+ margin): 2 wins, Chu (50+ margin): 2 wins
+            const maxOtherScore = Math.max(
+              ...playerScores
+                .filter((_, idx) => idx !== i)
+                .map(s => s.roundScore)
+            );
+            const margin = score.roundScore - maxOtherScore;
+            if (margin >= 100) {
+              wins = 2; // Basa
+            } else if (margin >= 50) {
+              wins = 2; // Chu
+            } else {
+              wins = 1;
+            }
+          } else {
+            wins = 1;
+          }
+        }
+        this.players[i].roundWins += wins;
+      }
+
+      // Standard Cumulative Scoring
+      this.players[i].matchScore += score.roundScore;
     }
+
+    // Prepare summary data (backward compatible for 2-player UI)
+    const summaryData = {
+      // All player scores
+      playerScores,
+      roundWinnerIndex,
+
+      // Backward compatibility fields (for 2-player UI)
+      playerBasePoints: playerScores[0].basePoints,
+      opponentBasePoints: playerScores[1]?.basePoints || 0,
+      playerYaku: playerScores[0].yaku,
+      opponentYaku: playerScores[1]?.yaku || null,
+      playerYakuPenalty: playerScores[0].yakuPenalty,
+      opponentYakuPenalty: playerScores[1]?.yakuPenalty || 0,
+      playerRoundScore: playerScores[0].roundScore,
+      opponentRoundScore: playerScores[1]?.roundScore || 0,
+      playerMatchScore: this.players[0].matchScore,
+      opponentMatchScore: this.players[1]?.matchScore || 0,
+      roundWinner: roundWinnerIndex === 0 ? 'player' : (roundWinnerIndex === 1 ? 'opponent' : `player${roundWinnerIndex}`),
+
+      // Round info
+      currentRound: this.currentRound,
+      totalRounds: this.totalRounds,
+      playerCount: this.playerCount
+    };
 
     // Show round summary
     if (this.roundSummaryCallback) {
-      this.roundSummaryCallback({
-        playerBasePoints,
-        opponentBasePoints,
-        playerYaku: this.playerYaku,
-        opponentYaku: this.opponentYaku,
-        playerYakuPenalty,
-        opponentYakuPenalty,
-        playerRoundScore,
-        opponentRoundScore,
-        playerMatchScore: this.playerMatchScore,
-        opponentMatchScore: this.opponentMatchScore,
-        roundWinner,
-        currentRound: this.currentRound,
-        totalRounds: this.totalRounds
-      });
+      this.roundSummaryCallback(summaryData);
     }
 
     // Check if match is over
@@ -1380,25 +1736,73 @@ export class Sakura {
       this.endMatch();
     } else {
       // Next round - loser becomes dealer
-      this.dealer = (roundWinner === 'player') ? 'opponent' : 'player';
+      // In 3+ players, dealer rotates to next player (or could be loser in 2-player)
+      if (this.playerCount === 2) {
+        // 2-player: loser becomes dealer
+        this.dealerIndex = roundWinnerIndex === 0 ? 1 : 0;
+      } else {
+        // 3+ players: dealer rotates to next player
+        this.dealerIndex = (this.dealerIndex + 1) % this.playerCount;
+      }
+
       this.message = `Round ${this.currentRound} complete. Starting round ${this.currentRound + 1}...`;
     }
   }
 
   /**
-   * End the match and determine winner
+   * End the match and determine winner (supports N players)
    */
   endMatch() {
     this.gameOver = true;
     this.phase = 'game_over';
 
-    if (this.playerMatchScore > this.opponentMatchScore) {
-      this.message = `You win the match! Final score: ${this.playerMatchScore} - ${this.opponentMatchScore}`;
-    } else if (this.opponentMatchScore > this.playerMatchScore) {
-      this.message = `Opponent wins the match! Final score: ${this.opponentMatchScore} - ${this.playerMatchScore}`;
+    // Determine winner among all players
+    let winnerIndex = -1;
+    let winMessage = '';
+
+    if (this.variants.victoryScoring) {
+      // Victory Scoring: Winner determined by round wins
+      const maxWins = Math.max(...this.players.map(p => p.roundWins));
+      const winners = this.players
+        .map((p, idx) => ({ playerIndex: idx, roundWins: p.roundWins }))
+        .filter(p => p.roundWins === maxWins);
+
+      if (winners.length === 1) {
+        winnerIndex = winners[0].playerIndex;
+        if (winnerIndex === 0) {
+          winMessage = `You win the match! Final wins: `;
+        } else {
+          winMessage = `Player ${winnerIndex + 1} wins the match! Final wins: `;
+        }
+        // Add all players' win counts
+        const winCounts = this.players.map(p => p.roundWins).join(' - ');
+        winMessage += winCounts;
+      } else {
+        winMessage = `Match tied! Final wins: ${this.players.map(p => p.roundWins).join(' - ')}`;
+      }
     } else {
-      this.message = `Match tied! Final score: ${this.playerMatchScore} - ${this.opponentMatchScore}`;
+      // Standard Cumulative Scoring
+      const maxScore = Math.max(...this.players.map(p => p.matchScore));
+      const winners = this.players
+        .map((p, idx) => ({ playerIndex: idx, matchScore: p.matchScore }))
+        .filter(p => p.matchScore === maxScore);
+
+      if (winners.length === 1) {
+        winnerIndex = winners[0].playerIndex;
+        if (winnerIndex === 0) {
+          winMessage = `You win the match! Final score: `;
+        } else {
+          winMessage = `Player ${winnerIndex + 1} wins the match! Final score: `;
+        }
+        // Add all players' scores
+        const scores = this.players.map(p => p.matchScore).join(' - ');
+        winMessage += scores;
+      } else {
+        winMessage = `Match tied! Final score: ${this.players.map(p => p.matchScore).join(' - ')}`;
+      }
     }
+
+    this.message = winMessage;
   }
 
   /**
@@ -1422,8 +1826,21 @@ export class Sakura {
 
   /**
    * Get current game state for rendering
+   * Supports both 2-player (backward compatible) and multi-player modes
    */
   getState() {
+    // Build multi-player state data
+    const playersData = this.players.map((player, index) => ({
+      hand: player.hand,
+      captured: player.captured,
+      yaku: player.yaku,
+      basePoints: this.calculateBasePoints(player.captured),
+      matchScore: player.matchScore,
+      roundWins: player.roundWins,
+      isHuman: player.isHuman,
+      difficulty: player.difficulty
+    }));
+
     return {
       // Cards
       field: this.field,
@@ -1432,6 +1849,12 @@ export class Sakura {
       playerCaptured: this.playerCaptured,
       opponentCaptured: this.opponentCaptured,
 
+      // Multi-player data (new)
+      players: playersData,
+      playerCount: this.playerCount,
+      currentPlayerIndex: this.currentPlayerIndex,
+      dealerIndex: this.dealerIndex,
+
       // Scores
       playerBasePoints: this.calculateBasePoints(this.playerCaptured),
       opponentBasePoints: this.calculateBasePoints(this.opponentCaptured),
@@ -1439,6 +1862,8 @@ export class Sakura {
       opponentYaku: this.opponentYaku,
       playerMatchScore: this.playerMatchScore,
       opponentMatchScore: this.opponentMatchScore,
+      playerRoundWins: this.playerRoundWins,
+      opponentRoundWins: this.opponentRoundWins,
 
       // Game state
       currentPlayer: this.currentPlayer,
@@ -1453,12 +1878,14 @@ export class Sakura {
 
       // Sakura-specific
       isSakuraMode: true,
+      variants: this.variants,
       completedHikis: this.completedHikis,
       gajiState: this.gajiState,
       drawnCard: this.drawnCard,
       drawnCardMatches: this.drawnCardMatches,
       selectedCards: this.selectedCards,
       opponentPlayedCard: this.opponentPlayedCard,
+      lastPlayedCard: this.lastPlayedCard,
 
       // Deck info
       deckSize: this.deck.cards.length,
