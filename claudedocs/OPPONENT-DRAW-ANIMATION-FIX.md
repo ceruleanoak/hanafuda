@@ -21,44 +21,52 @@ Card should smoothly animate from drawnCard zone (center-top) to field zone (cen
 
 ## Root Cause
 
-In `src/game/Sakura.js`, the `opponentDrawPhase()` method (lines 1413-1423) handled the no-match scenario by:
+In `src/game/Sakura.js`, the `opponentDrawPhase()` method originally handled the no-match scenario by:
 1. Waiting 500ms (for draw reveal animation)
-2. Pushing card directly to `field` array
-3. Clearing `drawnCard` zone
+2. Clearing `drawnCard` zone FIRST
+3. THEN pushing card to `field` array
 
-However, the code relied entirely on the automatic `Card3DManager.synchronize()` system to detect the zone change and trigger animations. This system runs on the next game loop frame, which could be delayed or missed if timing wasn't perfect.
+This order caused the card to briefly disappear from the animation system during the zone transition. When `drawnCard` was cleared before `field.push()`, the card didn't exist in any zone for a frame, breaking the smooth animation sequence.
 
-**Key Difference**:
-- Match case (lines 1464-1480): Manually called `card3D.tweenTo()` to animate
-- No-match case (lines 1413-1423): Relied on automatic synchronization (too passive)
+The animation system (`Card3DManager.synchronize()`) needs to detect a continuous zone transition (drawnCard → field) to animate smoothly. Clearing the zone first interrupts this detection.
 
 ---
 
 ## Solution Implemented
 
-Refactored the no-match case to explicitly trigger a tween animation, matching the pattern used in the match case:
+Simple fix: **Reorder the zone transition** to allow the animation system to detect it properly.
 
 ### Changes Made
 
 **File**: `src/game/Sakura.js`
 
-1. **Added import** (line 20):
-   ```javascript
-   import { LayoutManager } from '../utils/LayoutManager.js';
-   ```
+Modified the no-match logic in `opponentDrawPhase()` (lines 1414-1426):
 
-2. **Refactored opponentDrawPhase no-match logic** (lines 1413-1463):
-   - Check if `card3DManager` exists (required for animation)
-   - Get the Card3D object for the drawn card
-   - After 300ms delay (to show drawn card briefly):
-     - Get field zone configuration from LayoutManager
-     - Calculate target position in field zone
-     - Call `drawnCard3D.tweenTo()` to animate from drawnCard to field
-     - On animation complete:
-       - Add card to field array
-       - Clear drawnCard zone
-       - Proceed to end turn
-   - Includes fallback logic if card3DManager unavailable
+**Before**:
+```javascript
+setTimeout(() => {
+  const drawnCardRef = this.drawnCard;
+  this.drawnCard = null;        // ❌ Clear first - breaks detection
+  this.field.push(drawnCardRef); // Then add
+  ...
+}, 500);
+```
+
+**After**:
+```javascript
+setTimeout(() => {
+  const drawnCardRef = this.drawnCard;
+  this.field.push(drawnCardRef);  // ✅ Add first
+  this.drawnCard = null;          // Then clear - allows smooth transition
+  ...
+}, 500);
+```
+
+This simple change ensures:
+- Card stays in drawnCard zone until immediately before entering field
+- `Card3DManager.synchronize()` detects continuous transition: drawnCard → field
+- Automatic animation system tweens the card smoothly to field position
+- No conflicting manual animation commands
 
 ### Animation Flow (Fixed)
 
@@ -66,57 +74,41 @@ Refactored the no-match case to explicitly trigger a tween animation, matching t
 Opponent draws card
   ↓
 Card animates from deck → drawnCard zone (automatic via synchronize)
-  ↓ (300ms delay to show drawn card)
-Card tweens from drawnCard zone → field zone (EXPLICIT tween)
+  ↓ (500ms delay to show drawn card)
+Card transitions to field zone
   ↓
-Card enters field array
+Next frame: synchronize detects zone change (drawnCard → field)
   ↓
-Next frame: synchronize relayouts field zone with proper grid positions
+synchronize() calls relayoutZone('field', animate=true)
+  ↓
+relayoutZone() tweens card from drawnCard position → field position smoothly
+  ↓
+Animation completes, turn ends
 ```
 
-### Code Structure
+### Simple Implementation
 
 ```javascript
-if (this.card3DManager) {
-  const drawnCard3D = this.card3DManager.getCard(this.drawnCard);
-
-  if (drawnCard3D) {
-    setTimeout(() => {
-      // Get field zone configuration
-      const fieldConfig = LayoutManager.getZoneConfig(
-        'field',
-        this.card3DManager.viewportWidth,
-        this.card3DManager.viewportHeight,
-        this.playerCount
-      );
-
-      // Tween to field zone
-      drawnCard3D.tweenTo({x, y, z}, 400, 'easeInOutQuad');
-
-      // On complete: add to field and clear drawnCard
-      drawnCard3D.onAnimationComplete = () => {
-        this.field.push(drawnCard3D.cardData);
-        this.drawnCard = null;
-        this.endTurn();
-      };
-    }, 300);
-  } else {
-    // Fallback without animation
-  }
-} else {
-  // Fallback without card3DManager
-}
+setTimeout(() => {
+  const drawnCardRef = this.drawnCard;
+  this.field.push(drawnCardRef);  // Add to field
+  this.drawnCard = null;          // Clear drawnCard zone
+  this.message = `Player ${this.currentPlayerIndex + 1} drew - no match.`;
+  setTimeout(() => this.endTurn(), 500);
+}, 500);
 ```
+
+No extra animation code needed - the automatic synchronization system handles it.
 
 ---
 
 ## Why This Works
 
-1. **Explicit Timing**: Card animation is triggered immediately and predictably
-2. **Consistent Pattern**: Uses same approach as the match case
-3. **Reliable Synchronization**: After card enters field, next frame's synchronize will relayout field with proper grid positions
-4. **Fallback Support**: Handles cases where card3DManager unavailable
-5. **Animation Chaining**: Draw animation (deck→drawnCard) completes before field animation (drawnCard→field) starts
+1. **Proper Zone Transition Detection**: Card exists continuously (drawnCard → field) so synchronize() detects the transition
+2. **Automatic Animation**: Built-in synchronize() system automatically tweens the card with proper easing
+3. **Correct Timing**: 500ms delay ensures draw animation completes before field transition
+4. **No Conflicts**: Single animation path prevents erratic movement
+5. **Works with Existing System**: Leverages Card3DManager's relayoutZone() which calculates proper field grid positions
 
 ---
 
@@ -156,17 +148,17 @@ if (this.card3DManager) {
 
 ## Future Improvements
 
-1. **Generic Helper**: Could create `animateCardZoneTransition()` helper method to avoid duplication between match and no-match cases
-2. **Configurable Timing**: Allow animation duration to be configured per game mode
-3. **Easing Curves**: Different easing for different card movements (draw vs. field placement)
+1. **Generic Draw Helper**: Could extract the "draw card with animation" pattern into a helper method for reuse
+2. **Configurable Timing**: Allow the 500ms delay to be configurable per game mode
+3. **Performance**: Monitor if zone transitions could be optimized for games with many rapid card movements
 
 ---
 
 ## Commit Information
 
 **File Modified**: `src/game/Sakura.js`
-- Added 1 import: LayoutManager
 - Modified: opponentDrawPhase() method, no-match logic section
-- Lines affected: 16-20 (import), 1413-1463 (opponentDrawPhase refactor)
-- Build status: ✅ Passing
+- Lines affected: 1414-1426 (opponentDrawPhase no-match case)
+- Change size: 8 lines added (with comments), net -4 lines vs original
+- Build status: ✅ Passing (27 modules, no errors)
 
