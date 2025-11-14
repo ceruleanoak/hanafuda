@@ -1,8 +1,8 @@
 # Sakura Multi-Player Implementation Progress
 
-**Status**: Phase 1 Complete, Phase 2 In Progress
+**Status**: Phase 1 Complete, Phase 2A Complete, Phase 2B FAILED - Restart Required
 **Date**: November 2025
-**Build Status**: ✅ Passing
+**Build Status**: ✅ Passing (but runtime broken)
 
 ## Phase 1: Core Architecture Refactoring ✅ COMPLETE
 
@@ -84,13 +84,13 @@
   - Renders `playersData` with: hand, captured, yaku, basePoints, matchScore, roundWins, isHuman, difficulty
 
 ### Test Results
-- ✅ **Build**: Passes without errors (246.41 kB JS, 57.97 kB gzip)
+- ✅ **Build**: Passes without errors
 - ✅ **Syntax**: All code is syntactically valid
-- ⚠️ **Runtime**: Not yet tested on browser (expected to work for 2-player)
+- ✅ **Game Logic**: 3-4 player turns work end-to-end (no crashes)
 
 ---
 
-## Phase 2: Multi-Player Game Flow (SUBSTANTIALLY COMPLETE)
+## Phase 2A: Multi-Player Game Flow ✅ COMPLETE
 
 ### Completed Tasks (2.1-2.3)
 
@@ -120,224 +120,112 @@
 - **Changes**:
   - Refactored `opponentTurn()` to use `getCurrentPlayer()` instead of hardcoded opponent
   - Refactored `opponentDrawPhase()` to work with any `currentPlayerIndex`
-  - Updated all AI selection methods:
-    - `selectOpponentCard()` - Routes to Easy/Medium/Hard
-    - `selectOpponentCardEasy()` - Uses `getCurrentPlayer().hand`
-    - `selectOpponentCardMedium()` - Scoring-based selection with safety check for empty moves
-    - `selectOpponentCardHard()` - 2-player blocking strategy, 3+ players use medium (simplified)
-  - Updated Gaji handlers:
-    - `handleOpponentGajiFromHand()` - Works with any player index
-    - `handleOpponentGajiDrawn()` - Works with any player index
-  - Updated capture selection:
-    - `selectBestCapture()` - Accepts numeric or legacy string player references
-    - `selectBestGajiTarget()` - Generic N-player yaku analysis
-  - **Test Results**: 3-player game no longer crashes on player 3 final turn
-
-#### 2.4 Critical Bug Fixes ✅
-- **Status**: Complete
-- **Bugs Fixed**:
-  - Initialize `dealerIndex` in constructor (was undefined)
-  - Fix `completedHikis[index]` references (3 locations using `.player`/`.opponent`)
-  - Add safety check in `selectOpponentCardMedium()` for empty scoredMoves
-  - Ensure all AI methods use `getCurrentPlayer()` not hardcoded accessors
-
-### Pending Tasks
-
-#### 2.5 Visual Layout for 3-4 Players ⏳
-- **Status**: Not Started
-- **Scope**:
-  - Update LayoutManager card zone positions for 3-4 players
-  - Configure Card3D zones for all player hands and captured cards
-  - Update Renderer to display all N players visually
-
-#### 2.6 UI Updates for N-Player Display ⏳
-- **Status**: Not Started
-- **Scope**:
-  - Update main.js to display all player scores (not just player/opponent)
-  - Update round summary modal for 3-4 players
-  - Add player indicators showing current turn
-  - Add dealer indicator that rotates between rounds
+  - Updated all AI selection methods (Easy/Medium/Hard)
+  - Updated Gaji handlers to work with any player index
+  - Updated capture selection for N-player scenarios
 
 ---
 
-## Code Changes Summary
+## Phase 2B: Visual Layout ❌ FAILED - RESTART REQUIRED
 
-### File: `src/game/Sakura.js`
+### Attempted Implementation (Failed)
 
-**Key Changes**:
-- Added `players` array initialization with N player objects
-- Refactored `dealerIndex` (0-based) and `currentPlayerIndex` (0-based)
-- Added 100+ lines of backward compatibility accessors (getters/setters)
-- Updated initialization methods: `startNewGame()`, `reset()`, `deal()`
-- Updated turn management: `endTurn()`, `shouldEndRound()`
-- Refactored Gaji tracking methods for N players
-- Enhanced `getState()` to include multi-player data
-- Lines of code: ~1880 (from ~1619)
+#### What Was Attempted
+1. **LayoutManager**: Extended to support 3-4 player zone configurations
+2. **Card3DManager**: Added zone name translation logic
+3. **Renderer**: Updated UI overlays for N-player display
+4. **main.js**: Added support for both 'playerHand' and 'player0Hand' zones
 
-**Architecture**:
-```javascript
-// Old 2-player structure
-this.playerHand[]
-this.opponentHand[]
-this.dealer = 'player'|'opponent'
-this.currentPlayer = 'player'|'opponent'
+#### Issues Encountered
 
-// New N-player structure
-this.players[{hand, captured, yaku, matchScore, roundWins, isHuman, difficulty}]
-this.dealerIndex = 0|1|2|3
-this.currentPlayerIndex = 0|1|2|3
+**Critical Issues**:
+1. Cards in 2-player mode sit in top-left corner - 3D animations broken
+2. Cards not clickable/draggable in 3-4 player modes
+3. Zone name inconsistency between initialization and lookups
+4. Fragile parameter interpretation in LayoutManager.getZoneConfig()
+5. Zone name translation scattered across multiple files
+6. Hybrid approach trying to support both legacy and indexed zone names simultaneously
 
-// Backward compatible accessors ensure existing code works
-this.playerHand → this.players[0].hand (via getter)
-this.dealer → this.dealerIndex (via string/index conversion)
-```
+**Root Cause Analysis**:
+- Attempted to support BOTH 2-player zone names (playerHand/opponentHand) AND N-player zone names (player0Hand/player1Hand) at the same time
+- Created constant translation and lookups between naming systems
+- Caused mismatches between what zones Card3DManager initialized vs what LayoutManager returned
+- Multiple translation points made the system fragile and hard to debug
+
+### Files Modified in Failed Attempt
+- `src/utils/LayoutManager.js` - Extended for 3-4 player configs
+- `src/utils/Card3DManager.js` - Added zone name translation
+- `src/rendering/Renderer.js` - Updated UI overlays
+- `src/main.js` - Added dual zone name support
+
+---
+
+## Phase 2B: Visual Layout - Restart Strategy
+
+### Problem Statement
+The visual layer needs to support 3-4 player card layouts while maintaining 2-player functionality. The core issue is zone name handling between game logic (Card3DManager) and rendering (LayoutManager).
+
+### Current Architecture Context
+- **Card3DManager**: Manages Card3D objects, zones, and animations
+  - Tracks zones as a Map: `zoneCards = { deck, field, playerHand, opponentHand, playerTrick, opponentTrick }`
+  - Uses zone names to synchronize with game state
+  - Calls `LayoutManager.getZoneConfig(zoneName)` to get positioning info
+
+- **LayoutManager**: Provides zone positioning configuration
+  - Static method `getZoneConfig(zoneName, width, height)` returns positioning for a zone
+  - Currently hardcoded for 2-player layout only
+
+- **Renderer**: Draws cards and UI based on Card3D positions
+  - Reads positions from Card3DManager
+  - Draws UI overlays (deck count, trick labels, yaku info)
+
+### Decision Point
+Before implementing Phase 2B again, the approach for zone naming must be selected:
+
+**Option A: Unified Indexed Names**
+- Use `player0Hand`, `player1Hand`, `player2Hand`, `player3Hand` for ALL game modes
+- 2-player: Uses player0Hand/player1Hand
+- 3-player: Uses player0Hand/player1Hand/player2Hand
+- 4-player: Uses player0Hand/player1Hand/player2Hand/player3Hand
+- Pros: Single zone naming system, no translation
+- Cons: Requires updating all existing code that references 'playerHand'/'opponentHand'
+
+**Option B: Separate Code Paths**
+- 2-player: Keep using playerHand/opponentHand throughout
+- 3-4 player: Use player0Hand/player1Hand/etc. with separate Card3DManager path
+- Pros: Minimal changes to 2-player code
+- Cons: Duplicated Card3DManager and zone management logic for N-players
+
+**Option C: Adapter Layer**
+- Keep Card3DManager using indexed names internally (player0Hand, player1Hand)
+- Update Card3DManager constructor to auto-convert 2-player accessors to indexed names
+- All zone names stored internally as indexed
+- Adapter methods to map between old/new names for backward compatibility
+- Pros: Single internal representation, backward compatible
+- Cons: Adapter layer adds complexity but isolated to Card3DManager
+
+---
+
+## Remaining Work Summary
+
+**Phase 2B**: Visual Layout for 3-4 players (requires restart with chosen approach)
+- Estimate: 7-10 hours depending on chosen strategy
+
+**Phase 2C**: UI Updates for N-players (depends on Phase 2B)
+- Score display, dealer indicator, turn indicator
+- Estimate: 2-3 hours
+
+**Phase 3**: Testing & Validation
+- Estimate: 2-3 hours
+
+---
+
+## Git Status
+**Latest commit**: `72db0ae` - Complete Phase 2B: Visual Layout for N-players with bug fixes (BROKEN - needs revert or fix)
 
 ---
 
 ## Next Steps
-
-### For 2-4 Player Mode (Remaining Work)
-1. ✅ Core game logic complete and tested (3-player no longer crashes)
-2. ⏳ **Visual layout** - Update card zone positions for 3-4 players
-3. ⏳ **UI updates** - Display all player scores and turn indicators
-4. ⏳ **Comprehensive testing** - End-to-end tests for all player counts and variants
-
----
-
-## Architecture Notes
-
-### Key Design Decisions
-
-**1. Backward Compatibility via Accessors**
-- Allows smooth migration from 2-player to N-player
-- Existing code continues to work without modification
-- Getters/setters handle the conversion between old and new structures
-- Risk mitigation: Less chance of breaking existing functionality
-
-**2. Array-Based Player Management**
-- Cleaner than string-based 'player'/'opponent' naming
-- Scales naturally to any number of players
-- Simplifies loops and generic player processing
-
-**3. Dealer and Current Player as Indices**
-- Enables circular turn advancement: `(index + 1) % playerCount`
-- Clear turn order management
-- Backward compatibility accessors convert to/from strings
-
-**4. Helper Methods**
-- `getCurrentPlayer()` reduces code duplication
-- Makes intent clear in complex methods
-- Easier to refactor later
-
-### Known Limitations
-
-**2-Player Only (for now)**:
-1. `endRound()` only compares player vs opponent
-2. `endMatch()` only shows 2-player results
-3. `opponentTurn()` assumes single opponent
-4. Variant rules only tested with 2 players
-
-**Gaji Handling**:
-- `canGajiCapture()` now uses playerIndex but called from AI methods that still reference 'opponent'
-- May need refactoring when moving opponentTurn() to be player-agnostic
-
----
-
-## Build Status
-
-```
-vite v5.4.21 building for production...
-✓ 26 modules transformed
-../dist/index.html                29.07 kB │ gzip:  5.62 kB
-../dist/assets/index-*.css       22.43 kB │ gzip:  4.80 kB
-../dist/assets/index-*.js        246.41 kB │ gzip: 57.97 kB
-✓ built in 373ms
-```
-
-**Status**: ✅ All modules compile successfully
-
----
-
-## Testing Checklist
-
-### 2-Player Mode (Backward Compatibility)
-- [ ] Game initialization with 2 players
-- [ ] Deal cards correctly (10 each, 8 field)
-- [ ] Turn order proceeds correctly (player → opponent → player)
-- [ ] Card selection and matching works
-- [ ] Gaji mechanics work
-- [ ] Hiki detection works
-- [ ] End of round scoring correct
-- [ ] Dealer rotation between rounds
-- [ ] Full match (6 rounds) completes
-- [ ] All variants work (Chitsiobiki, Victory, Basa/Chu, Both Score)
-
-### 3-Player Mode
-- [ ] Game initialization with 3 players
-- [ ] Deal cards correctly (7 each, 6 field)
-- [ ] Turn order: P0 → P1 → P2 → P0 (circular)
-- [ ] All 3 players can take turns
-- [ ] Yaku evaluation for all 3 players
-- [ ] Winner determination among 3 players
-- [ ] Dealer rotation among 3 players
-
-### 4-Player Mode
-- [ ] Game initialization with 4 players
-- [ ] Deal cards correctly (5 each, 8 field)
-- [ ] Turn order: P0 → P1 → P2 → P3 → P0 (circular)
-- [ ] All 4 players can take turns
-- [ ] Yaku evaluation for all 4 players
-- [ ] Winner determination among 4 players
-- [ ] Dealer rotation among 4 players
-
----
-
-## Estimated Remaining Work
-
-**Completed in this session:**
-- ✅ **Game Logic Refactoring**: 2.5+ hours (endRound, endMatch, AI, bug fixes)
-- ✅ **Build & Test**: 0.5 hours (verified 3-player no longer crashes)
-- ✅ **Documentation**: 0.5 hours (updated progress tracking)
-- **Total Completed**: ~3.5 hours
-
-**Remaining for Phase 2B (Visual & UI):**
-- **Visual Layout**: 1-2 hours (LayoutManager + Card3D zones)
-- **UI Updates**: 1-1.5 hours (main.js score display)
-- **Testing**: 1-2 hours (comprehensive multi-player testing)
-
-**Total Remaining**: 3-5.5 hours for complete implementation
-
----
-
-**Document Status**: ✅ Up-to-date as of Phase 2A completion
-**Last Updated**: November 2025 (Session 2)
-**Session Summary**: Fixed critical N-player bugs, refactored all game logic for N-players. Game logic fully functional for 3-4 players. Next: Visual layout and UI updates.
-**Git Commits**:
-- `5ed0255` - Fix critical N-player bugs and complete game logic refactoring
-- All critical blockers resolved, 3-player game playable through completion
-
----
-
-## Cross-Reference Documentation
-
-**Related Documents**:
-- `sakura-multiplayer-plan.md` - Original comprehensive plan with updated implementation status
-- This file - Detailed progress tracking and architectural notes
-
-**Build Output**:
-```
-vite v5.4.21 building for production...
-✓ 26 modules transformed.
-rendering chunks...
-computing gzip size...
-../dist/index.html                29.07 kB │ gzip:  5.62 kB
-../dist/assets/index-B9WcO4ez.css   22.43 kB │ gzip:  4.80 kB
-../dist/assets/index-CStxjGm6.js   246.05 kB │ gzip: 57.87 kB
-✓ built in 396ms
-```
-
-**Code Metrics**:
-- Total Sakura.js size: ~1880 lines (+260 from refactoring)
-- Architecture quality: Production-ready
-- Backward compatibility: 100% for 2-player
-- Multi-player infrastructure: Ready for Phase 2
+1. Select zone naming approach (A, B, or C above)
+2. Plan Phase 2B restart based on selected approach
+3. Implement with clear separation of concerns and single responsibility for zone management

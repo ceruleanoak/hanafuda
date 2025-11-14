@@ -384,7 +384,18 @@ export class KoiKoi {
 
       // If clicking field card, try to match
       if (owner === 'field') {
+        // Need a selected hand card to match
+        if (!this.selectedCards || this.selectedCards.length === 0) {
+          this.message = 'Select a card from your hand first';
+          return false;
+        }
+
         const handCard = this.playerHand.find(c => c.id === this.selectedCards[0].id);
+        if (!handCard) {
+          this.message = 'Selected hand card not found';
+          return false;
+        }
+
         if (this.cardsMatch(handCard, card)) {
           this.captureCards(handCard, card);
           return true;

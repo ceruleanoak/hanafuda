@@ -16,6 +16,7 @@ import { AudioManager } from './utils/AudioManager.js';
 import { APP_VERSION } from './utils/version.js';
 import { CARD_BACKS, getSelectedCardBack, setSelectedCardBack } from './data/cardBacks.js';
 import { ShopUI } from './ui/ShopUI.js';
+import { GameStateValidator } from './utils/GameStateValidator.js';
 
 class Game {
   constructor() {
@@ -955,30 +956,36 @@ class Game {
     const gameState = this.game.getState();
 
     // Only allow interactions during select phases
-    if (gameState.phase !== 'select_hand' && gameState.phase !== 'select_field' && gameState.phase !== 'select_drawn_match') {
+    if (gameState.phase !== 'select_hand' && gameState.phase !== 'select_field' && gameState.phase !== 'select_drawn_match' && gameState.phase !== 'gaji_selection') {
       return;
     }
 
     // Use 3D hit detection
     const card3D = this.card3DManager.getCardAtPosition(x, y);
-    if (card3D && (card3D.homeZone === 'playerHand' || card3D.homeZone === 'player0Hand')) {
-      // Clear any hover state
-      if (this.hoveredCard3D) {
-        this.hoveredCard3D.setHovered(false);
-        this.hoveredCard3D = null;
+    if (card3D) {
+      // Allow clicking on both hand cards and field cards
+      const isHandCard = card3D.homeZone === 'player0Hand';
+      const isFieldCard = card3D.homeZone === 'field';
+
+      if (isHandCard || isFieldCard) {
+        // Clear any hover state
+        if (this.hoveredCard3D) {
+          this.hoveredCard3D.setHovered(false);
+          this.hoveredCard3D = null;
+        }
+
+        // Register the card for interaction
+        this.draggedCard3D = card3D;
+        this.draggedCardData = card3D.cardData;
+        this.dragStartX = x;
+        this.dragStartY = y;
+        this.isDragging = false; // Will become true once mouse moves
+        card3D.isDragging = true;
+
+        debugLogger.log('gameState', `🔵 Card grabbed: ${card3D.cardData.name} from zone ${card3D.homeZone}`, {
+          x, y, zone: card3D.homeZone
+        });
       }
-
-      // Start dragging this card
-      this.draggedCard3D = card3D;
-      this.draggedCardData = card3D.cardData;
-      this.dragStartX = x;
-      this.dragStartY = y;
-      this.isDragging = false; // Will become true once mouse moves
-      card3D.isDragging = true;
-
-      debugLogger.log('gameState', `Card grabbed: ${card3D.cardData.name}`, {
-        x, y
-      });
     }
   }
 
@@ -991,7 +998,7 @@ class Game {
 
     // Use 3D hit detection
     const card3D = this.card3DManager.getCardAtPosition(x, y);
-    if (card3D && (card3D.homeZone === 'playerHand' || card3D.homeZone === 'player0Hand') && gameState.phase === 'select_hand') {
+    if (card3D && card3D.homeZone === 'player0Hand' && gameState.phase === 'select_hand') {
       const card = card3D.cardData;
 
       debugLogger.log('gameState', `Card double-clicked (auto-match): ${card.name}`, {
@@ -1093,7 +1100,7 @@ class Game {
       } else {
         // Not dropping on a card - check if we can place on field
         // Only allow placing from player hand
-        if (this.draggedCard3D.homeZone === 'playerHand' || this.draggedCard3D.homeZone === 'player0Hand') {
+        if (this.draggedCard3D.homeZone === 'player0Hand') {
           // Check if dropping back over hand area - if so, cancel the drag
           if (this.isPositionInPlayerHandZone(x, y)) {
             debugLogger.log('gameState', `Card dropped over hand area - returning to hand`, null);
@@ -1107,7 +1114,7 @@ class Game {
             gameState.selectedCards[0].id === this.draggedCardData.id;
 
           // Check if card has matches
-          const handCard = gameState.playerHand.find(c => c.id === this.draggedCardData.id);
+          const handCard = gameState.players[0].hand.find(c => c.id === this.draggedCardData.id);
           const matches = handCard ? gameState.field.filter(fc =>
             this.game.cardsMatch(handCard, fc)
           ) : [];
@@ -1170,7 +1177,7 @@ class Game {
       this.draggedCardData = null;
 
       // Handle click based on zone
-      if (clickedZone === 'playerHand' || clickedZone === 'player0Hand') {
+      if (clickedZone === 'player0Hand') {
         // Get current game state before the action
         const gameState = this.game.getState();
         const wasInSelectField = gameState.phase === 'select_field';
@@ -1211,17 +1218,28 @@ class Game {
         }
       } else if (clickedZone === 'field') {
         // Clicking a field card - try to match with selected hand card
+        debugLogger.log('gameState', `🔴 FIELD CARD CLICKED: ${clickedCardData.name}`, {
+          clickedCardId: clickedCardData.id,
+          zone: clickedZone
+        });
+
         const success = this.game.selectCard(clickedCardData, 'field');
+
+        debugLogger.log('gameState', `📊 selectCard result for field: ${success}`, {
+          newPhase: this.game.getState().phase,
+          message: this.game.getState().message
+        });
+
         if (success) {
           // Match successful - clear selection
           if (this.selectedCard3D) {
             this.selectedCard3D.z = 0;
             this.selectedCard3D = null;
           }
-          debugLogger.log('gameState', `Field card matched successfully`, null);
+          debugLogger.log('gameState', `✅ Field card matched successfully`, null);
           this.updateUI();
         } else {
-          debugLogger.log('gameState', `Field card match failed`, null);
+          debugLogger.log('gameState', `❌ Field card match failed - ${this.game.getState().message}`, null);
         }
       }
     }
@@ -1516,10 +1534,10 @@ class Game {
     // When a hand card is selected, only allow hovering over field cards or the selected card itself
     // Don't hover over cards that are being used as drop targets
     const isHoverable = card3D &&
-      (card3D.homeZone === 'playerHand' || card3D.homeZone === 'field') &&
+      (card3D.homeZone === 'player0Hand' || card3D.homeZone === 'field') &&
       card3D !== this.dropTargetCard3D &&
       // If a hand card is selected, don't hover other hand cards
-      !(this.selectedCard3D && card3D.homeZone === 'playerHand' && card3D !== this.selectedCard3D);
+      !(this.selectedCard3D && card3D.homeZone === 'player0Hand' && card3D !== this.selectedCard3D);
 
     // Update hover state
     if (isHoverable && card3D !== this.hoveredCard3D) {
@@ -3173,7 +3191,7 @@ class Game {
 
         setTimeout(() => {
           // Restore original face-up state based on zone
-          const originalFaceUp = (card3D._showcaseOriginalZone === 'opponentHand' || card3D._showcaseOriginalZone === 'deck') ? 0 : 1;
+          const originalFaceUp = (card3D._showcaseOriginalZone === 'player1Hand' || card3D._showcaseOriginalZone === 'deck') ? 0 : 1;
 
           card3D.tweenTo({
             x: card3D._showcaseOriginalX,
@@ -3268,7 +3286,7 @@ class Game {
       allCard3Ds.forEach((card3D, index) => {
         const delay = index * 20;
         setTimeout(() => {
-          const originalFaceUp = (card3D._showcaseOriginalZone === 'opponentHand' || card3D._showcaseOriginalZone === 'deck') ? 0 : 1;
+          const originalFaceUp = (card3D._showcaseOriginalZone === 'player1Hand' || card3D._showcaseOriginalZone === 'deck') ? 0 : 1;
           card3D.tweenTo({
             x: card3D._showcaseOriginalX,
             y: card3D._showcaseOriginalY,
@@ -3344,7 +3362,7 @@ class Game {
       allCard3Ds.forEach((card3D, index) => {
         const delay = index * 15;
         setTimeout(() => {
-          const originalFaceUp = (card3D._showcaseOriginalZone === 'opponentHand' || card3D._showcaseOriginalZone === 'deck') ? 0 : 1;
+          const originalFaceUp = (card3D._showcaseOriginalZone === 'player1Hand' || card3D._showcaseOriginalZone === 'deck') ? 0 : 1;
           card3D.tweenTo({
             x: card3D._showcaseOriginalX,
             y: card3D._showcaseOriginalY,
@@ -3417,7 +3435,7 @@ class Game {
       allCard3Ds.forEach((card3D, index) => {
         const delay = index * 18;
         setTimeout(() => {
-          const originalFaceUp = (card3D._showcaseOriginalZone === 'opponentHand' || card3D._showcaseOriginalZone === 'deck') ? 0 : 1;
+          const originalFaceUp = (card3D._showcaseOriginalZone === 'player1Hand' || card3D._showcaseOriginalZone === 'deck') ? 0 : 1;
           card3D.tweenTo({
             x: card3D._showcaseOriginalX,
             y: card3D._showcaseOriginalY,
@@ -3488,7 +3506,7 @@ class Game {
       allCard3Ds.forEach((card3D, index) => {
         const delay = index * 18;
         setTimeout(() => {
-          const originalFaceUp = (card3D._showcaseOriginalZone === 'opponentHand' || card3D._showcaseOriginalZone === 'deck') ? 0 : 1;
+          const originalFaceUp = (card3D._showcaseOriginalZone === 'player1Hand' || card3D._showcaseOriginalZone === 'deck') ? 0 : 1;
           card3D.tweenTo({
             x: card3D._showcaseOriginalX,
             y: card3D._showcaseOriginalY,
@@ -3583,7 +3601,7 @@ class Game {
       allCard3Ds.forEach((card3D, index) => {
         const delay = index * 20;
         setTimeout(() => {
-          const originalFaceUp = (card3D._showcaseOriginalZone === 'opponentHand' || card3D._showcaseOriginalZone === 'deck') ? 0 : 1;
+          const originalFaceUp = (card3D._showcaseOriginalZone === 'player1Hand' || card3D._showcaseOriginalZone === 'deck') ? 0 : 1;
           card3D.tweenTo({
             x: card3D._showcaseOriginalX,
             y: card3D._showcaseOriginalY,
@@ -3907,4 +3925,58 @@ document.addEventListener('DOMContentLoaded', async () => {
   // game.loadBackground('./assets/backgrounds/texture.jpg');
 
   console.log(`Hanafuda Koi-Koi ready (v${APP_VERSION})`);
+
+  // Expose testing utilities to console
+  window.gameTestUtils = {
+    game,
+    card3DManager: game.card3DManager,
+    gameState: () => game.game.getState(),
+    validateGameState: () => {
+      const playerCount = game.selectedPlayerCount;
+      const results = GameStateValidator.validateCardAllocation(
+        game.game.getState(),
+        game.card3DManager,
+        playerCount
+      );
+      GameStateValidator.printResults(results);
+      return results;
+    },
+    validateZones: () => {
+      const results = GameStateValidator.validateZoneStructure(
+        game.card3DManager,
+        game.selectedPlayerCount
+      );
+      console.group('🧪 Zone Structure Validation');
+      results.forEach(r => console.log(r.message));
+      console.groupEnd();
+      return results;
+    },
+    logZoneCards: () => {
+      console.group('🎴 Cards in Each Zone');
+      if (game.card3DManager && game.card3DManager.zoneCards) {
+        Object.entries(game.card3DManager.zoneCards).forEach(([zoneName, cardSet]) => {
+          console.log(`${zoneName}: ${cardSet.size} cards`);
+        });
+      }
+      console.groupEnd();
+    },
+    logPlayerCounts: () => {
+      const state = game.game.getState();
+      console.group('👥 Player Counts');
+      if (state.players && Array.isArray(state.players)) {
+        state.players.forEach((player, index) => {
+          console.log(`Player ${index}: hand=${player.hand?.length || 0}, trick=${player.trick?.length || 0}`);
+        });
+      }
+      console.log(`Field: ${state.field?.length || 0} cards`);
+      console.log(`Deck: ${state.deck?.length || 0} cards`);
+      console.groupEnd();
+    }
+  };
+
+  console.log('🧪 Testing utilities available at window.gameTestUtils');
+  console.log('  - gameTestUtils.validateGameState() - Full validation');
+  console.log('  - gameTestUtils.validateZones() - Zone structure check');
+  console.log('  - gameTestUtils.logZoneCards() - Show all zone contents');
+  console.log('  - gameTestUtils.logPlayerCounts() - Show player hand/trick counts');
 });

@@ -179,27 +179,22 @@ export class LayoutManager {
    * Get zone configuration for a given zone name and viewport dimensions
    * Supports N-player layouts (2, 3, or 4 players)
    *
-   * @param {string|number} zoneOrPlayerCount - Zone name (string) OR playerCount for batch initialization
+   * @param {string} zoneName - Zone name (e.g., 'player0Hand', 'field', 'playerTrick')
    * @param {number} viewportWidth - Viewport width
    * @param {number} viewportHeight - Viewport height
-   * @param {boolean|number} useAnimationsOrPlayerCount - useAnimations flag OR playerCount
-   * @returns {Object|Map} Single zone config or all zone configs for player count
+   * @param {number} playerCount - Number of players (2, 3, or 4)
+   * @param {boolean} useAnimations - Whether animations are enabled (default: true)
+   * @returns {Object} Zone configuration object
    */
-  static getZoneConfig(zoneOrPlayerCount, viewportWidth, viewportHeight, useAnimationsOrPlayerCount = true) {
-    // Handle new signature: getZoneConfig(zoneName, width, height, playerCount, useAnimations)
-    // Detect if called with playerCount as 3rd or 4th parameter
-    let zoneName = zoneOrPlayerCount;
-    let playerCount = 2; // Default
-    let useAnimations = useAnimationsOrPlayerCount === true ? true : (typeof useAnimationsOrPlayerCount === 'boolean' ? useAnimationsOrPlayerCount : true);
-
-    // If zoneOrPlayerCount is a number, it's a playerCount request
-    if (typeof zoneOrPlayerCount === 'number' && zoneOrPlayerCount !== viewportWidth) {
-      playerCount = zoneOrPlayerCount;
-      zoneName = null; // Will return all configs
-    } else if (typeof viewportHeight === 'number' && typeof useAnimationsOrPlayerCount === 'number') {
-      // Called as getZoneConfig(zoneName, width, height, playerCount)
-      playerCount = useAnimationsOrPlayerCount;
-      useAnimations = true;
+  static getZoneConfig(zoneName, viewportWidth, viewportHeight, playerCount = 2, useAnimations = true) {
+    // Validate inputs
+    if (typeof zoneName !== 'string') {
+      console.error(`Invalid zoneName: ${zoneName} (expected string)`);
+      return {};
+    }
+    if (![2, 3, 4].includes(playerCount)) {
+      console.warn(`Invalid playerCount: ${playerCount}, defaulting to 2`);
+      playerCount = 2;
     }
 
     const centerX = viewportWidth / 2;
@@ -239,10 +234,12 @@ export class LayoutManager {
     };
 
     // Generate configs based on player count
+    // Uses unified indexed naming for all player counts
     const getPlayerHandConfigs = () => {
       if (playerCount === 2) {
+        // 2-Player Layout: P0 bottom, P1 top (uses indexed names for consistency)
         return {
-          playerHand: {
+          player0Hand: {
             type: 'row',
             anchorPoint: { x: 50, y: viewportHeight - 170 },
             centerX: centerX,
@@ -252,7 +249,7 @@ export class LayoutManager {
             renderLayer: 5,
             hoverLift: 20
           },
-          opponentHand: {
+          player1Hand: {
             type: 'row',
             anchorPoint: { x: 50, y: 40 },
             centerX: centerX,
@@ -261,7 +258,7 @@ export class LayoutManager {
             faceUp: 0,
             renderLayer: 5
           },
-          playerTrick: {
+          player0Trick: {
             type: 'fan',
             position: { x: viewportWidth - 162, y: viewportHeight - 170 },
             fanOffset: { x: 8, y: 8, z: 2 },
@@ -269,7 +266,7 @@ export class LayoutManager {
             faceUp: 1,
             renderLayer: 2
           },
-          opponentTrick: {
+          player1Trick: {
             type: 'fan',
             position: { x: viewportWidth - 162, y: 40 },
             fanOffset: { x: 8, y: 8, z: 2 },
@@ -409,25 +406,37 @@ export class LayoutManager {
     const handConfigs = getPlayerHandConfigs();
     const allConfigs = { ...baseConfigs, ...handConfigs };
 
-    // Return specific zone or all configs
-    return allConfigs[zoneName] || allConfigs;
+    // Return specific zone config
+    if (!allConfigs[zoneName]) {
+      console.error(`Zone config not found: ${zoneName}. Available: ${Object.keys(allConfigs).join(', ')}`);
+      // Return a default row config as fallback
+      return {
+        type: 'row',
+        anchorPoint: { x: 50, y: centerY },
+        centerX: centerX,
+        spacing: 115,
+        faceUp: 1,
+        renderLayer: 5
+      };
+    }
+    return allConfigs[zoneName];
   }
 
   /**
    * Helper: Get all zone names for a given player count
+   * Uses unified indexed naming for all player counts
    */
   static getZoneNamesForPlayerCount(playerCount) {
     const baseZones = ['deck', 'drawnCard', 'field'];
+    const playerZones = [];
 
-    if (playerCount === 2) {
-      return [...baseZones, 'playerHand', 'opponentHand', 'playerTrick', 'opponentTrick'];
-    } else if (playerCount === 3) {
-      return [...baseZones, 'player0Hand', 'player1Hand', 'player2Hand', 'player0Trick', 'player1Trick', 'player2Trick'];
-    } else if (playerCount === 4) {
-      return [...baseZones, 'player0Hand', 'player1Hand', 'player2Hand', 'player3Hand', 'player0Trick', 'player1Trick', 'player2Trick', 'player3Trick'];
+    // Add indexed zone names for all players
+    for (let i = 0; i < playerCount; i++) {
+      playerZones.push(`player${i}Hand`);
+      playerZones.push(`player${i}Trick`);
     }
 
-    return baseZones;
+    return [...baseZones, ...playerZones];
   }
 
   /**

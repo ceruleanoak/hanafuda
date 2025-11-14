@@ -31,6 +31,7 @@ export class Card3DManager {
 
   /**
    * Initialize zone structure based on player count
+   * Uses unified indexed naming: player0Hand, player1Hand, etc. for all player counts
    */
   initializeZones(playerCount) {
     const zones = {
@@ -39,27 +40,10 @@ export class Card3DManager {
       field: new Set()
     };
 
-    if (playerCount === 2) {
-      zones.playerHand = new Set();
-      zones.opponentHand = new Set();
-      zones.playerTrick = new Set();
-      zones.opponentTrick = new Set();
-    } else if (playerCount === 3) {
-      zones.player0Hand = new Set();
-      zones.player1Hand = new Set();
-      zones.player2Hand = new Set();
-      zones.player0Trick = new Set();
-      zones.player1Trick = new Set();
-      zones.player2Trick = new Set();
-    } else if (playerCount === 4) {
-      zones.player0Hand = new Set();
-      zones.player1Hand = new Set();
-      zones.player2Hand = new Set();
-      zones.player3Hand = new Set();
-      zones.player0Trick = new Set();
-      zones.player1Trick = new Set();
-      zones.player2Trick = new Set();
-      zones.player3Trick = new Set();
+    // Use indexed names for ALL player counts (2, 3, or 4)
+    for (let i = 0; i < playerCount; i++) {
+      zones[`player${i}Hand`] = new Set();
+      zones[`player${i}Trick`] = new Set();
     }
 
     return zones;
@@ -102,7 +86,7 @@ export class Card3DManager {
 
   /**
    * Initialize all cards from game state
-   * Supports both 2-player and N-player formats
+   * Uses unified indexed zone naming (player0Hand, player1Hand, etc.) for all player counts
    */
   initializeFromGameState(gameState, isNewGame = false) {
     debugLogger.log('3dCards', '🎴 Initializing Card3D system from game state', null);
@@ -116,27 +100,29 @@ export class Card3DManager {
     this.cards.clear();
     Object.values(this.zoneCards).forEach(set => set.clear());
 
-    // Build card sources based on format
+    // Build card sources using unified indexed naming
     let cardSources = [];
 
+    cardSources.push({ cards: gameState.deck?.cards || [], zone: 'deck' });
+    cardSources.push({ cards: gameState.field || [], zone: 'field' });
+
+    // Use indexed player format for all player counts
     if (gameState.players && Array.isArray(gameState.players)) {
-      // N-player format (3-4 players)
-      cardSources.push({ cards: gameState.deck?.cards || [], zone: 'deck' });
-      cardSources.push({ cards: gameState.field || [], zone: 'field' });
+      // Players array available (primary source)
       gameState.players.forEach((player, index) => {
         cardSources.push({ cards: player.hand || [], zone: `player${index}Hand` });
         cardSources.push({ cards: player.captured || [], zone: `player${index}Trick` });
       });
     } else {
-      // 2-player format (legacy)
-      cardSources = [
-        { cards: gameState.deck?.cards || [], zone: 'deck' },
-        { cards: gameState.field || [], zone: 'field' },
-        { cards: gameState.playerHand || [], zone: 'playerHand' },
-        { cards: gameState.opponentHand || [], zone: 'opponentHand' },
-        { cards: gameState.playerCaptured || [], zone: 'playerTrick' },
-        { cards: gameState.opponentCaptured || [], zone: 'opponentTrick' }
+      // Legacy 2-player format fallback - convert to indexed names
+      const players = [
+        { hand: gameState.playerHand || [], captured: gameState.playerCaptured || [] },
+        { hand: gameState.opponentHand || [], captured: gameState.opponentCaptured || [] }
       ];
+      players.forEach((player, index) => {
+        cardSources.push({ cards: player.hand, zone: `player${index}Hand` });
+        cardSources.push({ cards: player.captured, zone: `player${index}Trick` });
+      });
     }
 
     let totalCards = 0;
@@ -305,29 +291,21 @@ export class Card3DManager {
 
     addCards(gameState.field, 'field');
 
-    // Use playerCount to determine which zone names to use
-    if (this.playerCount === 2) {
-      // 2-player uses legacy zone names (playerHand/opponentHand)
-      // Support both old format (direct properties) and new format (players array)
-      if (gameState.players && Array.isArray(gameState.players)) {
-        addCards(gameState.players[0].hand, 'playerHand');
-        addCards(gameState.players[1].hand, 'opponentHand');
-        addCards(gameState.players[0].captured, 'playerTrick');
-        addCards(gameState.players[1].captured, 'opponentTrick');
-      } else {
-        addCards(gameState.playerHand, 'playerHand');
-        addCards(gameState.opponentHand, 'opponentHand');
-        addCards(gameState.playerCaptured, 'playerTrick');
-        addCards(gameState.opponentCaptured, 'opponentTrick');
-      }
-    } else {
-      // N-player format uses indexed zone names (player0Hand, player1Hand, etc.)
+    // Use unified indexed zone naming for ALL player counts
+    if (gameState.players && Array.isArray(gameState.players)) {
+      // Players array format - use indexed names
       gameState.players.forEach((player, index) => {
         const handZone = `player${index}Hand`;
         const trickZone = `player${index}Trick`;
         addCards(player.hand, handZone);
         addCards(player.captured, trickZone);
       });
+    } else {
+      // Legacy 2-player format fallback - convert to indexed names
+      addCards(gameState.playerHand, 'player0Hand');
+      addCards(gameState.opponentHand, 'player1Hand');
+      addCards(gameState.playerCaptured, 'player0Trick');
+      addCards(gameState.opponentCaptured, 'player1Trick');
     }
 
     return mapping;
@@ -339,8 +317,14 @@ export class Card3DManager {
   moveCardToZone(card3D, newZone) {
     const oldZone = card3D.homeZone;
 
+    // Validate new zone exists
+    if (!this.zoneCards[newZone]) {
+      console.error(`Invalid zone: ${newZone}. Available zones: ${Object.keys(this.zoneCards).join(', ')}`);
+      return;
+    }
+
     // Remove from old zone
-    if (oldZone) {
+    if (oldZone && this.zoneCards[oldZone]) {
       this.zoneCards[oldZone].delete(card3D);
       this.dirtyZones.add(oldZone);
     }
@@ -441,32 +425,9 @@ export class Card3DManager {
       return; // Skip normal layout calculation
     }
 
-    // Get zone configuration - determine zone name format based on playerCount
-    let actualZoneName = zone;
-
-    // If zone name is in old 2-player format but we're in N-player mode, translate it
-    if (this.playerCount > 2) {
-      const zoneNameMap = {
-        'playerHand': 'player0Hand',
-        'opponentHand': 'player1Hand',
-        'playerTrick': 'player0Trick',
-        'opponentTrick': 'player1Trick'
-      };
-      actualZoneName = zoneNameMap[zone] || zone;
-    }
-
-    // For 2-player mode, also handle the reverse mapping
-    if (this.playerCount === 2 && (zone === 'player0Hand' || zone === 'player1Hand' || zone === 'player0Trick' || zone === 'player1Trick')) {
-      const zoneNameMap = {
-        'player0Hand': 'playerHand',
-        'player1Hand': 'opponentHand',
-        'player0Trick': 'playerTrick',
-        'player1Trick': 'opponentTrick'
-      };
-      actualZoneName = zoneNameMap[zone] || zone;
-    }
-
-    const config = LayoutManager.getZoneConfig(actualZoneName, this.viewportWidth, this.viewportHeight, this.useAnimations);
+    // Get zone configuration using unified indexed zone names
+    // No translation needed - all zones use indexed names (player0Hand, player1Hand, etc.)
+    const config = LayoutManager.getZoneConfig(zone, this.viewportWidth, this.viewportHeight, this.playerCount, this.useAnimations);
 
     // Convert set to array for layout calculation
     const cards = Array.from(zoneSet);

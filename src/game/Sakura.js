@@ -599,6 +599,12 @@ export class Sakura {
 
   /**
    * Player selects a card
+   * Implements standard two-click flow like KoiKoi:
+   * 1. Click hand card in select_hand phase → select it, move to select_field phase
+   * 2. Click field card in select_field phase → match and capture
+   * 3. Click same hand card again in select_field phase → place on field (if no matches)
+   * 4. Click different hand card in select_field phase → switch selection
+   *
    * @param {Object} card - The card being selected
    * @param {string} owner - The owner/zone of the card ('player', 'field', etc.)
    */
@@ -611,86 +617,126 @@ export class Sakura {
       isGaji: this.isGaji(card)
     });
 
-    // Route to field card selection when clicking field cards
+    // Handle field card clicks
     if (owner === 'field' && (this.phase === 'select_field' || this.phase === 'gaji_selection')) {
       return this.selectFieldCard(card);
     }
 
-    if (this.phase !== 'select_hand') {
-      debugLogger.log('sakura', `⚠️ Wrong phase for selectCard: ${this.phase}`);
-      return false;
-    }
-
-    // Check if card is Gaji (wild card) - only wild when IN HAND
-    if (this.isGaji(card)) {
-      debugLogger.log('sakura', `⚡ Gaji played from hand - wild card mode`);
-      this.handleGajiFromHand(card);
-      return true;
-    }
-
-    // Find matching cards on field (including Gaji if it's November and Gaji is on field)
-    const matches = this.field.filter(fc => fc.month === card.month);
-
-    debugLogger.log('sakura', `🎴 Card ${card.name} matches found:`, {
-      matchCount: matches.length,
-      matches: matches.map(m => m.name),
-      fieldCards: this.field.map(f => f.name)
-    });
-
-    // Remove card from hand
-    this.playerHand = this.playerHand.filter(c => c.id !== card.id);
-
-    if (matches.length === 0) {
-      // No match - add card to field
-      debugLogger.log('sakura', `➕ No match - adding ${card.name} to field`);
-      this.field.push(card);
-      this.message = 'No match. Card added to field.';
-      this.proceedToDrawPhase();
-    } else if (matches.length === 1) {
-      // Single match - auto capture
-      const capturedCard = matches[0];
-      debugLogger.log('sakura', `✅ Single match - capturing ${capturedCard.name}`);
-      this.playerCaptured.push(card, capturedCard);
-      this.field = this.field.filter(c => c.id !== capturedCard.id);
-      this.message = `Captured ${capturedCard.month}!`;
-
-      // Update Gaji state if we captured Gaji from field
-      if (this.isGaji(capturedCard)) {
-        debugLogger.log('sakura', `⚡ Gaji captured from field by regular card`);
-        this.gajiState.location = 'player_captured';
-        this.gajiState.isWildCard = false;
+    // Handle hand card selection in select_hand phase
+    if (this.phase === 'select_hand' && owner === 'player') {
+      // Check if card is Gaji (wild card) - only wild when IN HAND
+      if (this.isGaji(card)) {
+        debugLogger.log('sakura', `⚡ Gaji played from hand - wild card mode`);
+        this.handleGajiFromHand(card);
+        return true;
       }
 
-      this.proceedToDrawPhase();
-    } else if (matches.length === 2) {
-      // Two matches - player must choose
-      debugLogger.log('sakura', `🎯 Two matches - player must choose`, {
-        options: matches.map(m => m.name)
+      // Find matching cards on field
+      const matches = this.field.filter(fc => fc.month === card.month);
+
+      debugLogger.log('sakura', `🎴 Card ${card.name} matches found:`, {
+        matchCount: matches.length,
+        matches: matches.map(m => m.name)
       });
+
+      // Store selected card and matches info
       this.selectedCards = [card];
       this.drawnCardMatches = matches;
       this.phase = 'select_field';
-      this.message = 'Choose which card to capture.';
-    } else if (matches.length === 3) {
-      // HIKI! Capture all 4 cards
-      debugLogger.log('sakura', `🎊 HIKI! All 4 ${card.month} cards captured`);
-      this.announceHiki(card, matches);
-      this.playerCaptured.push(card, ...matches);
-      this.field = this.field.filter(c => !matches.includes(c));
-      this.completedHikis[0].push(card.month);
-      this.message = `HIKI! Captured all 4 ${card.month} cards!`;
 
-      // Update Gaji state if Hiki included Gaji
-      if (matches.some(m => this.isGaji(m))) {
-        debugLogger.log('sakura', `⚡ Hiki included Gaji`);
-        this.gajiState.location = 'player_captured';
-        this.gajiState.isWildCard = false;
+      // Set appropriate message based on matches
+      if (matches.length === 0) {
+        this.message = 'Click the card again to place on field, or click a different card';
+      } else if (matches.length === 1) {
+        this.message = `Click the ${matches[0].month} card to capture (or click again to place)`;
+      } else if (matches.length === 2) {
+        this.message = 'Choose which matching card to capture';
+      } else if (matches.length === 3) {
+        this.message = 'HIKI! Click any matching card to capture all 4';
       }
 
-      this.proceedToDrawPhase();
+      return true;
     }
 
-    return true;
+    // Handle selections in select_field phase
+    if (this.phase === 'select_field' && owner === 'player') {
+      // Check if clicking a different hand card - switch selection
+      if (this.selectedCards[0].id !== card.id) {
+        debugLogger.log('sakura', `🔄 Switching selection from ${this.selectedCards[0].name} to ${card.name}`);
+
+        // Check if new card is Gaji
+        if (this.isGaji(card)) {
+          debugLogger.log('sakura', `⚡ Gaji selected from hand - wild card mode`);
+          this.handleGajiFromHand(card);
+          return true;
+        }
+
+        // Find matches for new card
+        const matches = this.field.filter(fc => fc.month === card.month);
+
+        // Update selection
+        this.selectedCards = [card];
+        this.drawnCardMatches = matches;
+
+        // Update message
+        if (matches.length === 0) {
+          this.message = 'Click the card again to place on field, or click a different card';
+        } else if (matches.length === 1) {
+          this.message = `Click the ${matches[0].month} card to capture (or click again to place)`;
+        } else if (matches.length === 2) {
+          this.message = 'Choose which matching card to capture';
+        } else if (matches.length === 3) {
+          this.message = 'HIKI! Click any matching card to capture all 4';
+        }
+
+        return true;
+      }
+
+      // Clicking same card again - place on field or show message if matches exist
+      const matches = this.drawnCardMatches;
+
+      if (matches.length === 3) {
+        // HIKI! Auto-capture all 4 cards
+        debugLogger.log('sakura', `🎊 HIKI! All 4 ${card.month} cards captured`);
+        const selectedCard = this.selectedCards[0];
+        this.playerHand = this.playerHand.filter(c => c.id !== selectedCard.id);
+        this.announceHiki(selectedCard, matches);
+        this.playerCaptured.push(selectedCard, ...matches);
+        this.field = this.field.filter(c => !matches.includes(c));
+        this.completedHikis[0].push(selectedCard.month);
+        this.message = `HIKI! Captured all 4 ${selectedCard.month} cards!`;
+
+        // Update Gaji state if Hiki included Gaji
+        if (matches.some(m => this.isGaji(m))) {
+          debugLogger.log('sakura', `⚡ Hiki included Gaji`);
+          this.gajiState.location = 'player_captured';
+          this.gajiState.isWildCard = false;
+        }
+
+        this.selectedCards = [];
+        this.drawnCardMatches = [];
+        this.proceedToDrawPhase();
+        return true;
+      } else if (matches.length > 0) {
+        // Matches exist - cannot place on field
+        this.message = 'You must match with a card on the field (matches available)';
+        return false;
+      } else {
+        // No matches - place card on field
+        debugLogger.log('sakura', `➕ No match - placing ${card.name} on field`);
+        const selectedCard = this.selectedCards[0];
+        this.playerHand = this.playerHand.filter(c => c.id !== selectedCard.id);
+        this.field.push(selectedCard);
+        this.message = 'Card placed on field.';
+        this.selectedCards = [];
+        this.drawnCardMatches = [];
+        this.proceedToDrawPhase();
+        return true;
+      }
+    }
+
+    debugLogger.log('sakura', `⚠️ selectCard: Invalid state - phase=${this.phase}, owner=${owner}`);
+    return false;
   }
 
   /**
@@ -700,11 +746,19 @@ export class Sakura {
     debugLogger.log('sakura', `🎯 selectFieldCard called`, {
       fieldCardId: fieldCard.id,
       fieldCardName: fieldCard.name,
-      phase: this.phase
+      phase: this.phase,
+      selectedCardsCount: this.selectedCards?.length || 0
     });
 
     if (this.phase !== 'select_field' && this.phase !== 'gaji_selection') {
       debugLogger.log('sakura', `⚠️ Wrong phase for selectFieldCard: ${this.phase}`);
+      return false;
+    }
+
+    // Need a selected card (hand card or Gaji) to match
+    if (!this.selectedCards || this.selectedCards.length === 0) {
+      debugLogger.log('sakura', `⚠️ No selected card for field match`);
+      this.message = 'No card selected for matching';
       return false;
     }
 
@@ -733,8 +787,11 @@ export class Sakura {
       return true;
     }
 
-    // Regular field card selection (2 matches)
+    // Regular field card selection (2 matches or 1 match confirmation)
     debugLogger.log('sakura', `✅ Player chose ${fieldCard.name} to capture with ${handCard.name}`);
+
+    // Remove hand card from hand
+    this.playerHand = this.playerHand.filter(c => c.id !== handCard.id);
 
     // Capture both cards
     this.playerCaptured.push(handCard, fieldCard);
@@ -1072,7 +1129,7 @@ export class Sakura {
     }
 
     // Check if using Gaji would complete a Hiki for this player
-    const captured = this.players[playerIndex].captured;
+    const captured = playerIndex === 0 ? this.playerCaptured : (this.opponentCaptured || []);
     const suitCount = captured.filter(c => c.month === month).length;
 
     if (suitCount === 3) {

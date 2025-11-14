@@ -225,14 +225,27 @@ export class InitializationManager {
   validateZoneAssignments(card3DManager, gameState) {
     const errors = [];
 
+    // Determine player count from game state
+    const playerCount = gameState.playerCount || gameState.players?.length || 2;
+
     const zoneChecks = [
       { zone: 'deck', expected: gameState.deck?.cards?.length || 0 },
-      { zone: 'field', expected: gameState.field?.length || 0 },
-      { zone: 'playerHand', expected: gameState.playerHand?.length || 0 },
-      { zone: 'opponentHand', expected: gameState.opponentHand?.length || 0 },
-      { zone: 'playerTrick', expected: gameState.playerCaptured?.length || 0 },
-      { zone: 'opponentTrick', expected: gameState.opponentCaptured?.length || 0 }
+      { zone: 'field', expected: gameState.field?.length || 0 }
     ];
+
+    // Add hand and trick zones for all players using indexed naming
+    if (gameState.players && Array.isArray(gameState.players)) {
+      gameState.players.forEach((player, index) => {
+        zoneChecks.push({ zone: `player${index}Hand`, expected: player.hand?.length || 0 });
+        zoneChecks.push({ zone: `player${index}Trick`, expected: player.captured?.length || 0 });
+      });
+    } else {
+      // Legacy 2-player format - convert to indexed names for validation
+      zoneChecks.push({ zone: 'player0Hand', expected: gameState.playerHand?.length || 0 });
+      zoneChecks.push({ zone: 'player1Hand', expected: gameState.opponentHand?.length || 0 });
+      zoneChecks.push({ zone: 'player0Trick', expected: gameState.playerCaptured?.length || 0 });
+      zoneChecks.push({ zone: 'player1Trick', expected: gameState.opponentCaptured?.length || 0 });
+    }
 
     for (const { zone, expected } of zoneChecks) {
       const actual = card3DManager.getCardsInZone(zone).length;
@@ -259,11 +272,22 @@ export class InitializationManager {
       debugLogger.log('init', `ℹ️ Field has ${gameState.field.length} cards (expected 8 for new game)`, null);
     }
 
-    // Check hands have expected number of cards
-    // Standard: 8 per hand, Bomb variation: 10 per hand
-    const expectedHandSize = gameState.playerHand?.length || 8;
-    if (gameState.opponentHand && gameState.opponentHand.length !== expectedHandSize) {
-      errors.push(`Hand size mismatch: player has ${expectedHandSize}, opponent has ${gameState.opponentHand.length}`);
+    // Check hands have expected number of cards (multi-player support)
+    // Standard: 8 per hand for 2-player, 7 for 3-player, 5 for 4-player
+    if (gameState.players && Array.isArray(gameState.players)) {
+      const playerCount = gameState.players.length;
+      const expectedSize = playerCount === 2 ? 8 : (playerCount === 3 ? 7 : 5);
+      for (let i = 0; i < gameState.players.length; i++) {
+        if (gameState.players[i].hand && gameState.players[i].hand.length !== expectedSize) {
+          errors.push(`Hand size mismatch: player ${i} has ${gameState.players[i].hand.length}, expected ${expectedSize}`);
+        }
+      }
+    } else {
+      // Legacy 2-player format
+      const expectedHandSize = gameState.playerHand?.length || 8;
+      if (gameState.opponentHand && gameState.opponentHand.length !== expectedHandSize) {
+        errors.push(`Hand size mismatch: player has ${expectedHandSize}, opponent has ${gameState.opponentHand.length}`);
+      }
     }
 
     // Check deck exists
@@ -297,8 +321,9 @@ export class InitializationManager {
     }
 
     // Check all zones have been laid out
-    const zones = ['deck', 'field', 'playerHand', 'opponentHand', 'playerTrick', 'opponentTrick'];
-    for (const zone of zones) {
+    // Get zones from card3DManager which are already initialized with correct names (indexed format)
+    const allZones = Object.keys(card3DManager.zoneCards);
+    for (const zone of allZones) {
       const cards = card3DManager.getCardsInZone(zone);
       for (const card3D of cards) {
         if (card3D.x === 0 && card3D.y === 0 && zone !== 'deck') {

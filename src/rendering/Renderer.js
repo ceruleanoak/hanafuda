@@ -214,17 +214,19 @@ export class Renderer {
     // Determine player count from card3DManager
     const playerCount = card3DManager.playerCount || 2;
 
+    // Get trick configs for 2-player mode (will be used in multiple places below)
+    let playerTrickConfig, opponentTrickConfig;
     if (playerCount === 2) {
-      // 2-player layout
-      const playerTrickConfig = LayoutManager.getZoneConfig('playerTrick', this.displayWidth, this.displayHeight);
-      const opponentTrickConfig = LayoutManager.getZoneConfig('opponentTrick', this.displayWidth, this.displayHeight);
+      // 2-player layout - use indexed names
+      playerTrickConfig = LayoutManager.getZoneConfig('player0Trick', this.displayWidth, this.displayHeight, playerCount);
+      opponentTrickConfig = LayoutManager.getZoneConfig('player1Trick', this.displayWidth, this.displayHeight, playerCount);
 
-      const playerTrickCards = card3DManager.getCardsInZone('playerTrick');
+      const playerTrickCards = card3DManager.getCardsInZone('player0Trick');
       if (playerTrickCards.length > 0) {
         this.drawTrickLabel(playerTrickConfig.position.x, playerTrickConfig.position.y, `Player: ${playerTrickCards.length}`, false);
       }
 
-      const opponentTrickCards = card3DManager.getCardsInZone('opponentTrick');
+      const opponentTrickCards = card3DManager.getCardsInZone('player1Trick');
       if (opponentTrickCards.length > 0) {
         this.drawTrickLabel(opponentTrickConfig.position.x, opponentTrickConfig.position.y, `Opponent: ${opponentTrickCards.length}`, true);
       }
@@ -379,13 +381,15 @@ export class Renderer {
   draw3DYakuInfo(gameState, card3DManager) {
     const playerCount = card3DManager.playerCount || 2;
 
+    // Get trick configs for 2-player mode
+    let playerTrickConfig, opponentTrickConfig;
     if (playerCount === 2) {
-      // 2-player layout
-      const playerTrickConfig = LayoutManager.getZoneConfig('playerTrick', this.displayWidth, this.displayHeight);
-      const opponentTrickConfig = LayoutManager.getZoneConfig('opponentTrick', this.displayWidth, this.displayHeight);
+      // 2-player layout - use indexed names
+      playerTrickConfig = LayoutManager.getZoneConfig('player0Trick', this.displayWidth, this.displayHeight, playerCount);
+      opponentTrickConfig = LayoutManager.getZoneConfig('player1Trick', this.displayWidth, this.displayHeight, playerCount);
 
-      const playerTrickCards = card3DManager.getCardsInZone('playerTrick');
-      const opponentTrickCards = card3DManager.getCardsInZone('opponentTrick');
+      const playerTrickCards = card3DManager.getCardsInZone('player0Trick');
+      const opponentTrickCards = card3DManager.getCardsInZone('player1Trick');
 
       if (playerTrickCards.length > 0) {
         this.drawYakuList(
@@ -472,7 +476,9 @@ export class Renderer {
   highlight3DMatchableCards(gameState, card3DManager) {
     const matchableHandCards = new Set();
 
-    gameState.playerHand.forEach(handCard => {
+    // Get player 0's hand (works for both KoiKoi and Sakura)
+    const playerHand = gameState.players?.[0]?.hand || gameState.playerHand || [];
+    playerHand.forEach(handCard => {
       const matches = gameState.field.filter(fieldCard =>
         fieldCard.month === handCard.month
       );
@@ -484,7 +490,7 @@ export class Renderer {
     this.ctx.save();
 
     // Highlight matchable hand cards only
-    card3DManager.getCardsInZone('playerHand').forEach(card3D => {
+    card3DManager.getCardsInZone('player0Hand').forEach(card3D => {
       if (matchableHandCards.has(card3D.id)) {
         this.drawCardHighlight(card3D, '#ffeb3b');
       }
@@ -895,8 +901,9 @@ export class Renderer {
     };
 
     // Check player hand
-    if (gameState.playerHand) {
-      const result = checkCards(gameState.playerHand, 'player');
+    const playerHand = gameState.players?.[0]?.hand || gameState.playerHand || [];
+    if (playerHand) {
+      const result = checkCards(playerHand, 'player');
       if (result) return result;
     }
 
@@ -1049,10 +1056,13 @@ export class Renderer {
 
     // Create sets for different card states
     const capturedCardIds = new Set();
-    gameState.playerCaptured.forEach(c => capturedCardIds.add(c.id));
-    gameState.opponentCaptured.forEach(c => capturedCardIds.add(c.id));
+    const playerTrick = gameState.players?.[0]?.trick || gameState.playerCaptured || [];
+    const opponentTrick = gameState.players?.[1]?.trick || gameState.opponentCaptured || [];
+    playerTrick.forEach(c => capturedCardIds.add(c.id));
+    opponentTrick.forEach(c => capturedCardIds.add(c.id));
 
-    const playerHandIds = new Set(gameState.playerHand.map(c => c.id));
+    const playerHand = gameState.players?.[0]?.hand || gameState.playerHand || [];
+    const playerHandIds = new Set(playerHand.map(c => c.id));
     const fieldIds = new Set(gameState.field.map(c => c.id));
 
     // Draw all 48 cards
@@ -1097,7 +1107,8 @@ export class Renderer {
     const matchableHandCards = new Set();
     const matchableFieldCards = new Set();
 
-    gameState.playerHand.forEach(handCard => {
+    const playerHand = gameState.players?.[0]?.hand || gameState.playerHand || [];
+    playerHand.forEach(handCard => {
       const matches = gameState.field.filter(fieldCard =>
         fieldCard.month === handCard.month
       );
@@ -1110,7 +1121,7 @@ export class Renderer {
     this.ctx.save();
 
     // Highlight matchable cards in player hand
-    gameState.playerHand.forEach(card => {
+    playerHand.forEach(card => {
       if (matchableHandCards.has(card.id) && card._renderX !== undefined) {
         this.ctx.strokeStyle = '#ffeb3b';
         this.ctx.lineWidth = 4;
