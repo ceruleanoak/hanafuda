@@ -961,7 +961,7 @@ class Game {
 
     // Use 3D hit detection
     const card3D = this.card3DManager.getCardAtPosition(x, y);
-    if (card3D && card3D.homeZone === 'playerHand') {
+    if (card3D && (card3D.homeZone === 'playerHand' || card3D.homeZone === 'player0Hand')) {
       // Clear any hover state
       if (this.hoveredCard3D) {
         this.hoveredCard3D.setHovered(false);
@@ -991,7 +991,7 @@ class Game {
 
     // Use 3D hit detection
     const card3D = this.card3DManager.getCardAtPosition(x, y);
-    if (card3D && card3D.homeZone === 'playerHand' && gameState.phase === 'select_hand') {
+    if (card3D && (card3D.homeZone === 'playerHand' || card3D.homeZone === 'player0Hand') && gameState.phase === 'select_hand') {
       const card = card3D.cardData;
 
       debugLogger.log('gameState', `Card double-clicked (auto-match): ${card.name}`, {
@@ -1093,7 +1093,7 @@ class Game {
       } else {
         // Not dropping on a card - check if we can place on field
         // Only allow placing from player hand
-        if (this.draggedCard3D.homeZone === 'playerHand') {
+        if (this.draggedCard3D.homeZone === 'playerHand' || this.draggedCard3D.homeZone === 'player0Hand') {
           // Check if dropping back over hand area - if so, cancel the drag
           if (this.isPositionInPlayerHandZone(x, y)) {
             debugLogger.log('gameState', `Card dropped over hand area - returning to hand`, null);
@@ -1170,7 +1170,7 @@ class Game {
       this.draggedCardData = null;
 
       // Handle click based on zone
-      if (clickedZone === 'playerHand') {
+      if (clickedZone === 'playerHand' || clickedZone === 'player0Hand') {
         // Get current game state before the action
         const gameState = this.game.getState();
         const wasInSelectField = gameState.phase === 'select_field';

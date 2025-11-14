@@ -441,10 +441,32 @@ export class Card3DManager {
       return; // Skip normal layout calculation
     }
 
-    // Get zone configuration - pass playerCount for N-player layout support
-    // Try to get all configs for this player count, then access specific zone
-    const allConfigs = LayoutManager.getZoneConfig(this.playerCount, this.viewportWidth, this.viewportHeight);
-    const config = allConfigs[zone] || LayoutManager.getZoneConfig(zone, this.viewportWidth, this.viewportHeight, this.useAnimations);
+    // Get zone configuration - determine zone name format based on playerCount
+    let actualZoneName = zone;
+
+    // If zone name is in old 2-player format but we're in N-player mode, translate it
+    if (this.playerCount > 2) {
+      const zoneNameMap = {
+        'playerHand': 'player0Hand',
+        'opponentHand': 'player1Hand',
+        'playerTrick': 'player0Trick',
+        'opponentTrick': 'player1Trick'
+      };
+      actualZoneName = zoneNameMap[zone] || zone;
+    }
+
+    // For 2-player mode, also handle the reverse mapping
+    if (this.playerCount === 2 && (zone === 'player0Hand' || zone === 'player1Hand' || zone === 'player0Trick' || zone === 'player1Trick')) {
+      const zoneNameMap = {
+        'player0Hand': 'playerHand',
+        'player1Hand': 'opponentHand',
+        'player0Trick': 'playerTrick',
+        'player1Trick': 'opponentTrick'
+      };
+      actualZoneName = zoneNameMap[zone] || zone;
+    }
+
+    const config = LayoutManager.getZoneConfig(actualZoneName, this.viewportWidth, this.viewportHeight, this.useAnimations);
 
     // Convert set to array for layout calculation
     const cards = Array.from(zoneSet);
