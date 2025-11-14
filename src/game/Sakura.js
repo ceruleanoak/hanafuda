@@ -1412,10 +1412,14 @@ export class Sakura {
 
     if (matches.length === 0) {
       // No match - add to field
+      // Wait for draw animation to complete, then move to field
+      // Keep card in drawnCard zone until we add it to field so synchronize
+      // can properly detect the zone transition and animate it
       setTimeout(() => {
         const drawnCardRef = this.drawnCard;
-        this.drawnCard = null;
+        // Add to field FIRST, then clear drawnCard so synchronize detects the zone change
         this.field.push(drawnCardRef);
+        this.drawnCard = null;
         this.message = `Player ${this.currentPlayerIndex + 1} drew - no match.`;
         setTimeout(() => this.endTurn(), 500);
       }, 500);
