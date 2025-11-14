@@ -14,63 +14,63 @@ import { CARD_TYPES } from '../data/cards.js';
 
 export class SakuraYaku {
   constructor() {
-    // Define all 8 Sakura yaku
+    // Define all 8 Sakura yaku (matching official Hawaiian Sakura rules)
     this.YAKU_DEFINITIONS = {
-      SANKO: {
-        name: "Sanko",
-        displayName: "Sanko (Three Brights)",
-        description: "Any 3 of 4 bright cards (excluding Rainman)",
+      DRINKING: {
+        name: "Drinking",
+        displayName: "Drinking (Nomi)",
+        description: "Cherry Curtain + Susuki Moon + Chrysanthemum Cup",
         penalty: 50,
-        check: (cards) => this.checkSanko(cards)
+        check: (cards) => this.checkDrinking(cards)
       },
-      SHIKO: {
-        name: "Shiko",
-        displayName: "Shiko (Four Brights)",
-        description: "All 4 bright cards (excluding Rainman)",
+      SPRING: {
+        name: "Spring",
+        displayName: "Spring (Omote Sugawara)",
+        description: "Pine Crane + Plum Warbler + Cherry Curtain",
         penalty: 50,
-        check: (cards) => this.checkShiko(cards)
-      },
-      AME_SHIKO: {
-        name: "Ame-Shiko",
-        displayName: "Ame-Shiko (Rainy Four Brights)",
-        description: "Any 3 brights + Rainman",
-        penalty: 50,
-        check: (cards) => this.checkAmeShiko(cards)
-      },
-      GOKO: {
-        name: "Goko",
-        displayName: "Goko (Five Brights)",
-        description: "All 5 bright cards",
-        penalty: 50,
-        check: (cards) => this.checkGoko(cards)
+        check: (cards) => this.checkSpring(cards)
       },
       AKATAN: {
         name: "Akatan",
         displayName: "Akatan (Red Poetry Ribbons)",
-        description: "All 3 red ribbons with text",
+        description: "Red poetry ribbons from January, February, March",
         penalty: 50,
         check: (cards) => this.checkAkatan(cards)
       },
       AOTAN: {
         name: "Aotan",
         displayName: "Aotan (Blue Ribbons)",
-        description: "All 3 blue ribbons",
+        description: "Blue ribbons from June, September, October",
         penalty: 50,
         check: (cards) => this.checkAotan(cards)
       },
-      TANZAKU: {
-        name: "Tanzaku",
-        displayName: "Tanzaku (Plain Ribbons)",
-        description: "Any 3 of 4 plain ribbons",
+      KUSATAN: {
+        name: "Kusatan",
+        displayName: "Kusatan (Grass Ribbons)",
+        description: "Plain ribbons from April, May, July (excluding Willow)",
         penalty: 50,
-        check: (cards) => this.checkTanzaku(cards)
+        check: (cards) => this.checkKusatan(cards)
       },
-      INO_SHIKA_CHO: {
-        name: "Ino-Shika-Cho",
-        displayName: "Ino-Shika-Cho (Boar-Deer-Butterfly)",
-        description: "Bush Clover boar, Maple deer, Peony butterflies",
+      ANIMALS_A: {
+        name: "Animals A",
+        displayName: "Animals A",
+        description: "Peony Butterfly + Chrysanthemum Cup + Maple Deer",
         penalty: 50,
-        check: (cards) => this.checkInoShikaCho(cards)
+        check: (cards) => this.checkAnimalsA(cards)
+      },
+      ANIMALS_B: {
+        name: "Animals B",
+        displayName: "Animals B",
+        description: "Wisteria Cuckoo + Iris Bridge + Clover Boar",
+        penalty: 50,
+        check: (cards) => this.checkAnimalsB(cards)
+      },
+      INOSHIKAGAN: {
+        name: "Inoshikagan",
+        displayName: "Inoshikagan (Boar-Geese-Deer)",
+        description: "Clover Boar + Susuki Geese + Maple Deer",
+        penalty: 50,
+        check: (cards) => this.checkInoshikagan(cards)
       }
     };
   }
@@ -112,50 +112,29 @@ export class SakuraYaku {
   // ============================================================
 
   /**
-   * Sanko (Three Brights) - Any 3 of 4 brights (excluding Rainman)
+   * Drinking (Nomi) - Cherry Curtain + Susuki Moon + Chrysanthemum Cup
+   * Requires: March bright + August bright + September animal
    */
-  checkSanko(cards) {
-    const regularBrights = cards.filter(c =>
-      c.type === CARD_TYPES.BRIGHT && c.month !== 'November'
-    );
-    return regularBrights.length >= 3;
+  checkDrinking(cards) {
+    const hasCherryCurtain = cards.some(c => c.month === 'March' && c.type === CARD_TYPES.BRIGHT);
+    const hasSuskiMoon = cards.some(c => c.month === 'August' && c.type === CARD_TYPES.BRIGHT);
+    const hasChrysanthemumCup = cards.some(c => c.month === 'September' && c.type === CARD_TYPES.ANIMAL);
+    return hasCherryCurtain && hasSuskiMoon && hasChrysanthemumCup;
   }
 
   /**
-   * Shiko (Four Brights) - All 4 brights (excluding Rainman)
+   * Spring (Omote Sugawara) - Pine Crane + Plum Warbler + Cherry Curtain
+   * Requires: January bright + February animal + March bright
    */
-  checkShiko(cards) {
-    const regularBrights = cards.filter(c =>
-      c.type === CARD_TYPES.BRIGHT && c.month !== 'November'
-    );
-    return regularBrights.length === 4;
+  checkSpring(cards) {
+    const hasPineCrane = cards.some(c => c.month === 'January' && c.type === CARD_TYPES.BRIGHT);
+    const hasPlumWarbler = cards.some(c => c.month === 'February' && c.type === CARD_TYPES.ANIMAL);
+    const hasCherryCurtain = cards.some(c => c.month === 'March' && c.type === CARD_TYPES.BRIGHT);
+    return hasPineCrane && hasPlumWarbler && hasCherryCurtain;
   }
 
   /**
-   * Ame-Shiko (Rainy Four) - 3 regular brights + Rainman
-   */
-  checkAmeShiko(cards) {
-    const regularBrights = cards.filter(c =>
-      c.type === CARD_TYPES.BRIGHT && c.month !== 'November'
-    ).length;
-
-    const hasRainman = cards.some(c =>
-      c.month === 'November' && c.type === CARD_TYPES.BRIGHT
-    );
-
-    return regularBrights >= 3 && hasRainman;
-  }
-
-  /**
-   * Goko (Five Brights) - All 5 bright cards
-   */
-  checkGoko(cards) {
-    const allBrights = cards.filter(c => c.type === CARD_TYPES.BRIGHT);
-    return allBrights.length === 5;
-  }
-
-  /**
-   * Akatan (Red Poetry Ribbons) - Pine, Plum, Cherry ribbons
+   * Akatan (Red Poetry Ribbons) - January, February, March ribbons
    */
   checkAkatan(cards) {
     const redRibbonMonths = ['January', 'February', 'March'];
@@ -165,7 +144,7 @@ export class SakuraYaku {
   }
 
   /**
-   * Aotan (Blue Ribbons) - Peony, Chrysanthemum, Maple ribbons
+   * Aotan (Blue Ribbons) - June, September, October ribbons
    */
   checkAotan(cards) {
     const blueRibbonMonths = ['June', 'September', 'October'];
@@ -175,24 +154,47 @@ export class SakuraYaku {
   }
 
   /**
-   * Tanzaku (Plain Ribbons) - Any 3 of 4: Wisteria, Iris, Bush Clover, Willow
+   * Kusatan (Grass Ribbons) - Plain ribbons from April, May, July (excluding Willow)
    */
-  checkTanzaku(cards) {
-    const plainRibbonMonths = ['April', 'May', 'July', 'November'];
+  checkKusatan(cards) {
+    const plainRibbonMonths = ['April', 'May', 'July']; // NOT November
     const count = plainRibbonMonths.filter(month =>
       cards.some(c => c.month === month && c.type === CARD_TYPES.RIBBON)
     ).length;
-    return count >= 3;
+    return count === 3; // All 3 required
   }
 
   /**
-   * Ino-Shika-Cho (Boar-Deer-Butterfly) - Specific animal cards
+   * Animals A - Peony Butterfly + Chrysanthemum Cup + Maple Deer
+   * Requires: June animal + September animal + October animal
    */
-  checkInoShikaCho(cards) {
-    const requiredAnimals = ['July', 'October', 'June']; // Boar, Deer, Butterflies
-    return requiredAnimals.every(month =>
-      cards.some(c => c.month === month && c.type === CARD_TYPES.ANIMAL)
-    );
+  checkAnimalsA(cards) {
+    const hasPeonyButterfly = cards.some(c => c.month === 'June' && c.type === CARD_TYPES.ANIMAL);
+    const hasChrysanthemumCup = cards.some(c => c.month === 'September' && c.type === CARD_TYPES.ANIMAL);
+    const hasMapleDeer = cards.some(c => c.month === 'October' && c.type === CARD_TYPES.ANIMAL);
+    return hasPeonyButterfly && hasChrysanthemumCup && hasMapleDeer;
+  }
+
+  /**
+   * Animals B - Wisteria Cuckoo + Iris Bridge + Clover Boar
+   * Requires: April animal + May animal + July animal
+   */
+  checkAnimalsB(cards) {
+    const hasWisteriaCuckoo = cards.some(c => c.month === 'April' && c.type === CARD_TYPES.ANIMAL);
+    const hasIrisBridge = cards.some(c => c.month === 'May' && c.type === CARD_TYPES.ANIMAL);
+    const hasCloverBoar = cards.some(c => c.month === 'July' && c.type === CARD_TYPES.ANIMAL);
+    return hasWisteriaCuckoo && hasIrisBridge && hasCloverBoar;
+  }
+
+  /**
+   * Inoshikagan (Boar-Geese-Deer) - Clover Boar + Susuki Geese + Maple Deer
+   * Requires: July animal + August animal + October animal
+   */
+  checkInoshikagan(cards) {
+    const hasCloverBoar = cards.some(c => c.month === 'July' && c.type === CARD_TYPES.ANIMAL);
+    const hasSuskiGeese = cards.some(c => c.month === 'August' && c.type === CARD_TYPES.ANIMAL);
+    const hasMapleDeer = cards.some(c => c.month === 'October' && c.type === CARD_TYPES.ANIMAL);
+    return hasCloverBoar && hasSuskiGeese && hasMapleDeer;
   }
 
   // ============================================================
@@ -207,47 +209,37 @@ export class SakuraYaku {
   analyzeYakuProgress(cards) {
     const progress = {};
 
-    // Sanko progress
-    const regularBrights = cards.filter(c =>
-      c.type === CARD_TYPES.BRIGHT && c.month !== 'November'
-    );
-    if (regularBrights.length > 0 && regularBrights.length < 3) {
-      const haveSuits = regularBrights.map(c => c.month);
-      const needed = ['January', 'March', 'August', 'December']
-        .filter(m => !haveSuits.includes(m));
-      progress.SANKO = {
-        count: regularBrights.length,
-        needed: needed,
-        priority: (regularBrights.length / 3) * 100
+    // Drinking progress: March bright + August bright + September animal
+    const dinkingCards = {
+      march: cards.some(c => c.month === 'March' && c.type === CARD_TYPES.BRIGHT),
+      august: cards.some(c => c.month === 'August' && c.type === CARD_TYPES.BRIGHT),
+      september: cards.some(c => c.month === 'September' && c.type === CARD_TYPES.ANIMAL)
+    };
+    const drinkingCount = Object.values(dinkingCards).filter(v => v).length;
+    if (drinkingCount > 0 && drinkingCount < 3) {
+      progress.DRINKING = {
+        count: drinkingCount,
+        needed: Object.keys(dinkingCards).filter(k => !dinkingCards[k]),
+        priority: (drinkingCount / 3) * 100
       };
     }
 
-    // Shiko progress
-    if (regularBrights.length === 3) {
-      const haveSuits = regularBrights.map(c => c.month);
-      const needed = ['January', 'March', 'August', 'December']
-        .filter(m => !haveSuits.includes(m));
-      progress.SHIKO = {
-        count: regularBrights.length,
-        needed: needed,
-        priority: (regularBrights.length / 4) * 100
+    // Spring progress: January bright + February animal + March bright
+    const springCards = {
+      january: cards.some(c => c.month === 'January' && c.type === CARD_TYPES.BRIGHT),
+      february: cards.some(c => c.month === 'February' && c.type === CARD_TYPES.ANIMAL),
+      march: cards.some(c => c.month === 'March' && c.type === CARD_TYPES.BRIGHT)
+    };
+    const springCount = Object.values(springCards).filter(v => v).length;
+    if (springCount > 0 && springCount < 3) {
+      progress.SPRING = {
+        count: springCount,
+        needed: Object.keys(springCards).filter(k => !springCards[k]),
+        priority: (springCount / 3) * 100
       };
     }
 
-    // Ame-Shiko progress
-    const hasRainman = cards.some(c =>
-      c.month === 'November' && c.type === CARD_TYPES.BRIGHT
-    );
-    if (hasRainman && regularBrights.length > 0 && regularBrights.length < 3) {
-      progress.AME_SHIKO = {
-        count: regularBrights.length + 1,
-        needed: ['January', 'March', 'August', 'December']
-          .filter(m => !regularBrights.some(c => c.month === m)),
-        priority: ((regularBrights.length + 1) / 4) * 100
-      };
-    }
-
-    // Akatan progress
+    // Akatan progress: Red ribbons (January, February, March)
     const redRibbons = cards.filter(c =>
       ['January', 'February', 'March'].includes(c.month) &&
       c.type === CARD_TYPES.RIBBON
@@ -261,7 +253,7 @@ export class SakuraYaku {
       };
     }
 
-    // Aotan progress
+    // Aotan progress: Blue ribbons (June, September, October)
     const blueRibbons = cards.filter(c =>
       ['June', 'September', 'October'].includes(c.month) &&
       c.type === CARD_TYPES.RIBBON
@@ -275,31 +267,62 @@ export class SakuraYaku {
       };
     }
 
-    // Tanzaku progress
+    // Kusatan progress: Plain ribbons (April, May, July - NOT November)
     const plainRibbons = cards.filter(c =>
-      ['April', 'May', 'July', 'November'].includes(c.month) &&
+      ['April', 'May', 'July'].includes(c.month) &&
       c.type === CARD_TYPES.RIBBON
     );
     if (plainRibbons.length > 0 && plainRibbons.length < 3) {
-      progress.TANZAKU = {
+      progress.KUSATAN = {
         count: plainRibbons.length,
-        needed: ['April', 'May', 'July', 'November']
+        needed: ['April', 'May', 'July']
           .filter(m => !plainRibbons.some(c => c.month === m)),
         priority: (plainRibbons.length / 3) * 100
       };
     }
 
-    // Ino-Shika-Cho progress
-    const inoShikaChoAnimals = cards.filter(c =>
-      ['July', 'October', 'June'].includes(c.month) &&
-      c.type === CARD_TYPES.ANIMAL
-    );
-    if (inoShikaChoAnimals.length > 0 && inoShikaChoAnimals.length < 3) {
-      progress.INO_SHIKA_CHO = {
-        count: inoShikaChoAnimals.length,
-        needed: ['July', 'October', 'June']
-          .filter(m => !inoShikaChoAnimals.some(c => c.month === m)),
-        priority: (inoShikaChoAnimals.length / 3) * 100
+    // Animals A progress: June animal + September animal + October animal
+    const animalsA = {
+      june: cards.some(c => c.month === 'June' && c.type === CARD_TYPES.ANIMAL),
+      september: cards.some(c => c.month === 'September' && c.type === CARD_TYPES.ANIMAL),
+      october: cards.some(c => c.month === 'October' && c.type === CARD_TYPES.ANIMAL)
+    };
+    const animalsACount = Object.values(animalsA).filter(v => v).length;
+    if (animalsACount > 0 && animalsACount < 3) {
+      progress.ANIMALS_A = {
+        count: animalsACount,
+        needed: Object.keys(animalsA).filter(k => !animalsA[k]),
+        priority: (animalsACount / 3) * 100
+      };
+    }
+
+    // Animals B progress: April animal + May animal + July animal
+    const animalsB = {
+      april: cards.some(c => c.month === 'April' && c.type === CARD_TYPES.ANIMAL),
+      may: cards.some(c => c.month === 'May' && c.type === CARD_TYPES.ANIMAL),
+      july: cards.some(c => c.month === 'July' && c.type === CARD_TYPES.ANIMAL)
+    };
+    const animalsBCount = Object.values(animalsB).filter(v => v).length;
+    if (animalsBCount > 0 && animalsBCount < 3) {
+      progress.ANIMALS_B = {
+        count: animalsBCount,
+        needed: Object.keys(animalsB).filter(k => !animalsB[k]),
+        priority: (animalsBCount / 3) * 100
+      };
+    }
+
+    // Inoshikagan progress: July animal + August animal + October animal
+    const inoshikagan = {
+      july: cards.some(c => c.month === 'July' && c.type === CARD_TYPES.ANIMAL),
+      august: cards.some(c => c.month === 'August' && c.type === CARD_TYPES.ANIMAL),
+      october: cards.some(c => c.month === 'October' && c.type === CARD_TYPES.ANIMAL)
+    };
+    const inoshikaganCount = Object.values(inoshikagan).filter(v => v).length;
+    if (inoshikaganCount > 0 && inoshikaganCount < 3) {
+      progress.INOSHIKAGAN = {
+        count: inoshikaganCount,
+        needed: Object.keys(inoshikagan).filter(k => !inoshikagan[k]),
+        priority: (inoshikaganCount / 3) * 100
       };
     }
 

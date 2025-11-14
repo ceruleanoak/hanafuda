@@ -19,6 +19,13 @@ export class GameOptions {
       // Game Variations
       bombVariationEnabled: false,       // Enable bomb variation (multi-card play)
 
+      // Sakura Variations
+      chitsiobikiEnabled: false,         // Enable three-of-a-kind trade
+      victoryScoringEnabled: false,      // Count wins instead of cumulative points
+      basaChuEnabled: false,             // Enable Basa & Chu multipliers
+      bothPlayersScoreEnabled: false,    // Both players score (no penalties)
+      oibanaEnabled: false,              // Enable auction variant
+
       // AI Settings
       aiDifficulty: 'normal',            // 'normal' or 'advanced'
 

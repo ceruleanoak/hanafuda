@@ -150,12 +150,12 @@ export class Renderer {
     const pointValueOptions = gameState.isSakuraMode ? {
       enabled: true,
       getValue: (card) => {
-        // Sakura point values
+        // Sakura point values (corrected from KoiKoi defaults)
         const SAKURA_VALUES = {
-          'bright': 20,
-          'ribbon': 5,
-          'animal': 1,
-          'chaff': 0
+          'bright': 20,  // All bright cards = 20 points
+          'ribbon': 10,  // All ribbon cards = 10 points
+          'animal': 5,   // All animal cards = 5 points
+          'chaff': 0     // All chaff cards = 0 points
         };
         return SAKURA_VALUES[card.type] || 0;
       }
@@ -210,18 +210,36 @@ export class Renderer {
       this.drawDeckCount(topCard.x, topCard.y, gameState.deckCount);
     }
 
-    // Draw trick pile labels using fixed zone positions
-    const playerTrickConfig = LayoutManager.getZoneConfig('playerTrick', this.displayWidth, this.displayHeight);
-    const opponentTrickConfig = LayoutManager.getZoneConfig('opponentTrick', this.displayWidth, this.displayHeight);
+    // Draw trick pile labels using fixed zone positions (N-player support)
+    // Determine player count from card3DManager
+    const playerCount = card3DManager.playerCount || 2;
 
-    const playerTrickCards = card3DManager.getCardsInZone('playerTrick');
-    if (playerTrickCards.length > 0) {
-      this.drawTrickLabel(playerTrickConfig.position.x, playerTrickConfig.position.y, `Player: ${playerTrickCards.length}`, false);
-    }
+    if (playerCount === 2) {
+      // 2-player layout
+      const playerTrickConfig = LayoutManager.getZoneConfig('playerTrick', this.displayWidth, this.displayHeight);
+      const opponentTrickConfig = LayoutManager.getZoneConfig('opponentTrick', this.displayWidth, this.displayHeight);
 
-    const opponentTrickCards = card3DManager.getCardsInZone('opponentTrick');
-    if (opponentTrickCards.length > 0) {
-      this.drawTrickLabel(opponentTrickConfig.position.x, opponentTrickConfig.position.y, `Opponent: ${opponentTrickCards.length}`, true);
+      const playerTrickCards = card3DManager.getCardsInZone('playerTrick');
+      if (playerTrickCards.length > 0) {
+        this.drawTrickLabel(playerTrickConfig.position.x, playerTrickConfig.position.y, `Player: ${playerTrickCards.length}`, false);
+      }
+
+      const opponentTrickCards = card3DManager.getCardsInZone('opponentTrick');
+      if (opponentTrickCards.length > 0) {
+        this.drawTrickLabel(opponentTrickConfig.position.x, opponentTrickConfig.position.y, `Opponent: ${opponentTrickCards.length}`, true);
+      }
+    } else {
+      // N-player layout (3-4 players)
+      for (let i = 0; i < playerCount; i++) {
+        const trickZone = `player${i}Trick`;
+        const trickConfig = LayoutManager.getZoneConfig(trickZone, this.displayWidth, this.displayHeight, this.useAnimations);
+        const trickCards = card3DManager.getCardsInZone(trickZone);
+
+        if (trickCards.length > 0) {
+          const playerLabel = i === 0 ? 'You' : `P${i + 1}`;
+          this.drawTrickLabel(trickConfig.position.x, trickConfig.position.y, `${playerLabel}: ${trickCards.length}`, i !== 0);
+        }
+      }
     }
 
     // Draw yaku information
@@ -265,34 +283,59 @@ export class Renderer {
         this.drawAllCardsGrid(gameState);
       }
 
-      // Trick pile hover - use zone-based detection instead of card-based
+      // Trick pile hover - use zone-based detection instead of card-based (N-player support)
       // This allows hover to work even when no cards are visible or between cards
       const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
 
-      // Check if mouse is in player trick pile zone
-      const playerTrickZone = {
-        x: playerTrickConfig.position.x,
-        y: playerTrickConfig.position.y,
-        width: cardWidth + (4 * playerTrickConfig.fanOffset.x), // Account for fan spread
-        height: cardHeight + (4 * playerTrickConfig.fanOffset.y)
-      };
-      if (hoverX >= playerTrickZone.x && hoverX <= playerTrickZone.x + playerTrickZone.width &&
-          hoverY >= playerTrickZone.y && hoverY <= playerTrickZone.y + playerTrickZone.height &&
-          gameState.playerCaptured.length > 0) {
-        this.drawTricksList(gameState.playerCaptured, 'Player Tricks');
-      }
+      if (playerCount === 2) {
+        // 2-player trick pile hover
+        // Check if mouse is in player trick pile zone
+        const playerTrickZone = {
+          x: playerTrickConfig.position.x,
+          y: playerTrickConfig.position.y,
+          width: cardWidth + (4 * playerTrickConfig.fanOffset.x), // Account for fan spread
+          height: cardHeight + (4 * playerTrickConfig.fanOffset.y)
+        };
+        if (hoverX >= playerTrickZone.x && hoverX <= playerTrickZone.x + playerTrickZone.width &&
+            hoverY >= playerTrickZone.y && hoverY <= playerTrickZone.y + playerTrickZone.height &&
+            gameState.playerCaptured.length > 0) {
+          this.drawTricksList(gameState.playerCaptured, 'Player Tricks');
+        }
 
-      // Check if mouse is in opponent trick pile zone
-      const opponentTrickZone = {
-        x: opponentTrickConfig.position.x,
-        y: opponentTrickConfig.position.y,
-        width: cardWidth + (4 * opponentTrickConfig.fanOffset.x),
-        height: cardHeight + (4 * opponentTrickConfig.fanOffset.y)
-      };
-      if (hoverX >= opponentTrickZone.x && hoverX <= opponentTrickZone.x + opponentTrickZone.width &&
-          hoverY >= opponentTrickZone.y && hoverY <= opponentTrickZone.y + opponentTrickZone.height &&
-          gameState.opponentCaptured.length > 0) {
-        this.drawTricksList(gameState.opponentCaptured, 'Opponent Tricks');
+        // Check if mouse is in opponent trick pile zone
+        const opponentTrickZone = {
+          x: opponentTrickConfig.position.x,
+          y: opponentTrickConfig.position.y,
+          width: cardWidth + (4 * opponentTrickConfig.fanOffset.x),
+          height: cardHeight + (4 * opponentTrickConfig.fanOffset.y)
+        };
+        if (hoverX >= opponentTrickZone.x && hoverX <= opponentTrickZone.x + opponentTrickZone.width &&
+            hoverY >= opponentTrickZone.y && hoverY <= opponentTrickZone.y + opponentTrickZone.height &&
+            gameState.opponentCaptured.length > 0) {
+          this.drawTricksList(gameState.opponentCaptured, 'Opponent Tricks');
+        }
+      } else if (gameState.players) {
+        // N-player trick pile hover (3-4 players)
+        for (let i = 0; i < playerCount; i++) {
+          const trickZone = `player${i}Trick`;
+          const trickConfig = LayoutManager.getZoneConfig(trickZone, this.displayWidth, this.displayHeight);
+          const trickCards = card3DManager.getCardsInZone(trickZone);
+
+          if (trickCards.length > 0) {
+            const trickZoneRect = {
+              x: trickConfig.position.x,
+              y: trickConfig.position.y,
+              width: cardWidth + (4 * trickConfig.fanOffset.x),
+              height: cardHeight + (4 * trickConfig.fanOffset.y)
+            };
+
+            if (hoverX >= trickZoneRect.x && hoverX <= trickZoneRect.x + trickZoneRect.width &&
+                hoverY >= trickZoneRect.y && hoverY <= trickZoneRect.y + trickZoneRect.height) {
+              const playerLabel = i === 0 ? 'Your Tricks' : `Player ${i + 1} Tricks`;
+              this.drawTricksList(gameState.players[i].captured || [], playerLabel);
+            }
+          }
+        }
       }
     }
   }
@@ -331,34 +374,61 @@ export class Renderer {
   }
 
   /**
-   * Draw yaku info for 3D rendering
+   * Draw yaku info for 3D rendering (N-player support)
    */
   draw3DYakuInfo(gameState, card3DManager) {
-    // Use fixed zone positions instead of card positions
-    const playerTrickConfig = LayoutManager.getZoneConfig('playerTrick', this.displayWidth, this.displayHeight);
-    const opponentTrickConfig = LayoutManager.getZoneConfig('opponentTrick', this.displayWidth, this.displayHeight);
+    const playerCount = card3DManager.playerCount || 2;
 
-    const playerTrickCards = card3DManager.getCardsInZone('playerTrick');
-    const opponentTrickCards = card3DManager.getCardsInZone('opponentTrick');
+    if (playerCount === 2) {
+      // 2-player layout
+      const playerTrickConfig = LayoutManager.getZoneConfig('playerTrick', this.displayWidth, this.displayHeight);
+      const opponentTrickConfig = LayoutManager.getZoneConfig('opponentTrick', this.displayWidth, this.displayHeight);
 
-    if (playerTrickCards.length > 0) {
-      this.drawYakuList(
-        playerTrickConfig.position.x,
-        playerTrickConfig.position.y - 50,
-        gameState.playerYaku || [],
-        gameState.playerYakuProgress || [],
-        false
-      );
-    }
+      const playerTrickCards = card3DManager.getCardsInZone('playerTrick');
+      const opponentTrickCards = card3DManager.getCardsInZone('opponentTrick');
 
-    if (opponentTrickCards.length > 0) {
-      this.drawYakuList(
-        opponentTrickConfig.position.x,
-        opponentTrickConfig.position.y + 180,
-        gameState.opponentYaku || [],
-        gameState.opponentYakuProgress || [],
-        true
-      );
+      if (playerTrickCards.length > 0) {
+        this.drawYakuList(
+          playerTrickConfig.position.x,
+          playerTrickConfig.position.y - 50,
+          gameState.playerYaku || [],
+          gameState.playerYakuProgress || [],
+          false
+        );
+      }
+
+      if (opponentTrickCards.length > 0) {
+        this.drawYakuList(
+          opponentTrickConfig.position.x,
+          opponentTrickConfig.position.y + 180,
+          gameState.opponentYaku || [],
+          gameState.opponentYakuProgress || [],
+          true
+        );
+      }
+    } else {
+      // N-player layout (3-4 players)
+      // Use players array from gameState if available
+      if (gameState.players && Array.isArray(gameState.players)) {
+        gameState.players.forEach((player, index) => {
+          const trickZone = `player${index}Trick`;
+          const trickConfig = LayoutManager.getZoneConfig(trickZone, this.displayWidth, this.displayHeight, this.useAnimations);
+          const trickCards = card3DManager.getCardsInZone(trickZone);
+
+          if (trickCards.length > 0 && player.yaku && player.yaku.length > 0) {
+            // Position yaku info above or below trick pile depending on player position
+            const isOpponent = index !== 0;
+            const yOffset = isOpponent ? 180 : -50;
+            this.drawYakuList(
+              trickConfig.position.x,
+              trickConfig.position.y + yOffset,
+              player.yaku || [],
+              [], // No progress tracking for N-player yet
+              isOpponent
+            );
+          }
+        });
+      }
     }
   }
 

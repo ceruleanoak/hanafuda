@@ -7,20 +7,15 @@ import { LayoutManager } from './LayoutManager.js';
 import { debugLogger } from './DebugLogger.js';
 
 export class Card3DManager {
-  constructor(viewportWidth, viewportHeight) {
+  constructor(viewportWidth, viewportHeight, playerCount = 2) {
     this.viewportWidth = viewportWidth;
     this.viewportHeight = viewportHeight;
+    this.playerCount = playerCount; // Track player count for dynamic zone setup
 
     this.cards = new Map(); // cardId → Card3D
-    this.zoneCards = {
-      deck: new Set(),
-      drawnCard: new Set(), // Temporary zone for card drawn from deck
-      field: new Set(),
-      playerHand: new Set(),
-      opponentHand: new Set(),
-      playerTrick: new Set(),
-      opponentTrick: new Set()
-    };
+
+    // Initialize zones based on player count
+    this.zoneCards = this.initializeZones(playerCount);
 
     this.layoutManager = new LayoutManager();
     this.lastUpdateTime = performance.now();
@@ -32,6 +27,56 @@ export class Card3DManager {
 
     // Animation settings
     this.useAnimations = true;
+  }
+
+  /**
+   * Initialize zone structure based on player count
+   */
+  initializeZones(playerCount) {
+    const zones = {
+      deck: new Set(),
+      drawnCard: new Set(),
+      field: new Set()
+    };
+
+    if (playerCount === 2) {
+      zones.playerHand = new Set();
+      zones.opponentHand = new Set();
+      zones.playerTrick = new Set();
+      zones.opponentTrick = new Set();
+    } else if (playerCount === 3) {
+      zones.player0Hand = new Set();
+      zones.player1Hand = new Set();
+      zones.player2Hand = new Set();
+      zones.player0Trick = new Set();
+      zones.player1Trick = new Set();
+      zones.player2Trick = new Set();
+    } else if (playerCount === 4) {
+      zones.player0Hand = new Set();
+      zones.player1Hand = new Set();
+      zones.player2Hand = new Set();
+      zones.player3Hand = new Set();
+      zones.player0Trick = new Set();
+      zones.player1Trick = new Set();
+      zones.player2Trick = new Set();
+      zones.player3Trick = new Set();
+    }
+
+    return zones;
+  }
+
+  /**
+   * Update player count and reinitialize zones
+   */
+  setPlayerCount(playerCount) {
+    if (this.playerCount !== playerCount) {
+      this.playerCount = playerCount;
+      // Clear and reinitialize zones
+      Object.values(this.zoneCards).forEach(set => set.clear());
+      this.zoneCards = this.initializeZones(playerCount);
+      // Mark all zones dirty
+      Object.keys(this.zoneCards).forEach(zone => this.dirtyZones.add(zone));
+    }
   }
 
   /**
@@ -57,23 +102,42 @@ export class Card3DManager {
 
   /**
    * Initialize all cards from game state
+   * Supports both 2-player and N-player formats
    */
   initializeFromGameState(gameState, isNewGame = false) {
     debugLogger.log('3dCards', '🎴 Initializing Card3D system from game state', null);
+
+    // Detect and set player count if using N-player format
+    if (gameState.players && Array.isArray(gameState.players)) {
+      this.setPlayerCount(gameState.players.length);
+    }
 
     // Clear existing
     this.cards.clear();
     Object.values(this.zoneCards).forEach(set => set.clear());
 
-    // Gather all cards from game state
-    const cardSources = [
-      { cards: gameState.deck?.cards || [], zone: 'deck' },
-      { cards: gameState.field || [], zone: 'field' },
-      { cards: gameState.playerHand || [], zone: 'playerHand' },
-      { cards: gameState.opponentHand || [], zone: 'opponentHand' },
-      { cards: gameState.playerCaptured || [], zone: 'playerTrick' },
-      { cards: gameState.opponentCaptured || [], zone: 'opponentTrick' }
-    ];
+    // Build card sources based on format
+    let cardSources = [];
+
+    if (gameState.players && Array.isArray(gameState.players)) {
+      // N-player format (3-4 players)
+      cardSources.push({ cards: gameState.deck?.cards || [], zone: 'deck' });
+      cardSources.push({ cards: gameState.field || [], zone: 'field' });
+      gameState.players.forEach((player, index) => {
+        cardSources.push({ cards: player.hand || [], zone: `player${index}Hand` });
+        cardSources.push({ cards: player.captured || [], zone: `player${index}Trick` });
+      });
+    } else {
+      // 2-player format (legacy)
+      cardSources = [
+        { cards: gameState.deck?.cards || [], zone: 'deck' },
+        { cards: gameState.field || [], zone: 'field' },
+        { cards: gameState.playerHand || [], zone: 'playerHand' },
+        { cards: gameState.opponentHand || [], zone: 'opponentHand' },
+        { cards: gameState.playerCaptured || [], zone: 'playerTrick' },
+        { cards: gameState.opponentCaptured || [], zone: 'opponentTrick' }
+      ];
+    }
 
     let totalCards = 0;
     cardSources.forEach(({ cards, zone }) => {
@@ -91,14 +155,25 @@ export class Card3DManager {
       });
     });
 
-    debugLogger.log('3dCards', `✅ Initialized ${totalCards} Card3D objects`, {
-      deck: this.zoneCards.deck.size,
-      field: this.zoneCards.field.size,
-      playerHand: this.zoneCards.playerHand.size,
-      opponentHand: this.zoneCards.opponentHand.size,
-      playerTrick: this.zoneCards.playerTrick.size,
-      opponentTrick: this.zoneCards.opponentTrick.size
-    });
+    // Build debug log info based on format
+    const debugInfo = {
+      deck: this.zoneCards.deck?.size || 0,
+      field: this.zoneCards.field?.size || 0
+    };
+
+    if (this.playerCount === 2) {
+      debugInfo.playerHand = this.zoneCards.playerHand?.size || 0;
+      debugInfo.opponentHand = this.zoneCards.opponentHand?.size || 0;
+      debugInfo.playerTrick = this.zoneCards.playerTrick?.size || 0;
+      debugInfo.opponentTrick = this.zoneCards.opponentTrick?.size || 0;
+    } else {
+      for (let i = 0; i < this.playerCount; i++) {
+        debugInfo[`player${i}Hand`] = this.zoneCards[`player${i}Hand`]?.size || 0;
+        debugInfo[`player${i}Trick`] = this.zoneCards[`player${i}Trick`]?.size || 0;
+      }
+    }
+
+    debugLogger.log('3dCards', `✅ Initialized ${totalCards} Card3D objects`, debugInfo);
 
     // Initial layout for all zones
     Object.keys(this.zoneCards).forEach(zone => {
@@ -183,6 +258,11 @@ export class Card3DManager {
     // Store current game state for use in layout calculations
     this.currentGameState = gameState;
 
+    // Detect and set player count from gameState if using N-player format
+    if (gameState.players && Array.isArray(gameState.players)) {
+      this.setPlayerCount(gameState.players.length);
+    }
+
     // Build current zone mapping from game state
     const currentMapping = this.buildZoneMapping(gameState);
 
@@ -205,6 +285,7 @@ export class Card3DManager {
 
   /**
    * Build mapping of cardId → zoneName from game state
+   * Uses the playerCount already set in this.playerCount to determine zone names
    */
   buildZoneMapping(gameState) {
     const mapping = new Map();
@@ -223,10 +304,31 @@ export class Card3DManager {
     }
 
     addCards(gameState.field, 'field');
-    addCards(gameState.playerHand, 'playerHand');
-    addCards(gameState.opponentHand, 'opponentHand');
-    addCards(gameState.playerCaptured, 'playerTrick');
-    addCards(gameState.opponentCaptured, 'opponentTrick');
+
+    // Use playerCount to determine which zone names to use
+    if (this.playerCount === 2) {
+      // 2-player uses legacy zone names (playerHand/opponentHand)
+      // Support both old format (direct properties) and new format (players array)
+      if (gameState.players && Array.isArray(gameState.players)) {
+        addCards(gameState.players[0].hand, 'playerHand');
+        addCards(gameState.players[1].hand, 'opponentHand');
+        addCards(gameState.players[0].captured, 'playerTrick');
+        addCards(gameState.players[1].captured, 'opponentTrick');
+      } else {
+        addCards(gameState.playerHand, 'playerHand');
+        addCards(gameState.opponentHand, 'opponentHand');
+        addCards(gameState.playerCaptured, 'playerTrick');
+        addCards(gameState.opponentCaptured, 'opponentTrick');
+      }
+    } else {
+      // N-player format uses indexed zone names (player0Hand, player1Hand, etc.)
+      gameState.players.forEach((player, index) => {
+        const handZone = `player${index}Hand`;
+        const trickZone = `player${index}Trick`;
+        addCards(player.hand, handZone);
+        addCards(player.captured, trickZone);
+      });
+    }
 
     return mapping;
   }
@@ -339,8 +441,10 @@ export class Card3DManager {
       return; // Skip normal layout calculation
     }
 
-    // Get zone configuration
-    const config = LayoutManager.getZoneConfig(zone, this.viewportWidth, this.viewportHeight, this.useAnimations);
+    // Get zone configuration - pass playerCount for N-player layout support
+    // Try to get all configs for this player count, then access specific zone
+    const allConfigs = LayoutManager.getZoneConfig(this.playerCount, this.viewportWidth, this.viewportHeight);
+    const config = allConfigs[zone] || LayoutManager.getZoneConfig(zone, this.viewportWidth, this.viewportHeight, this.useAnimations);
 
     // Convert set to array for layout calculation
     const cards = Array.from(zoneSet);

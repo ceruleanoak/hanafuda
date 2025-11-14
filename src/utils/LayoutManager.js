@@ -177,13 +177,37 @@ export class LayoutManager {
 
   /**
    * Get zone configuration for a given zone name and viewport dimensions
+   * Supports N-player layouts (2, 3, or 4 players)
+   *
+   * @param {string|number} zoneOrPlayerCount - Zone name (string) OR playerCount for batch initialization
+   * @param {number} viewportWidth - Viewport width
+   * @param {number} viewportHeight - Viewport height
+   * @param {boolean|number} useAnimationsOrPlayerCount - useAnimations flag OR playerCount
+   * @returns {Object|Map} Single zone config or all zone configs for player count
    */
-  static getZoneConfig(zoneName, viewportWidth, viewportHeight, useAnimations = true) {
+  static getZoneConfig(zoneOrPlayerCount, viewportWidth, viewportHeight, useAnimationsOrPlayerCount = true) {
+    // Handle new signature: getZoneConfig(zoneName, width, height, playerCount, useAnimations)
+    // Detect if called with playerCount as 3rd or 4th parameter
+    let zoneName = zoneOrPlayerCount;
+    let playerCount = 2; // Default
+    let useAnimations = useAnimationsOrPlayerCount === true ? true : (typeof useAnimationsOrPlayerCount === 'boolean' ? useAnimationsOrPlayerCount : true);
+
+    // If zoneOrPlayerCount is a number, it's a playerCount request
+    if (typeof zoneOrPlayerCount === 'number' && zoneOrPlayerCount !== viewportWidth) {
+      playerCount = zoneOrPlayerCount;
+      zoneName = null; // Will return all configs
+    } else if (typeof viewportHeight === 'number' && typeof useAnimationsOrPlayerCount === 'number') {
+      // Called as getZoneConfig(zoneName, width, height, playerCount)
+      playerCount = useAnimationsOrPlayerCount;
+      useAnimations = true;
+    }
+
     const centerX = viewportWidth / 2;
     const centerY = viewportHeight / 2;
     const margin = 30;
 
-    const configs = {
+    // Base configs shared across all modes
+    const baseConfigs = {
       deck: {
         type: 'stack',
         position: { x: margin + 50, y: centerY },
@@ -211,50 +235,219 @@ export class LayoutManager {
         useFixedPositions: true,
         faceUp: 1,
         renderLayer: 3
-      },
-
-      playerHand: {
-        type: 'row',
-        anchorPoint: { x: 50, y: viewportHeight - 170 },
-        centerX: centerX,
-        spacing: 115,
-        maxCards: 8,
-        faceUp: 1,
-        renderLayer: 5,
-        hoverLift: 20
-      },
-
-      opponentHand: {
-        type: 'row',
-        anchorPoint: { x: 50, y: 40 },
-        centerX: centerX,
-        spacing: 115,
-        maxCards: 8,
-        faceUp: 0,
-        renderLayer: 5
-      },
-
-      playerTrick: {
-        type: 'fan',
-        // Align to right edge: cardWidth (100) + fan spread (4 * 8 = 32) + margin (30) = 162
-        position: { x: viewportWidth - 162, y: viewportHeight - 170 },
-        fanOffset: { x: 8, y: 8, z: 2 },
-        maxVisible: 5,
-        faceUp: 1,
-        renderLayer: 2
-      },
-
-      opponentTrick: {
-        type: 'fan',
-        // Align to right edge: cardWidth (100) + fan spread (4 * 8 = 32) + margin (30) = 162
-        position: { x: viewportWidth - 162, y: 40 },
-        fanOffset: { x: 8, y: 8, z: 2 },
-        maxVisible: 5,
-        faceUp: 1,
-        renderLayer: 2
       }
     };
 
-    return configs[zoneName] || configs.field;
+    // Generate configs based on player count
+    const getPlayerHandConfigs = () => {
+      if (playerCount === 2) {
+        return {
+          playerHand: {
+            type: 'row',
+            anchorPoint: { x: 50, y: viewportHeight - 170 },
+            centerX: centerX,
+            spacing: 115,
+            maxCards: 8,
+            faceUp: 1,
+            renderLayer: 5,
+            hoverLift: 20
+          },
+          opponentHand: {
+            type: 'row',
+            anchorPoint: { x: 50, y: 40 },
+            centerX: centerX,
+            spacing: 115,
+            maxCards: 8,
+            faceUp: 0,
+            renderLayer: 5
+          },
+          playerTrick: {
+            type: 'fan',
+            position: { x: viewportWidth - 162, y: viewportHeight - 170 },
+            fanOffset: { x: 8, y: 8, z: 2 },
+            maxVisible: 5,
+            faceUp: 1,
+            renderLayer: 2
+          },
+          opponentTrick: {
+            type: 'fan',
+            position: { x: viewportWidth - 162, y: 40 },
+            fanOffset: { x: 8, y: 8, z: 2 },
+            maxVisible: 5,
+            faceUp: 1,
+            renderLayer: 2
+          }
+        };
+      } else if (playerCount === 3) {
+        // 3-Player Layout: P0 bottom, P1 top-left, P2 top-right
+        return {
+          player0Hand: {
+            type: 'row',
+            anchorPoint: { x: 50, y: viewportHeight - 170 },
+            centerX: centerX,
+            spacing: 115,
+            maxCards: 7,
+            faceUp: 1,
+            renderLayer: 5,
+            hoverLift: 20
+          },
+          player1Hand: {
+            type: 'fan',
+            position: { x: 150, y: 100 },
+            fanOffset: { x: 8, y: -8, z: 2 },
+            maxVisible: 5,
+            faceUp: 0,
+            renderLayer: 5
+          },
+          player2Hand: {
+            type: 'fan',
+            position: { x: viewportWidth - 150, y: 100 },
+            fanOffset: { x: -8, y: -8, z: 2 },
+            maxVisible: 5,
+            faceUp: 0,
+            renderLayer: 5
+          },
+          player0Trick: {
+            type: 'fan',
+            position: { x: viewportWidth - 162, y: viewportHeight - 170 },
+            fanOffset: { x: 8, y: 8, z: 2 },
+            maxVisible: 5,
+            faceUp: 1,
+            renderLayer: 2
+          },
+          player1Trick: {
+            type: 'fan',
+            position: { x: margin + 50, y: 150 },
+            fanOffset: { x: 8, y: -8, z: 2 },
+            maxVisible: 4,
+            faceUp: 1,
+            renderLayer: 2
+          },
+          player2Trick: {
+            type: 'fan',
+            position: { x: viewportWidth - margin - 50, y: 150 },
+            fanOffset: { x: -8, y: -8, z: 2 },
+            maxVisible: 4,
+            faceUp: 1,
+            renderLayer: 2
+          }
+        };
+      } else if (playerCount === 4) {
+        // 4-Player Layout: P0 bottom, P1 left, P2 top, P3 right (table-clockwise)
+        return {
+          player0Hand: {
+            type: 'row',
+            anchorPoint: { x: 50, y: viewportHeight - 170 },
+            centerX: centerX,
+            spacing: 115,
+            maxCards: 5,
+            faceUp: 1,
+            renderLayer: 5,
+            hoverLift: 20
+          },
+          player1Hand: {
+            type: 'fan',
+            position: { x: 80, y: centerY },
+            fanOffset: { x: 8, y: 8, z: 2 },
+            maxVisible: 5,
+            faceUp: 0,
+            renderLayer: 5
+          },
+          player2Hand: {
+            type: 'row',
+            anchorPoint: { x: 50, y: 100 },
+            centerX: centerX,
+            spacing: 115,
+            maxCards: 5,
+            faceUp: 0,
+            renderLayer: 5
+          },
+          player3Hand: {
+            type: 'fan',
+            position: { x: viewportWidth - 80, y: centerY },
+            fanOffset: { x: -8, y: 8, z: 2 },
+            maxVisible: 5,
+            faceUp: 0,
+            renderLayer: 5
+          },
+          player0Trick: {
+            type: 'fan',
+            position: { x: viewportWidth - 162, y: viewportHeight - 170 },
+            fanOffset: { x: 8, y: 8, z: 2 },
+            maxVisible: 5,
+            faceUp: 1,
+            renderLayer: 2
+          },
+          player1Trick: {
+            type: 'fan',
+            position: { x: 80, y: viewportHeight - 100 },
+            fanOffset: { x: 8, y: -8, z: 2 },
+            maxVisible: 4,
+            faceUp: 1,
+            renderLayer: 2
+          },
+          player2Trick: {
+            type: 'fan',
+            position: { x: viewportWidth - 162, y: 80 },
+            fanOffset: { x: -8, y: 8, z: 2 },
+            maxVisible: 4,
+            faceUp: 1,
+            renderLayer: 2
+          },
+          player3Trick: {
+            type: 'fan',
+            position: { x: viewportWidth - 80, y: viewportHeight - 100 },
+            fanOffset: { x: -8, y: -8, z: 2 },
+            maxVisible: 4,
+            faceUp: 1,
+            renderLayer: 2
+          }
+        };
+      }
+    };
+
+    const handConfigs = getPlayerHandConfigs();
+    const allConfigs = { ...baseConfigs, ...handConfigs };
+
+    // Return specific zone or all configs
+    return allConfigs[zoneName] || allConfigs;
+  }
+
+  /**
+   * Helper: Get all zone names for a given player count
+   */
+  static getZoneNamesForPlayerCount(playerCount) {
+    const baseZones = ['deck', 'drawnCard', 'field'];
+
+    if (playerCount === 2) {
+      return [...baseZones, 'playerHand', 'opponentHand', 'playerTrick', 'opponentTrick'];
+    } else if (playerCount === 3) {
+      return [...baseZones, 'player0Hand', 'player1Hand', 'player2Hand', 'player0Trick', 'player1Trick', 'player2Trick'];
+    } else if (playerCount === 4) {
+      return [...baseZones, 'player0Hand', 'player1Hand', 'player2Hand', 'player3Hand', 'player0Trick', 'player1Trick', 'player2Trick', 'player3Trick'];
+    }
+
+    return baseZones;
+  }
+
+  /**
+   * Helper: Convert 2-player zone names to N-player names
+   * playerHand → player0Hand, opponentHand → player1Hand, etc.
+   */
+  static getZoneName(zoneOrIndex, playerIndex = null) {
+    if (typeof zoneOrIndex === 'number') {
+      // Called with playerIndex only - return hand and trick zones
+      return [`player${zoneOrIndex}Hand`, `player${zoneOrIndex}Trick`];
+    }
+
+    // Legacy zone name conversion
+    const legacyMap = {
+      'playerHand': 'player0Hand',
+      'opponentHand': 'player1Hand',
+      'playerTrick': 'player0Trick',
+      'opponentTrick': 'player1Trick'
+    };
+
+    return legacyMap[zoneOrIndex] || zoneOrIndex;
   }
 }

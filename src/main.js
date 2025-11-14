@@ -49,6 +49,9 @@ class Game {
     this.currentGameMode = localStorage.getItem('currentGameMode') || 'koikoi'; // 'koikoi', 'sakura', 'match', or 'shop'
     this.gameModeSelect = document.getElementById('game-mode-select');
 
+    // Player count for Sakura (used in multi-player setup)
+    this.selectedPlayerCount = 2; // Default: 2 players
+
     // Initialize all game types
     this.koikoiGame = new KoiKoi(this.gameOptions);
     this.koikoiGame.setUICallback((yaku, score) => this.showKoikoiDecision(yaku, score));
@@ -316,7 +319,24 @@ class Game {
     document.querySelectorAll('.round-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const rounds = parseInt(e.target.dataset.rounds);
-        this.startNewGame(rounds);
+        this.startNewGame(rounds, this.selectedPlayerCount || 2);
+      });
+    });
+
+    // Sakura player count buttons
+    document.querySelectorAll('.player-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const players = parseInt(e.target.dataset.players);
+        this.selectedPlayerCount = players;
+        this.showRoundSelection();
+
+        // Show/hide team info
+        const teamInfo = document.getElementById('sakura-team-info');
+        if (players === 4) {
+          teamInfo.style.display = 'block';
+        } else {
+          teamInfo.style.display = 'none';
+        }
       });
     });
 
@@ -359,6 +379,34 @@ class Game {
       }
     });
 
+    // Sakura variations
+    const sakuraVariations = ['chitsiobiki', 'victory-scoring', 'basa-chu', 'both-players-score', 'oibana'];
+    sakuraVariations.forEach(variationId => {
+      const element = document.getElementById(`${variationId}-enabled`);
+      if (element) {
+        element.addEventListener('change', (e) => {
+          const optionKey = variationId.split('-').map((word, i) =>
+            i === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1)
+          ).join('') + 'Enabled';
+
+          this.gameOptions.set(optionKey, e.target.checked);
+          this.game.updateOptions(this.gameOptions);
+          this.updateVariationsButtonState();
+
+          // Reset game when variation is toggled
+          if (confirm('Changing variations will reset the current game. Continue?')) {
+            this.showRoundModal();
+          } else {
+            // Revert the change
+            e.target.checked = !e.target.checked;
+            this.gameOptions.set(optionKey, e.target.checked);
+            this.game.updateOptions(this.gameOptions);
+            this.updateVariationsButtonState();
+          }
+        });
+      }
+    });
+
     // Match options modal buttons
     document.getElementById('match-options-start').addEventListener('click', () => this.startMatchGame());
     document.getElementById('match-options-cancel').addEventListener('click', () => this.hideMatchOptionsModal());
@@ -391,7 +439,26 @@ class Game {
       return;
     }
 
+    // For Sakura, show player selection first
+    if (this.currentGameMode === 'sakura') {
+      document.getElementById('sakura-player-selection').style.display = 'block';
+      document.getElementById('round-selection').style.display = 'none';
+      this.selectedPlayerCount = null;
+    } else {
+      // For other games, hide player selection and show round selection
+      document.getElementById('sakura-player-selection').style.display = 'none';
+      document.getElementById('round-selection').style.display = 'block';
+    }
+
     this.roundModal.classList.add('show');
+  }
+
+  /**
+   * Show the round selection section (called after player count is selected in Sakura)
+   */
+  showRoundSelection() {
+    document.getElementById('sakura-player-selection').style.display = 'none';
+    document.getElementById('round-selection').style.display = 'block';
   }
 
   hideRoundModal() {
@@ -688,15 +755,15 @@ class Game {
     });
   }
 
-  startNewGame(rounds) {
+  startNewGame(rounds, playerCount) {
     this.hideRoundModal();
 
     if (this.currentGameMode === 'match') {
       // Match game doesn't use rounds - pass viewport dimensions
       this.game.startNewGame(false, this.renderer.displayWidth, this.renderer.displayHeight);
     } else if (this.currentGameMode === 'sakura') {
-      // Sakura uses rounds (default 6 rounds)
-      this.game.startNewGame(rounds || 6);
+      // Sakura uses rounds and playerCount (default 6 rounds, 2 players)
+      this.game.startNewGame(rounds || 6, playerCount || 2);
     } else {
       // Koi Koi uses rounds
       this.game.startNewGame(rounds);
@@ -1515,7 +1582,27 @@ class Game {
   showVariationsModal() {
     // Populate current values
     const options = this.gameOptions.getAll();
+    const isSakura = this.currentGameMode === 'sakura';
+
+    // Show/hide variations based on game mode
+    document.querySelectorAll('.koikoi-variation').forEach(el => {
+      el.style.display = isSakura ? 'none' : 'block';
+    });
+    document.querySelectorAll('.sakura-variation').forEach(el => {
+      el.style.display = isSakura ? 'block' : 'none';
+    });
+
+    // Populate Koi-Koi variations
     document.getElementById('bomb-variation-enabled').checked = options.bombVariationEnabled;
+
+    // Populate Sakura variations
+    if (isSakura) {
+      document.getElementById('chitsiobiki-enabled').checked = options.chitsiobikiEnabled || false;
+      document.getElementById('victory-scoring-enabled').checked = options.victoryScoringEnabled || false;
+      document.getElementById('basa-chu-enabled').checked = options.basaChuEnabled || false;
+      document.getElementById('both-players-score-enabled').checked = options.bothPlayersScoreEnabled || false;
+      document.getElementById('oibana-enabled').checked = options.oibanaEnabled || false;
+    }
 
     this.variationsModal.classList.add('show');
   }

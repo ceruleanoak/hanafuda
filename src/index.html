@@ -48,12 +48,30 @@
       <!-- Round Selection Modal -->
       <div id="round-modal" class="modal">
         <div class="modal-content">
-          <h2>Select Number of Rounds</h2>
-          <div class="modal-buttons">
-            <button class="round-btn" data-rounds="1">1 Round</button>
-            <button class="round-btn" data-rounds="3">3 Rounds</button>
-            <button class="round-btn" data-rounds="6">6 Rounds</button>
-            <button class="round-btn" data-rounds="12">12 Rounds</button>
+          <!-- Sakura Player Count Selection -->
+          <div id="sakura-player-selection" style="display: none;">
+            <h2>Select Number of Players</h2>
+            <p class="section-description">Choose how many players will participate (currently limited to 4 players max)</p>
+            <div class="modal-buttons">
+              <button class="player-btn" data-players="2">2 Players</button>
+              <button class="player-btn" data-players="3">3 Players</button>
+              <button class="player-btn" data-players="4">4 Players (Teams)</button>
+            </div>
+            <div id="sakura-team-info" style="display: none; margin-top: 15px; padding: 10px; background: #f0f0f0; border-radius: 5px; font-size: 0.9em;">
+              <strong>Team Mode (4 Players):</strong><br>
+              Players are automatically assigned to teams: You + AI 1 (opposite seats) vs AI 2 + AI 3. Teammates share score.
+            </div>
+          </div>
+
+          <!-- Round Selection (Common) -->
+          <div id="round-selection">
+            <h2>Select Number of Rounds</h2>
+            <div class="modal-buttons">
+              <button class="round-btn" data-rounds="1">1 Round</button>
+              <button class="round-btn" data-rounds="3">3 Rounds</button>
+              <button class="round-btn" data-rounds="6">6 Rounds</button>
+              <button class="round-btn" data-rounds="12">12 Rounds</button>
+            </div>
           </div>
         </div>
       </div>
@@ -174,7 +192,8 @@
           <p class="variations-description">Toggle special game variations. These are advanced house rules that change gameplay mechanics.</p>
 
           <div class="variations-list">
-            <div class="variation-item">
+            <!-- Koi-Koi Variations -->
+            <div class="variation-item koikoi-variation">
               <div class="variation-header">
                 <span class="variation-emoji">💣</span>
                 <h3>Bomb Variation</h3>
@@ -195,6 +214,113 @@
               </p>
               <label class="variation-toggle">
                 <input type="checkbox" id="bomb-variation-enabled">
+                <span class="toggle-label">Enable</span>
+              </label>
+            </div>
+
+            <!-- Sakura Variations -->
+            <div class="variation-item sakura-variation" style="display: none;">
+              <div class="variation-header">
+                <span class="variation-emoji">🏴</span>
+                <h3>Chitsiobiki (Three-of-a-Kind Trade)</h3>
+                <span class="variation-badge">House Rule</span>
+              </div>
+              <p class="variation-description">
+                <strong>How it works:</strong> If 3 cards of the same month appear on the field, trade one from your hand with one from the field, then play normally.
+              </p>
+              <p class="variation-how-to">
+                <strong>Rules:</strong><br>
+                • Only applies when exactly 3 of the same month are on field<br>
+                • Optional - you may decline the trade<br>
+                • AI players auto-accept beneficial trades
+              </p>
+              <label class="variation-toggle">
+                <input type="checkbox" id="chitsiobiki-enabled">
+                <span class="toggle-label">Enable</span>
+              </label>
+            </div>
+
+            <div class="variation-item sakura-variation" style="display: none;">
+              <div class="variation-header">
+                <span class="variation-emoji">🏆</span>
+                <h3>Victory Scoring</h3>
+                <span class="variation-badge">Variant</span>
+              </div>
+              <p class="variation-description">
+                <strong>How it works:</strong> Instead of cumulative points, count round victories. Winner is player with most round wins after all rounds.
+              </p>
+              <p class="variation-how-to">
+                <strong>Standard Mode:</strong> Cumulative points across all rounds<br>
+                <strong>Victory Mode:</strong> Count round wins only (highest score wins the round)
+              </p>
+              <label class="variation-toggle">
+                <input type="checkbox" id="victory-scoring-enabled">
+                <span class="toggle-label">Enable</span>
+              </label>
+            </div>
+
+            <div class="variation-item sakura-variation" style="display: none;">
+              <div class="variation-header">
+                <span class="variation-emoji">📈</span>
+                <h3>Basa & Chu Multipliers</h3>
+                <span class="variation-badge">Variant</span>
+              </div>
+              <p class="variation-description">
+                <strong>How it works:</strong> Bonus points for winning by large score margins (requires Victory Scoring mode).
+              </p>
+              <p class="variation-how-to">
+                <strong>Multipliers:</strong><br>
+                • Chu: +50 point margin = 2 wins<br>
+                • Basa: +100 point margin = 2 wins (or 3× with Chu enabled)
+              </p>
+              <p class="variation-status">
+                <strong>Note:</strong> Only applies when Victory Scoring is enabled.
+              </p>
+              <label class="variation-toggle">
+                <input type="checkbox" id="basa-chu-enabled">
+                <span class="toggle-label">Enable</span>
+              </label>
+            </div>
+
+            <div class="variation-item sakura-variation" style="display: none;">
+              <div class="variation-header">
+                <span class="variation-emoji">💰</span>
+                <h3>Both Players Score</h3>
+                <span class="variation-badge">Variant</span>
+              </div>
+              <p class="variation-description">
+                <strong>How it works:</strong> Remove the yaku penalty system - both players score their card values and any yaku bonuses.
+              </p>
+              <p class="variation-how-to">
+                <strong>Standard:</strong> Yaku subtract 50 points from opponent per yaku<br>
+                <strong>Variant:</strong> Yaku award bonus points to player (no penalties)
+              </p>
+              <label class="variation-toggle">
+                <input type="checkbox" id="both-players-score-enabled">
+                <span class="toggle-label">Enable</span>
+              </label>
+            </div>
+
+            <div class="variation-item sakura-variation" style="display: none;">
+              <div class="variation-header">
+                <span class="variation-emoji">🎲</span>
+                <h3>Oi-bana (Auction)</h3>
+                <span class="variation-badge">Variant</span>
+              </div>
+              <p class="variation-description">
+                <strong>How it works:</strong> Special 2-player elimination format for 3-6 players via auction (currently limited to 4 players max).
+              </p>
+              <p class="variation-how-to">
+                <strong>Rules:</strong><br>
+                1. All players bid for the round<br>
+                2. Top 2 bidders play Sakura (others sit out)<br>
+                3. Winner collects bid amount from loser
+              </p>
+              <p class="variation-status">
+                <strong>Note:</strong> Experimental - requires multi-player mode enabled.
+              </p>
+              <label class="variation-toggle">
+                <input type="checkbox" id="oibana-enabled">
                 <span class="toggle-label">Enable</span>
               </label>
             </div>
