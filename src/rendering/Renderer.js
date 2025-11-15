@@ -255,8 +255,10 @@ export class Renderer {
       }
     }
 
-    // Draw yaku information
-    this.draw3DYakuInfo(gameState, card3DManager);
+    // Draw yaku information (trick progress) - only when Help is active
+    if (helpMode) {
+      this.draw3DYakuInfo(gameState, card3DManager);
+    }
 
     // Only show drawn/played card popups when 3D animations are disabled
     // When 3D animations are ON, cards are rendered in the 3D system instead

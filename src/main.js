@@ -2458,30 +2458,20 @@ class Game {
     }
 
     // Update scores - different calculation for Sakura vs Koi-Koi
-    // Only show scores when Help button is active
+    // Scores always displayed; trick progress text only shown when Help is active
     const roundText = state.totalRounds > 1 ? ` (Round ${state.currentRound}/${state.totalRounds})` : '';
     const helpActive = this.helpButton.classList.contains('active');
 
-    if (helpActive) {
-      // Help is ON - show scores
-      if (this.currentGameMode === 'sakura') {
-        // Sakura: Display accumulated points (basePoints) + match score
-        const playerTotal = (state.playerBasePoints || 0) + (state.playerMatchScore || 0);
-        const opponentTotal = (state.opponentBasePoints || 0) + (state.opponentMatchScore || 0);
-        this.playerScoreElement.textContent = playerTotal + roundText;
-        this.opponentScoreElement.textContent = opponentTotal;
-      } else {
-        // Koi-Koi: Display cumulative scores
-        this.playerScoreElement.textContent = (state.playerScore || 0) + roundText;
-        this.opponentScoreElement.textContent = (state.opponentScore || 0);
-      }
-      // Make sure score display is visible
-      this.playerScoreElement.style.display = 'block';
-      this.opponentScoreElement.style.display = 'block';
+    if (this.currentGameMode === 'sakura') {
+      // Sakura: Display accumulated points (basePoints) + match score
+      const playerTotal = (state.playerBasePoints || 0) + (state.playerMatchScore || 0);
+      const opponentTotal = (state.opponentBasePoints || 0) + (state.opponentMatchScore || 0);
+      this.playerScoreElement.textContent = playerTotal + roundText;
+      this.opponentScoreElement.textContent = opponentTotal;
     } else {
-      // Help is OFF - hide scores
-      this.playerScoreElement.style.display = 'none';
-      this.opponentScoreElement.style.display = 'none';
+      // Koi-Koi: Display cumulative scores
+      this.playerScoreElement.textContent = (state.playerScore || 0) + roundText;
+      this.opponentScoreElement.textContent = (state.opponentScore || 0);
     }
 
     // Update instructions and log if message changed
@@ -3039,7 +3029,7 @@ class Game {
         // Render
         try {
           const renderOptions = {
-            helpMode: this.helpMode,
+            helpMode: this.helpButton.classList.contains('active'),
             hoverX: this.hoverX,
             hoverY: this.hoverY,
             isModalVisible: this.koikoiModal.classList.contains('show'),
