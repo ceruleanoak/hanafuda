@@ -23,14 +23,13 @@ class Game {
     this.canvas = document.getElementById('game-canvas');
     this.statusElement = document.getElementById('game-status');
     this.instructionsElement = document.getElementById('instructions');
-    this.playerScoreElement = document.getElementById('player-score');
-    this.opponentScoreElement = document.getElementById('opponent-score');
+    this.scoreDisplayElement = document.getElementById('score-display');
+    this.scoreContainer = document.getElementById('score');
     this.newGameButton = document.getElementById('new-game-btn');
     this.helpButton = document.getElementById('help-btn');
     this.variationsButton = document.getElementById('variations-btn');
     this.cardBackButton = document.getElementById('card-back-btn');
     this.optionsButton = document.getElementById('options-btn');
-    this.test3DButton = document.getElementById('test-3d-btn');
     this.animationTesterButton = document.getElementById('animation-tester-btn');
     this.roundModal = document.getElementById('round-modal');
     this.variationsModal = document.getElementById('variations-modal');
@@ -308,9 +307,6 @@ class Game {
 
     // Options button
     this.optionsButton.addEventListener('click', () => this.showOptionsModal());
-
-    // Test 3D animation button
-    this.test3DButton.addEventListener('click', () => this.playRandomShowcaseAnimation());
 
     // Animation tester button
     this.animationTesterButton.addEventListener('click', () => this.showAnimationTester());
@@ -798,7 +794,6 @@ class Game {
       // Hide Koi Koi specific UI elements
       document.getElementById('score').style.display = 'none';
       document.getElementById('variations-btn').style.display = 'none';
-      document.getElementById('test-3d-btn').style.display = 'none';
 
       // Keep options button visible but change its behavior
       document.getElementById('options-btn').style.display = 'inline-block';
@@ -812,7 +807,6 @@ class Game {
       // Hide score display for shop mode
       document.getElementById('score').style.display = 'none';
       document.getElementById('variations-btn').style.display = 'none';
-      document.getElementById('test-3d-btn').style.display = 'inline-block';
 
       // Update instructions
       this.instructionsElement.textContent = 'Achieve your bonus chance!';
@@ -823,7 +817,6 @@ class Game {
       document.getElementById('score').style.display = 'flex';
       document.getElementById('options-btn').style.display = 'inline-block';
       document.getElementById('variations-btn').style.display = 'none';
-      document.getElementById('test-3d-btn').style.display = 'inline-block';
 
       // Update instructions
       this.instructionsElement.textContent = 'Sakura (Hawaiian Hanafuda) - Click cards to select them';
@@ -834,7 +827,6 @@ class Game {
       document.getElementById('score').style.display = 'flex';
       document.getElementById('options-btn').style.display = 'inline-block';
       document.getElementById('variations-btn').style.display = 'inline-block';
-      document.getElementById('test-3d-btn').style.display = 'inline-block';
 
       // Update instructions
       this.instructionsElement.textContent = 'Click cards to select them';
@@ -2421,6 +2413,76 @@ class Game {
     });
   }
 
+  /**
+   * Dynamically update score display for 2P, 3P, and 4P modes
+   */
+  updateScoreDisplay(state) {
+    const roundText = state.totalRounds > 1 ? ` (Round ${state.currentRound}/${state.totalRounds})` : '';
+
+    // Determine player count and teams mode from state or game instance
+    const playerCount = state.playerCount || this.selectedPlayerCount || 2;
+    const isTeamsMode = state.isTeamsMode || this.isTeamsMode || false;
+
+    // Update data attributes
+    this.scoreContainer.setAttribute('data-player-count', playerCount);
+    this.scoreContainer.setAttribute('data-teams-mode', isTeamsMode);
+
+    // Clear existing score elements
+    this.scoreDisplayElement.innerHTML = '';
+
+    if (this.currentGameMode === 'sakura') {
+      // Sakura: Use players array and calculate totals
+      if (state.players && state.players.length > 0) {
+        if (isTeamsMode && playerCount === 4) {
+          // Teams mode: Group players into Team 1 and Team 2
+          // Team 1: Players 0 + 2 (You + Ally), Team 2: Players 1 + 3 (Opponents)
+          const team1Score = (state.players[0].basePoints || 0) + (state.players[0].matchScore || 0) +
+                            (state.players[2].basePoints || 0) + (state.players[2].matchScore || 0);
+          const team2Score = (state.players[1].basePoints || 0) + (state.players[1].matchScore || 0) +
+                            (state.players[3].basePoints || 0) + (state.players[3].matchScore || 0);
+
+          const team1Span = document.createElement('span');
+          team1Span.innerHTML = `Team 1: <strong>${team1Score + roundText}</strong>`;
+          this.scoreDisplayElement.appendChild(team1Span);
+
+          const team2Span = document.createElement('span');
+          team2Span.innerHTML = `Team 2: <strong>${team2Score}</strong>`;
+          this.scoreDisplayElement.appendChild(team2Span);
+        } else {
+          // Individual players: 2P, 3P, or 4P Competitive
+          state.players.forEach((player, index) => {
+            const total = (player.basePoints || 0) + (player.matchScore || 0);
+            const label = this.getPlayerLabel(index, playerCount, false);
+            const scoreText = index === 0 ? total + roundText : total.toString();
+            const span = document.createElement('span');
+            span.innerHTML = `${label}: <strong>${scoreText}</strong>`;
+            this.scoreDisplayElement.appendChild(span);
+          });
+        }
+      }
+    } else {
+      // Koi-Koi: Use legacy 2-player score fields (only valid for 2P)
+      const playerScore = (state.playerScore || 0) + roundText;
+      const opponentScore = (state.opponentScore || 0);
+
+      const playerSpan = document.createElement('span');
+      playerSpan.innerHTML = `Player: <strong>${playerScore}</strong>`;
+      this.scoreDisplayElement.appendChild(playerSpan);
+
+      const opponentSpan = document.createElement('span');
+      opponentSpan.innerHTML = `Opponent: <strong>${opponentScore}</strong>`;
+      this.scoreDisplayElement.appendChild(opponentSpan);
+    }
+  }
+
+  /**
+   * Get player label based on player index (for non-teams mode)
+   */
+  getPlayerLabel(index, playerCount, isTeamsMode) {
+    if (index === 0) return 'Player';
+    return `Opponent ${index}`;
+  }
+
   updateUI() {
     // For Match Game, pass current viewport dimensions for position scaling
     const state = this.currentGameMode === 'match'
@@ -2459,20 +2521,7 @@ class Game {
 
     // Update scores - different calculation for Sakura vs Koi-Koi
     // Scores always displayed; trick progress text only shown when Help is active
-    const roundText = state.totalRounds > 1 ? ` (Round ${state.currentRound}/${state.totalRounds})` : '';
-    const helpActive = this.helpButton.classList.contains('active');
-
-    if (this.currentGameMode === 'sakura') {
-      // Sakura: Display accumulated points (basePoints) + match score
-      const playerTotal = (state.playerBasePoints || 0) + (state.playerMatchScore || 0);
-      const opponentTotal = (state.opponentBasePoints || 0) + (state.opponentMatchScore || 0);
-      this.playerScoreElement.textContent = playerTotal + roundText;
-      this.opponentScoreElement.textContent = opponentTotal;
-    } else {
-      // Koi-Koi: Display cumulative scores
-      this.playerScoreElement.textContent = (state.playerScore || 0) + roundText;
-      this.opponentScoreElement.textContent = (state.opponentScore || 0);
-    }
+    this.updateScoreDisplay(state);
 
     // Update instructions and log if message changed
     if (this.lastMessage !== state.message) {

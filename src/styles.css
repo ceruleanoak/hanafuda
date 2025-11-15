@@ -82,8 +82,54 @@ h1 {
 
 #score {
   display: flex;
+  gap: 1.5rem;
+  font-size: 0.95rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+#score-display {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  flex: 1;
+}
+
+#score-display > span {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+#score-display > span strong {
+  color: #4ecdc4;
+  margin-left: 0.3rem;
+}
+
+/* Multi-player responsive layouts */
+#score[data-player-count="2"] #score-display {
+  flex-direction: row;
   gap: 2rem;
-  font-size: 1.1rem;
+}
+
+#score[data-player-count="3"] #score-display {
+  flex-direction: row;
+  gap: 1.2rem;
+  font-size: 0.9rem;
+}
+
+#score[data-player-count="4"][data-teams-mode="false"] #score-display {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  font-size: 0.85rem;
+}
+
+#score[data-player-count="4"][data-teams-mode="true"] #score-display {
+  flex-direction: row;
+  gap: 3rem;
+  font-size: 0.9rem;
 }
 
 #score strong {
