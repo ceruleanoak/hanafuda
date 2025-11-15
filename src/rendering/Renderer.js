@@ -314,7 +314,7 @@ export class Renderer {
         if (hoverX >= playerTrickZone.x && hoverX <= playerTrickZone.x + playerTrickZone.width &&
             hoverY >= playerTrickZone.y && hoverY <= playerTrickZone.y + playerTrickZone.height &&
             gameState.playerCaptured.length > 0) {
-          this.drawTricksList(gameState.playerCaptured, 'Player Tricks');
+          this.drawTricksList(gameState.playerCaptured, 'You');
         }
 
         // Check if mouse is in opponent trick pile zone
@@ -327,7 +327,7 @@ export class Renderer {
         if (hoverX >= opponentTrickZone.x && hoverX <= opponentTrickZone.x + opponentTrickZone.width &&
             hoverY >= opponentTrickZone.y && hoverY <= opponentTrickZone.y + opponentTrickZone.height &&
             gameState.opponentCaptured.length > 0) {
-          this.drawTricksList(gameState.opponentCaptured, 'Opponent Tricks');
+          this.drawTricksList(gameState.opponentCaptured, 'Opponent');
         }
       } else if (gameState.players) {
         // N-player trick pile hover (3-4 players)
@@ -346,7 +346,7 @@ export class Renderer {
 
             if (hoverX >= trickZoneRect.x && hoverX <= trickZoneRect.x + trickZoneRect.width &&
                 hoverY >= trickZoneRect.y && hoverY <= trickZoneRect.y + trickZoneRect.height) {
-              const playerLabel = i === 0 ? 'Your Tricks' : `Player ${i + 1} Tricks`;
+              const playerLabel = getPlayerLabel(i);
               this.drawTricksList(gameState.players[i].captured || [], playerLabel);
             }
           }
