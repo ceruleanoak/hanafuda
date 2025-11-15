@@ -234,7 +234,7 @@ export class Renderer {
       // N-player layout (3-4 players)
       for (let i = 0; i < playerCount; i++) {
         const trickZone = `player${i}Trick`;
-        const trickConfig = LayoutManager.getZoneConfig(trickZone, this.displayWidth, this.displayHeight, this.useAnimations);
+        const trickConfig = LayoutManager.getZoneConfig(trickZone, this.displayWidth, this.displayHeight, playerCount, this.useAnimations);
         const trickCards = card3DManager.getCardsInZone(trickZone);
 
         if (trickCards.length > 0) {
@@ -320,7 +320,7 @@ export class Renderer {
         // N-player trick pile hover (3-4 players)
         for (let i = 0; i < playerCount; i++) {
           const trickZone = `player${i}Trick`;
-          const trickConfig = LayoutManager.getZoneConfig(trickZone, this.displayWidth, this.displayHeight);
+          const trickConfig = LayoutManager.getZoneConfig(trickZone, this.displayWidth, this.displayHeight, playerCount);
           const trickCards = card3DManager.getCardsInZone(trickZone);
 
           if (trickCards.length > 0) {
@@ -416,7 +416,7 @@ export class Renderer {
       if (gameState.players && Array.isArray(gameState.players)) {
         gameState.players.forEach((player, index) => {
           const trickZone = `player${index}Trick`;
-          const trickConfig = LayoutManager.getZoneConfig(trickZone, this.displayWidth, this.displayHeight, this.useAnimations);
+          const trickConfig = LayoutManager.getZoneConfig(trickZone, this.displayWidth, this.displayHeight, playerCount);
           const trickCards = card3DManager.getCardsInZone(trickZone);
 
           if (trickCards.length > 0 && player.yaku && player.yaku.length > 0) {
@@ -1008,7 +1008,12 @@ export class Renderer {
 
     visibleCards.forEach((card, index) => {
       this.ctx.fillStyle = '#fff';
-      this.ctx.fillText(`• ${card.name}`, x + padding, startY + index * lineHeight);
+      // Format card text: show value if it exists and is not undefined
+      let cardText = `• ${card.name}`;
+      if (card.value !== undefined && card.value !== null) {
+        cardText += ` (${card.value} pts)`;
+      }
+      this.ctx.fillText(cardText, x + padding, startY + index * lineHeight);
     });
 
     // If there are more cards, show indicator

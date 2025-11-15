@@ -52,6 +52,7 @@ class Game {
 
     // Player count for Sakura (used in multi-player setup)
     this.selectedPlayerCount = 2; // Default: 2 players
+    this.isTeamsMode = false; // For 4P: true = teams, false = competitive
 
     // Initialize all game types
     this.koikoiGame = new KoiKoi(this.gameOptions);
@@ -329,6 +330,7 @@ class Game {
       btn.addEventListener('click', (e) => {
         const players = parseInt(e.target.dataset.players);
         this.selectedPlayerCount = players;
+        this.isTeamsMode = (players === 4); // 4P is always teams mode
         this.showRoundSelection();
 
         // Show/hide team info
@@ -1902,7 +1904,7 @@ class Game {
   }
 
   /**
-   * Display the round summary modal (extracted from showRoundSummary)
+   * Display the round summary modal with unified score display (2P, 3P, 4P)
    */
   displayRoundSummaryModal(data) {
     // Hide bonus chance display when showing round summary
@@ -1919,109 +1921,196 @@ class Game {
                      data.opponentTotalScore > data.playerTotalScore ? 'Opponent Wins!' : 'Tie Game!';
       title.textContent = `Game Over - ${winner}`;
     } else {
-      title.textContent = `Round ${data.roundNumber} Complete!`;
+      title.textContent = `Round ${data.currentRound} Complete!`;
     }
 
-    // Update round scores
-    document.getElementById('player-round-points').textContent = data.playerRoundScore;
-    document.getElementById('opponent-round-points').textContent = data.opponentRoundScore;
+    // Determine player count and update data attribute
+    const playerCount = data.playerCount || 2;
+    const isTeamsMode = data.isTeamsMode || false;
+    const roundScoreDisplay = document.getElementById('round-score-display');
+    const scoreGrid = document.getElementById('round-score-grid');
 
-    // Update total scores
-    document.getElementById('player-total-points').textContent = data.playerTotalScore;
-    document.getElementById('opponent-total-points').textContent = data.opponentTotalScore;
+    // Set player count and teams mode for CSS responsive layout
+    roundScoreDisplay.setAttribute('data-player-count', playerCount);
+    roundScoreDisplay.setAttribute('data-teams-mode', isTeamsMode && playerCount === 4);
+    scoreGrid.innerHTML = '';
 
-    // Update yaku details
-    const yakuDetails = document.getElementById('round-yaku-details');
-    yakuDetails.innerHTML = '';
-
-    // Show shop mode message if present
-    if (data.shopMode && data.shopMessage) {
-      const shopMessageDiv = document.createElement('div');
-      shopMessageDiv.className = 'shop-end-message';
-      shopMessageDiv.style.cssText = 'margin: 1rem 0; padding: 1rem; background: rgba(255,255,255,0.1); border-radius: 8px; text-align: center; font-size: 1.1rem; font-weight: bold;';
-      shopMessageDiv.textContent = data.shopMessage;
-      yakuDetails.appendChild(shopMessageDiv);
+    // Build playerScores array if not provided (backward compatibility for Koi-Koi)
+    let playerScores = data.playerScores;
+    if (!playerScores || playerScores.length === 0) {
+      // Construct from individual player score fields (Koi-Koi 2P format)
+      playerScores = [
+        { roundScore: data.playerRoundScore || 0 },
+        { roundScore: data.opponentRoundScore || 0 }
+      ];
     }
 
-    if (data.playerYaku.length > 0) {
-      const playerSection = document.createElement('div');
-      playerSection.innerHTML = '<h4>Your Yaku:</h4>';
-      const yakuList = document.createElement('div');
-      yakuList.className = 'yaku-list';
-      data.playerYaku.forEach(y => {
-        const yakuLine = document.createElement('div');
-        yakuLine.textContent = `• ${y.name} (${y.points} pts)`;
-        yakuList.appendChild(yakuLine);
+    // For 4P teams mode: organize players into teams
+    // Team 1: Player 0 (You) + Player 2 (AI 1)
+    // Team 2: Player 1 (AI 2) + Player 3 (AI 3)
+    if (isTeamsMode && playerCount === 4 && playerScores && playerScores.length === 4) {
+      const teams = [
+        { name: 'Team 1 (You & AI 1)', players: [0, 2] },
+        { name: 'Team 2 (AI 2 & AI 3)', players: [1, 3] }
+      ];
+
+      teams.forEach(team => {
+        const teamGroup = document.createElement('div');
+        teamGroup.className = 'team-group';
+
+        const teamHeader = document.createElement('h4');
+        teamHeader.textContent = team.name;
+        teamGroup.appendChild(teamHeader);
+
+        team.players.forEach(playerIndex => {
+          const playerScore = playerScores[playerIndex];
+          let playerLabel;
+          if (playerIndex === 0) {
+            playerLabel = 'You';
+          } else {
+            playerLabel = `AI ${playerIndex}`;
+          }
+          const isYou = playerIndex === 0;
+
+          // Get total score based on game mode
+          let totalScore = 0;
+          if (this.currentGameMode === 'sakura' && this.sakuraGame?.players[playerIndex]) {
+            totalScore = this.sakuraGame.players[playerIndex].matchScore || 0;
+          }
+
+          const scoreCard = document.createElement('div');
+          scoreCard.className = `player-score-card ${isYou ? 'player-you' : ''}`;
+          scoreCard.innerHTML = `
+            <span class="score-card-label">${playerLabel}</span>
+            <div class="score-row">
+              <span class="score-label-small">Round</span>
+              <span class="score-value">${playerScore.roundScore || 0}</span>
+            </div>
+            <div class="score-row">
+              <span class="score-label-small">Total</span>
+              <span class="score-value">${totalScore}</span>
+            </div>
+          `;
+          teamGroup.appendChild(scoreCard);
+        });
+
+        scoreGrid.appendChild(teamGroup);
       });
-      playerSection.appendChild(yakuList);
+    } else {
+      // Standard display for 2P, 3P, or 4P competitive mode
+      if (playerScores && playerScores.length > 0) {
+        playerScores.forEach((playerScore, index) => {
+          let playerLabel;
+          if (index === 0) {
+            playerLabel = 'You';
+          } else {
+            playerLabel = `Opponent ${index}`;
+          }
+          const isYou = index === 0;
 
-      // Add score breakdown if available
-      if (data.playerScoreBreakdown) {
-        const breakdown = data.playerScoreBreakdown;
-        const breakdownDiv = document.createElement('div');
-        breakdownDiv.className = 'score-breakdown-detail';
-        breakdownDiv.innerHTML = '<strong>Score Calculation:</strong>';
+          // Get total score based on game mode
+          let totalScore = 0;
+          if (this.currentGameMode === 'sakura' && this.sakuraGame?.players[index]) {
+            totalScore = this.sakuraGame.players[index].matchScore || 0;
+          } else if (this.currentGameMode === 'koi-koi') {
+            // For 2P Koi-Koi, use the provided totals
+            totalScore = isYou ? data.playerTotalScore : data.opponentTotalScore;
+          }
 
+          const scoreCard = document.createElement('div');
+          scoreCard.className = `player-score-card ${isYou ? 'player-you' : ''}`;
+          scoreCard.innerHTML = `
+            <span class="score-card-label">${playerLabel}</span>
+            <div class="score-row">
+              <span class="score-label-small">Round</span>
+              <span class="score-value">${playerScore.roundScore || 0}</span>
+            </div>
+            <div class="score-row">
+              <span class="score-label-small">Total</span>
+              <span class="score-value">${totalScore}</span>
+            </div>
+          `;
+          scoreGrid.appendChild(scoreCard);
+        });
+      }
+    }
+
+    // Update yaku/tricks display with column layout
+    const yakuDisplay = document.getElementById('round-yaku-display');
+    const yakuGrid = document.getElementById('yaku-grid');
+
+    yakuDisplay.setAttribute('data-player-count', playerCount);
+    yakuDisplay.setAttribute('data-teams-mode', isTeamsMode && playerCount === 4);
+    yakuGrid.innerHTML = '';
+
+    // Helper function to create a yaku card for a player
+    const createYakuCard = (playerScore, playerIndex, playerLabel) => {
+      const isYou = playerIndex === 0;
+      const yakuCard = document.createElement('div');
+      yakuCard.className = `yaku-card ${isYou ? 'player-you' : ''}`;
+
+      let yakuCardHTML = `<div class="yaku-card-header">${playerLabel}</div>`;
+
+      // Get yaku list - from playerScore.yaku (Sakura) or from data.playerYaku/data.opponentYaku (Koi-Koi)
+      let yakuList = playerScore.yaku || [];
+      if (yakuList.length === 0 && this.currentGameMode === 'koi-koi') {
+        yakuList = isYou ? (data.playerYaku || []) : (data.opponentYaku || []);
+      }
+
+      if (yakuList.length > 0) {
+        yakuList.forEach(y => {
+          const yakuName = y.name || y.displayName;
+          yakuCardHTML += `<div class="yaku-item">• <strong>${yakuName}</strong></div>`;
+        });
+      } else {
+        yakuCardHTML += `<div class="yaku-item" style="color: #888; font-style: italic;">No yaku</div>`;
+      }
+
+      // Add score breakdown for Koi-Koi if available
+      let breakdown = isYou ? data.playerScoreBreakdown : data.opponentScoreBreakdown;
+      if (breakdown) {
+        yakuCardHTML += `<div class="yaku-label"><strong>Score Breakdown:</strong></div>`;
         if (breakdown.koikoiPenalty) {
-          breakdownDiv.innerHTML += '<br>• Koi-Koi penalty applied (didn\'t improve) = 0 pts';
+          yakuCardHTML += `<div class="yaku-item">Koi-Koi penalty (no improve)</div>`;
         } else {
-          breakdownDiv.innerHTML += `<br>• Base score: ${breakdown.baseScore} pts`;
+          yakuCardHTML += `<div class="yaku-item">Base: <strong>${breakdown.baseScore}</strong> pts</div>`;
           if (breakdown.bonusPoints && breakdown.bonusPoints > 0) {
-            breakdownDiv.innerHTML += `<br>• Bonus chance (+${breakdown.bonusPoints} pts): ${breakdown.bonusChanceName}`;
+            yakuCardHTML += `<div class="yaku-item">Bonus: <strong>+${breakdown.bonusPoints}</strong> pts</div>`;
           }
           if (breakdown.autoDouble) {
-            breakdownDiv.innerHTML += '<br>• Auto-double (7+ pts) ×2';
+            yakuCardHTML += `<div class="yaku-item">×2 (7+ pts)</div>`;
           }
           if (breakdown.koikoiMultiplier > 0) {
-            breakdownDiv.innerHTML += `<br>• Koi-Koi bonus ×${breakdown.koikoiMultiplier} (opponent called koi-koi)`;
+            yakuCardHTML += `<div class="yaku-item">×${breakdown.koikoiMultiplier} (opponent koi-koi)</div>`;
           }
-          if (breakdown.autoDouble || breakdown.koikoiMultiplier > 0 || (breakdown.bonusPoints && breakdown.bonusPoints > 0)) {
-            breakdownDiv.innerHTML += `<br>• <strong>Final: ${breakdown.finalScore} pts</strong>`;
+          if (breakdown.finalScore !== breakdown.baseScore) {
+            yakuCardHTML += `<div class="yaku-item"><strong>Final: ${breakdown.finalScore}</strong> pts</div>`;
           }
         }
-        playerSection.appendChild(breakdownDiv);
       }
 
-      yakuDetails.appendChild(playerSection);
-    }
+      yakuCard.innerHTML = yakuCardHTML;
+      return yakuCard;
+    };
 
-    if (data.opponentYaku.length > 0) {
-      const opponentSection = document.createElement('div');
-      opponentSection.innerHTML = '<h4>Opponent Yaku:</h4>';
-      const yakuList = document.createElement('div');
-      yakuList.className = 'yaku-list';
-      data.opponentYaku.forEach(y => {
-        const yakuLine = document.createElement('div');
-        yakuLine.textContent = `• ${y.name} (${y.points} pts)`;
-        yakuList.appendChild(yakuLine);
-      });
-      opponentSection.appendChild(yakuList);
-
-      // Add score breakdown if available
-      if (data.opponentScoreBreakdown) {
-        const breakdown = data.opponentScoreBreakdown;
-        const breakdownDiv = document.createElement('div');
-        breakdownDiv.className = 'score-breakdown-detail';
-        breakdownDiv.innerHTML = '<strong>Score Calculation:</strong>';
-
-        if (breakdown.koikoiPenalty) {
-          breakdownDiv.innerHTML += '<br>• Koi-Koi penalty applied (didn\'t improve) = 0 pts';
+    // For all modes: display yaku cards as individual columns
+    // (Teams mode still uses individual columns for yaku to maximize horizontal space)
+    if (playerScores && playerScores.length > 0) {
+      playerScores.forEach((playerScore, index) => {
+        let playerLabel;
+        if (playerCount === 4 && isTeamsMode) {
+          // 4P teams: label as "You" or "AI X"
+          playerLabel = index === 0 ? 'You' : `AI ${index}`;
+        } else if (playerCount === 4) {
+          // 4P competitive: label as "You" or "Opponent X"
+          playerLabel = index === 0 ? 'You' : `Opponent ${index}`;
         } else {
-          breakdownDiv.innerHTML += `<br>• Base score: ${breakdown.baseScore} pts`;
-          if (breakdown.autoDouble) {
-            breakdownDiv.innerHTML += '<br>• Auto-double (7+ pts) ×2';
-          }
-          if (breakdown.koikoiMultiplier > 0) {
-            breakdownDiv.innerHTML += `<br>• Koi-Koi bonus ×${breakdown.koikoiMultiplier} (you called koi-koi)`;
-          }
-          if (breakdown.autoDouble || breakdown.koikoiMultiplier > 0) {
-            breakdownDiv.innerHTML += `<br>• <strong>Final: ${breakdown.finalScore} pts</strong>`;
-          }
+          // 2P, 3P: label as "You" or "Opponent X"
+          playerLabel = index === 0 ? 'You' : `Opponent ${index}`;
         }
-        opponentSection.appendChild(breakdownDiv);
-      }
-
-      yakuDetails.appendChild(opponentSection);
+        const yakuCard = createYakuCard(playerScore, index, playerLabel);
+        yakuGrid.appendChild(yakuCard);
+      });
     }
 
     // Update button text
@@ -2029,7 +2118,7 @@ class Game {
     if (data.isGameOver) {
       continueBtn.textContent = 'Start New Game';
     } else {
-      continueBtn.textContent = `Continue to Round ${data.roundNumber + 1}`;
+      continueBtn.textContent = `Continue to Round ${data.currentRound + 1}`;
     }
 
     // Show modal
@@ -2087,102 +2176,64 @@ class Game {
    * Display Sakura round summary modal
    */
   displaySakuraRoundSummaryModal(data, isGameOver) {
-    // Update title
-    const title = document.getElementById('round-summary-title');
-    if (isGameOver) {
-      const winner = data.playerMatchScore > data.opponentMatchScore ? 'You Win!' :
-                     data.opponentMatchScore > data.playerMatchScore ? 'Opponent Wins!' : 'Tie Game!';
-      title.textContent = `Game Over - ${winner}`;
-    } else {
-      title.textContent = `Round ${data.currentRound} Complete!`;
-    }
+    const playerCount = data.playerCount || data.playerScores?.length || 2;
 
-    // Update round scores
-    document.getElementById('player-round-points').textContent = data.playerRoundScore;
-    document.getElementById('opponent-round-points').textContent = data.opponentRoundScore;
+    // Build data structure for unified display function
+    const displayData = {
+      playerCount: playerCount,
+      currentRound: data.currentRound,
+      isGameOver: isGameOver,
+      playerTotalScore: data.playerMatchScore,
+      opponentTotalScore: data.opponentMatchScore,
+      playerScores: data.playerScores,
+      isTeamsMode: this.isTeamsMode // Pass teams mode info
+    };
 
-    // Update total scores
-    document.getElementById('player-total-points').textContent = data.playerMatchScore;
-    document.getElementById('opponent-total-points').textContent = data.opponentMatchScore;
+    // Use unified display function for score display
+    this.displayRoundSummaryModal(displayData);
 
-    // Update yaku details (Sakura-specific)
-    const yakuDetails = document.getElementById('round-yaku-details');
-    yakuDetails.innerHTML = '';
+    // Update yaku grid with Sakura-specific details (multi-column layout)
+    const yakuGrid = document.getElementById('yaku-grid');
+    yakuGrid.innerHTML = '';
 
-    // Player section
-    const playerSection = document.createElement('div');
-    playerSection.innerHTML = '<h4>Your Score:</h4>';
+    // Generate yaku cards for each player (Sakura edition with detailed info)
+    if (data.playerScores && data.playerScores.length > 0) {
+      data.playerScores.forEach((playerScore, index) => {
+        const isYou = index === 0;
 
-    const playerBreakdown = document.createElement('div');
-    playerBreakdown.className = 'score-breakdown-detail';
-    playerBreakdown.innerHTML = `
-      <strong>Base Points:</strong> ${data.playerBasePoints} pts<br>
-      ${data.playerYaku.length > 0 ? `<strong>Yaku (${data.playerYaku.length}):</strong>` : '<strong>No Yaku</strong>'}
-    `;
+        const yakuCard = document.createElement('div');
+        yakuCard.className = `yaku-card ${isYou ? 'player-you' : ''}`;
 
-    if (data.playerYaku.length > 0) {
-      const yakuList = document.createElement('div');
-      yakuList.className = 'yaku-list';
-      data.playerYaku.forEach(y => {
-        const yakuLine = document.createElement('div');
-        yakuLine.textContent = `• ${y.displayName} (-50 pts to opponent)`;
-        yakuList.appendChild(yakuLine);
+        let yakuCardHTML = `<div class="yaku-card-header">${isYou ? 'You' : `Opponent ${index}`}</div>`;
+
+        // Base points
+        yakuCardHTML += `<div class="yaku-item"><strong>Base:</strong> ${playerScore.basePoints} pts</div>`;
+
+        // Yaku list
+        if (playerScore.yaku.length > 0) {
+          yakuCardHTML += `<div class="yaku-label"><strong>Yaku (${playerScore.yaku.length}):</strong></div>`;
+          playerScore.yaku.forEach(y => {
+            const penaltyLabel = isYou ? '→ opponent' : '→ you';
+            yakuCardHTML += `<div class="yaku-item">• ${y.displayName} ${penaltyLabel}</div>`;
+          });
+        } else {
+          yakuCardHTML += `<div class="yaku-item" style="color: #888; font-style: italic;">No yaku</div>`;
+        }
+
+        // Yaku penalty
+        if (playerScore.yakuPenalty > 0) {
+          yakuCardHTML += `<div class="yaku-label"><strong>Penalty:</strong></div>`;
+          yakuCardHTML += `<div class="yaku-item">-${playerScore.yakuPenalty} pts</div>`;
+        }
+
+        // Round total
+        yakuCardHTML += `<div class="yaku-label" style="margin-top: 0.5rem;"><strong>Round Total:</strong></div>`;
+        yakuCardHTML += `<div class="yaku-item"><strong>${playerScore.roundScore}</strong> pts</div>`;
+
+        yakuCard.innerHTML = yakuCardHTML;
+        yakuGrid.appendChild(yakuCard);
       });
-      playerBreakdown.appendChild(yakuList);
     }
-
-    if (data.opponentYakuPenalty > 0) {
-      const penaltyDiv = document.createElement('div');
-      penaltyDiv.style.marginTop = '8px';
-      penaltyDiv.innerHTML = `<strong>Opponent Yaku Penalty:</strong> -${data.opponentYakuPenalty} pts`;
-      playerBreakdown.appendChild(penaltyDiv);
-    }
-
-    const totalDiv = document.createElement('div');
-    totalDiv.style.marginTop = '8px';
-    totalDiv.innerHTML = `<strong>Round Total:</strong> ${data.playerRoundScore} pts`;
-    playerBreakdown.appendChild(totalDiv);
-
-    playerSection.appendChild(playerBreakdown);
-    yakuDetails.appendChild(playerSection);
-
-    // Opponent section
-    const opponentSection = document.createElement('div');
-    opponentSection.style.marginTop = '16px';
-    opponentSection.innerHTML = '<h4>Opponent Score:</h4>';
-
-    const opponentBreakdown = document.createElement('div');
-    opponentBreakdown.className = 'score-breakdown-detail';
-    opponentBreakdown.innerHTML = `
-      <strong>Base Points:</strong> ${data.opponentBasePoints} pts<br>
-      ${data.opponentYaku.length > 0 ? `<strong>Yaku (${data.opponentYaku.length}):</strong>` : '<strong>No Yaku</strong>'}
-    `;
-
-    if (data.opponentYaku.length > 0) {
-      const yakuList = document.createElement('div');
-      yakuList.className = 'yaku-list';
-      data.opponentYaku.forEach(y => {
-        const yakuLine = document.createElement('div');
-        yakuLine.textContent = `• ${y.displayName} (-50 pts to you)`;
-        yakuList.appendChild(yakuLine);
-      });
-      opponentBreakdown.appendChild(yakuList);
-    }
-
-    if (data.playerYakuPenalty > 0) {
-      const penaltyDiv = document.createElement('div');
-      penaltyDiv.style.marginTop = '8px';
-      penaltyDiv.innerHTML = `<strong>Your Yaku Penalty:</strong> -${data.playerYakuPenalty} pts`;
-      opponentBreakdown.appendChild(penaltyDiv);
-    }
-
-    const opponentTotalDiv = document.createElement('div');
-    opponentTotalDiv.style.marginTop = '8px';
-    opponentTotalDiv.innerHTML = `<strong>Round Total:</strong> ${data.opponentRoundScore} pts`;
-    opponentBreakdown.appendChild(opponentTotalDiv);
-
-    opponentSection.appendChild(opponentBreakdown);
-    yakuDetails.appendChild(opponentSection);
 
     // Update button text
     const continueBtn = document.getElementById('continue-next-round');
@@ -2405,17 +2456,26 @@ class Game {
       return;
     }
 
-    // Koi Koi UI updates
     // Clear selected card if we're no longer in select_field phase
     if (this.selectedCard3D && state.phase !== 'select_field') {
       this.selectedCard3D.z = 0;
       this.selectedCard3D = null;
     }
 
-    // Update scores - show round progress
+    // Update scores - different calculation for Sakura vs Koi-Koi
     const roundText = state.totalRounds > 1 ? ` (Round ${state.currentRound}/${state.totalRounds})` : '';
-    this.playerScoreElement.textContent = state.playerScore + roundText;
-    this.opponentScoreElement.textContent = state.opponentScore;
+
+    if (this.currentGameMode === 'sakura') {
+      // Sakura: Display accumulated points (basePoints) + match score
+      const playerTotal = (state.playerBasePoints || 0) + (state.playerMatchScore || 0);
+      const opponentTotal = (state.opponentBasePoints || 0) + (state.opponentMatchScore || 0);
+      this.playerScoreElement.textContent = playerTotal + roundText;
+      this.opponentScoreElement.textContent = opponentTotal;
+    } else {
+      // Koi-Koi: Display cumulative scores
+      this.playerScoreElement.textContent = (state.playerScore || 0) + roundText;
+      this.opponentScoreElement.textContent = (state.opponentScore || 0);
+    }
 
     // Update instructions and log if message changed
     if (this.lastMessage !== state.message) {

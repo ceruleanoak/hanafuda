@@ -219,6 +219,14 @@ export class LayoutManager {
         renderLayer: 6 // Above everything else to show prominently
       },
 
+      opponentPlayedCard: {
+        type: 'stack',
+        position: { x: centerX, y: 120 }, // Center-top of screen, below drawnCard
+        offset: { x: 0, y: 0, z: 0 },
+        faceUp: 1,
+        renderLayer: 5 // Below drawnCard but above most other elements
+      },
+
       field: {
         type: 'grid',
         // Center field vertically between player hand (viewportHeight - 170) and opponent hand (40)
@@ -330,7 +338,8 @@ export class LayoutManager {
           }
         };
       } else if (playerCount === 4) {
-        // 4-Player Layout: P0 bottom, P1 left, P2 top, P3 right (table-clockwise)
+        // 4-Player Layout: P0 bottom-center, P1 left-center, P2 top-center, P3 right-center
+        // Trick piles in four corners: P0 bottom-right, P1 bottom-left, P2 top-left, P3 top-right
         return {
           player0Hand: {
             type: 'row',
@@ -370,32 +379,32 @@ export class LayoutManager {
           player0Trick: {
             type: 'fan',
             position: { x: viewportWidth - 162, y: viewportHeight - 170 },
-            fanOffset: { x: 8, y: 8, z: 2 },
-            maxVisible: 5,
+            fanOffset: { x: -8, y: -8, z: 2 },
+            maxVisible: 6,
             faceUp: 1,
             renderLayer: 2
           },
           player1Trick: {
             type: 'fan',
-            position: { x: 80, y: viewportHeight - 100 },
+            position: { x: margin + 50, y: viewportHeight - 170 },
             fanOffset: { x: 8, y: -8, z: 2 },
-            maxVisible: 4,
+            maxVisible: 6,
             faceUp: 1,
             renderLayer: 2
           },
           player2Trick: {
             type: 'fan',
-            position: { x: viewportWidth - 162, y: 80 },
-            fanOffset: { x: -8, y: 8, z: 2 },
-            maxVisible: 4,
+            position: { x: margin + 50, y: 80 },
+            fanOffset: { x: 8, y: 8, z: 2 },
+            maxVisible: 6,
             faceUp: 1,
             renderLayer: 2
           },
           player3Trick: {
             type: 'fan',
-            position: { x: viewportWidth - 80, y: viewportHeight - 100 },
-            fanOffset: { x: -8, y: -8, z: 2 },
-            maxVisible: 4,
+            position: { x: viewportWidth - margin - 50, y: 80 },
+            fanOffset: { x: -8, y: 8, z: 2 },
+            maxVisible: 6,
             faceUp: 1,
             renderLayer: 2
           }

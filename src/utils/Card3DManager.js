@@ -289,6 +289,11 @@ export class Card3DManager {
       mapping.set(gameState.drawnCard.id, 'drawnCard');
     }
 
+    // Handle opponent played card (single card during opponent_playing phase)
+    if (gameState.opponentPlayedCard) {
+      mapping.set(gameState.opponentPlayedCard.id, 'opponentPlayedCard');
+    }
+
     addCards(gameState.field, 'field');
 
     // Use unified indexed zone naming for ALL player counts

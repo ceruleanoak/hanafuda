@@ -690,58 +690,234 @@ footer {
 /* Round Summary Modal */
 .round-summary-content {
   min-width: 500px;
+  max-width: 95vw;
+  max-height: calc(100vh - 120px); /* Account for header/footer */
+  overflow-y: auto;
 }
 
-.round-summary-scores {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2rem;
-  margin-bottom: 2rem;
+/* Multi-player round summary - wider modal */
+.round-summary-content.multiplayer-summary {
+  min-width: 90vw;
+  max-width: 95vw;
+  max-height: calc(100vh - 120px); /* Account for header/footer */
+  overflow-y: auto;
+}
+
+/* Unified round-score display (2P, 3P, 4P support) */
+.round-score-display {
+  --score-card-border-color: #4ecdc4;
+  --score-card-border-width: 4px;
+  --score-card-bg-color: rgba(0, 0, 0, 0.3);
+  --score-card-bg-color-you: rgba(255, 235, 59, 0.1);
+  --score-card-border-color-you: #ffeb3b;
+  --score-grid-gap: 1.5rem;
+
+  width: 100%;
+  margin-bottom: 1.5rem;
 }
 
 .round-score-section h3 {
   color: #4ecdc4;
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   margin-bottom: 1rem;
   border-bottom: 2px solid #333;
   padding-bottom: 0.5rem;
+  text-align: center;
 }
 
-.score-breakdown {
+.round-score-grid {
+  display: grid;
+  gap: var(--score-grid-gap);
+  width: 100%;
+}
+
+/* Responsive grid based on player count */
+#round-score-display[data-player-count="2"] .round-score-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+#round-score-display[data-player-count="3"] .round-score-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+#round-score-display[data-player-count="4"] .round-score-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* Teams mode layout: 2 team groups with 2 players each */
+#round-score-display[data-player-count="4"][data-teams-mode="true"] .round-score-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+
+#round-score-display[data-player-count="4"][data-teams-mode="true"] .team-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  padding: 1.25rem;
+  border: 2px solid #4ecdc4;
+  border-radius: 8px;
+  background: rgba(78, 205, 196, 0.05);
+}
+
+#round-score-display[data-player-count="4"][data-teams-mode="true"] .team-group h4 {
+  grid-column: 1 / -1;
+  color: #4ecdc4;
+  font-size: 0.95rem;
+  margin: -1.25rem -1.25rem 0.5rem -1.25rem;
+  padding: 0.75rem 1.25rem;
+  background: rgba(78, 205, 196, 0.1);
+  border-radius: 6px 6px 0 0;
+  text-align: center;
+}
+
+/* Unified yaku/tricks display (matches score card layout) */
+.round-yaku-display {
+  --yaku-card-bg-color: rgba(0, 0, 0, 0.2);
+  --yaku-card-bg-color-you: rgba(255, 235, 59, 0.05);
+  --yaku-grid-gap: 1.5rem;
+
+  width: 100%;
+  margin-bottom: 1.5rem;
+}
+
+.yaku-section h3 {
+  color: #4ecdc4;
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid #333;
+  padding-bottom: 0.5rem;
+  text-align: center;
+}
+
+.yaku-grid {
+  display: grid;
+  gap: var(--yaku-grid-gap);
+  width: 100%;
+}
+
+/* Responsive yaku grid based on player count */
+#round-yaku-display[data-player-count="2"] .yaku-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+#round-yaku-display[data-player-count="3"] .yaku-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+#round-yaku-display[data-player-count="4"] .yaku-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* Teams mode yaku layout: 4 individual columns (not grouped by team) */
+#round-yaku-display[data-player-count="4"][data-teams-mode="true"] .yaku-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.5rem;
+}
+
+.yaku-card {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: var(--yaku-card-bg-color);
+  border-radius: 8px;
+  border-left: 4px solid #4ecdc4;
+  font-size: 0.85rem;
 }
 
-.player-round-score,
-.opponent-round-score,
-.player-total-score,
-.opponent-total-score {
+.yaku-card.player-you {
+  background: var(--yaku-card-bg-color-you);
+  border-left-color: #ffeb3b;
+}
+
+.yaku-card .yaku-card-header {
+  font-weight: bold;
+  color: #fff;
+  font-size: 0.9rem;
+  padding-bottom: 0.4rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.yaku-card .yaku-item {
+  color: #ccc;
+  padding: 0.2rem 0;
+  line-height: 1.3;
+}
+
+.yaku-card .yaku-item strong {
+  color: #ffeb3b;
+  font-weight: 600;
+}
+
+.yaku-card .yaku-label {
+  color: #888;
+  font-size: 0.8rem;
+  margin-top: 0.4rem;
+}
+
+.player-score-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem;
+  background: var(--score-card-bg-color);
+  border-radius: 8px;
+  border-left: var(--score-card-border-width) solid var(--score-card-border-color);
+
+  /* Customization hooks for artist styling */
+  transition: all 0.2s ease;
+}
+
+.player-score-card:hover {
+  background: rgba(0, 0, 0, 0.4);
+  transform: translateY(-2px);
+}
+
+.player-score-card.player-you {
+  border-left-color: var(--score-card-border-color-you);
+  background: var(--score-card-bg-color-you);
+}
+
+.player-score-card.player-you:hover {
+  background: rgba(255, 235, 59, 0.15);
+}
+
+.player-score-card .score-card-label {
+  font-weight: bold;
+  color: #fff;
+  font-size: 0.9rem;
+  text-align: center;
+  padding-bottom: 0.4rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.player-score-card .score-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1rem;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 6px;
+  gap: 0.4rem;
+  padding: 0.3rem 0;
 }
 
-.player-label {
-  font-weight: bold;
-  color: #ccc;
+.player-score-card .score-label-small {
+  color: #888;
+  font-size: 0.75rem;
+  flex: 0 0 auto;
 }
 
-.round-points,
-.total-points {
-  font-size: 1.5rem;
+.player-score-card .score-value {
+  font-size: 1.2rem;
   font-weight: bold;
   color: #ffeb3b;
-  margin: 0 0.5rem;
+  flex: 1 1 auto;
+  text-align: right;
 }
 
-.points-label {
-  color: #888;
-  font-size: 0.9rem;
-}
 
 .round-yaku-details {
   background: rgba(78, 205, 196, 0.1);

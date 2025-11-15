@@ -1336,45 +1336,90 @@ export class Sakura {
     // Phase 1: Play from hand
     if (currentPlayer.hand.length > 0) {
       const chosenCard = this.selectOpponentCard(difficulty);
-      this.lastPlayedCard = chosenCard;
 
-      // Remove from hand
-      currentPlayer.hand = currentPlayer.hand.filter(c => c.id !== chosenCard.id);
+      // Show the card being played (opponent_playing phase)
+      // IMPORTANT: Keep card in hand while displaying - let Card3DManager animate it
+      // Do NOT remove from hand yet!
+      this.opponentPlayedCard = chosenCard;
+      this.phase = 'opponent_playing';
 
-      // Check if Gaji
-      if (this.isGaji(chosenCard)) {
-        this.handleOpponentGajiFromHand(chosenCard, difficulty);
-        return;
-      }
+      // Wait for card animation to complete (600ms for animation from hand to display position)
+      setTimeout(() => {
+        // Check if Gaji first (before removing from hand)
+        if (this.isGaji(chosenCard)) {
+          // Remove from hand now
+          currentPlayer.hand = currentPlayer.hand.filter(c => c.id !== chosenCard.id);
 
-      // Find matches
-      const matches = this.field.filter(fc => fc.month === chosenCard.month);
+          // Get valid Gaji targets
+          const validTargets = this.field.filter(card => this.canGajiCapture(card, this.currentPlayerIndex));
 
-      if (matches.length === 0) {
-        this.field.push(chosenCard);
-        this.message = `Player ${this.currentPlayerIndex + 1} played ${chosenCard.month}.`;
-      } else if (matches.length === 1) {
-        currentPlayer.captured.push(chosenCard, matches[0]);
-        this.field = this.field.filter(c => c.id !== matches[0].id);
-        this.message = `Player ${this.currentPlayerIndex + 1} captured ${matches[0].month}!`;
-      } else if (matches.length === 2) {
-        // AI chooses highest value card
-        const chosen = this.selectBestCapture(matches, this.currentPlayerIndex);
-        currentPlayer.captured.push(chosenCard, chosen);
-        this.field = this.field.filter(c => c.id !== chosen.id);
-        this.message = `Player ${this.currentPlayerIndex + 1} captured ${chosen.month}!`;
-      } else if (matches.length === 3) {
-        // HIKI!
-        currentPlayer.captured.push(chosenCard, ...matches);
-        this.field = this.field.filter(c => !matches.includes(c));
-        this.completedHikis[this.currentPlayerIndex].push(chosenCard.month);
-        this.message = `Player ${this.currentPlayerIndex + 1} HIKI! Captured all 4 ${chosenCard.month} cards!`;
-      }
+          if (validTargets.length === 0) {
+            // No valid targets - place Gaji on field and clear display
+            this.field.push(chosenCard);
+            this.gajiState.location = 'field';
+            this.gajiState.isWildCard = false;
+            this.message = `Player ${this.currentPlayerIndex + 1} played Gaji - no valid targets.`;
 
-      this.lastPlayedCard = null;
+            // Clear display after animation
+            setTimeout(() => {
+              this.opponentPlayedCard = null;
+              this.phase = 'opponent_turn';
+              setTimeout(() => this.opponentDrawPhase(difficulty), 300);
+            }, 800);
+          } else {
+            // Valid targets exist - capture with Gaji
+            const bestTarget = this.selectBestGajiTarget(validTargets, this.currentPlayerIndex);
+            currentPlayer.captured.push(chosenCard, bestTarget);
+            this.field = this.field.filter(c => c.id !== bestTarget.id);
+            this.gajiState.location = `player_${this.currentPlayerIndex}_captured`;
+            this.gajiState.pairedWithMonth = bestTarget.month;
+            this.gajiState.isWildCard = false;
+            this.message = `Player ${this.currentPlayerIndex + 1} used Gaji to capture ${bestTarget.month}!`;
 
-      // Delay before draw phase
-      setTimeout(() => this.opponentDrawPhase(difficulty), 800);
+            // Keep card displayed while capture animation plays
+            setTimeout(() => {
+              this.opponentPlayedCard = null;
+              this.phase = 'opponent_turn';
+              setTimeout(() => this.opponentDrawPhase(difficulty), 300);
+            }, 800);
+          }
+          return;
+        }
+
+        // Remove from hand AFTER animation has shown it
+        currentPlayer.hand = currentPlayer.hand.filter(c => c.id !== chosenCard.id);
+
+        // Find matches
+        const matches = this.field.filter(fc => fc.month === chosenCard.month);
+
+        if (matches.length === 0) {
+          // No match - place on field
+          // Card will animate from opponentPlayedCard zone to field zone via Card3DManager
+          this.field.push(chosenCard);
+          this.message = `Player ${this.currentPlayerIndex + 1} placed on field.`;
+
+          // Clear display zone and move to draw phase
+          setTimeout(() => {
+            this.opponentPlayedCard = null;
+            this.phase = 'opponent_turn';
+            setTimeout(() => this.opponentDrawPhase(difficulty), 300);
+          }, 600);
+        } else {
+          // Match found - card will be captured
+          // Keep card visible during entire capture animation
+          const chosen = matches.length === 1 ? matches[0] : this.selectBestCapture(matches, this.currentPlayerIndex);
+          currentPlayer.captured.push(chosenCard, chosen);
+          this.field = this.field.filter(c => c.id !== chosen.id);
+          this.message = `Player ${this.currentPlayerIndex + 1} captured ${chosen.month}!`;
+
+          // Keep card displayed while capture animation plays
+          setTimeout(() => {
+            this.opponentPlayedCard = null;
+            this.phase = 'opponent_turn';
+            setTimeout(() => this.opponentDrawPhase(difficulty), 300);
+          }, 800);
+        }
+      }, 600);
     } else {
       // No cards in hand - only draw phase
       this.opponentDrawPhase(difficulty);
@@ -1504,10 +1549,33 @@ export class Sakura {
   }
 
   /**
-   * Medium AI: Prioritize matches and high value
+   * Medium AI: Prioritize matches and high value, with gaji awareness
    */
   selectOpponentCardMedium() {
     const currentPlayer = this.getCurrentPlayer();
+
+    // Check for gaji first - if it can help with yaku, prioritize it
+    const gajiCard = currentPlayer.hand.find(c => this.isGaji(c));
+    if (gajiCard) {
+      const validTargets = this.field.filter(card =>
+        this.canGajiCapture(card, this.currentPlayerIndex)
+      );
+
+      // If gaji can complete a yaku, use it
+      for (let target of validTargets) {
+        if (this.yakuChecker.wouldCompleteYaku(target, currentPlayer.captured)) {
+          return gajiCard;
+        }
+      }
+
+      // If gaji can help yaku progress significantly, prioritize it
+      for (let target of validTargets) {
+        if (this.yakuChecker.wouldHelpYaku(target, currentPlayer.captured)) {
+          return gajiCard;
+        }
+      }
+    }
+
     const scoredMoves = currentPlayer.hand.map(card => {
       let score = 0;
       const matches = this.field.filter(fc => fc.month === card.month);
@@ -1536,7 +1604,7 @@ export class Sakura {
   }
 
   /**
-   * Hard AI: Full yaku awareness and blocking
+   * Hard AI: Full yaku awareness and blocking, with aggressive gaji usage
    */
   selectOpponentCardHard() {
     const currentPlayer = this.getCurrentPlayer();
@@ -1548,7 +1616,41 @@ export class Sakura {
       return this.selectOpponentCardMedium();
     }
 
-    // 2-player hard mode: Block player 0's yaku attempts
+    // 2-player hard mode: Aggressive gaji usage to complete own yaku or block opponent
+    const gajiCard = currentPlayer.hand.find(c => this.isGaji(c));
+    if (gajiCard) {
+      const validTargets = this.field.filter(card =>
+        this.canGajiCapture(card, this.currentPlayerIndex)
+      );
+
+      // Prioritize: Gaji to complete own yaku
+      for (let target of validTargets) {
+        if (this.yakuChecker.wouldCompleteYaku(target, currentPlayer.captured)) {
+          return gajiCard;
+        }
+      }
+
+      // Second priority: Gaji to block player's yaku completion
+      const playerYakuProgress = this.yakuChecker.analyzeYakuProgress(this.players[0].captured);
+      for (let target of validTargets) {
+        for (let yakuKey in playerYakuProgress) {
+          const progress = playerYakuProgress[yakuKey];
+          if (progress.needed.includes(target.month)) {
+            // This gaji move blocks player's yaku
+            return gajiCard;
+          }
+        }
+      }
+
+      // Third priority: Gaji to help own yaku progress
+      for (let target of validTargets) {
+        if (this.yakuChecker.wouldHelpYaku(target, currentPlayer.captured)) {
+          return gajiCard;
+        }
+      }
+    }
+
+    // 2-player hard mode: Block player 0's yaku attempts with regular cards
     const playerYakuProgress = this.yakuChecker.analyzeYakuProgress(this.players[0].captured);
 
     // Try to block player's yaku attempts
@@ -1781,12 +1883,15 @@ export class Sakura {
       opponentRoundScore: playerScores[1]?.roundScore || 0,
       playerMatchScore: this.players[0].matchScore,
       opponentMatchScore: this.players[1]?.matchScore || 0,
+      playerTotalScore: this.players[0].matchScore,
+      opponentTotalScore: this.players[1]?.matchScore || 0,
       roundWinner: roundWinnerIndex === 0 ? 'player' : (roundWinnerIndex === 1 ? 'opponent' : `player${roundWinnerIndex}`),
 
       // Round info
       currentRound: this.currentRound,
       totalRounds: this.totalRounds,
-      playerCount: this.playerCount
+      playerCount: this.playerCount,
+      isGameOver: this.currentRound >= this.totalRounds
     };
 
     // Show round summary
@@ -1983,5 +2088,15 @@ export class Sakura {
    */
   setCard3DManager(card3DManager) {
     this.card3DManager = card3DManager;
+  }
+
+  /**
+   * Check if two cards match (same month)
+   * @param {Object} card1 - First card
+   * @param {Object} card2 - Second card
+   * @returns {boolean} True if cards match
+   */
+  cardsMatch(card1, card2) {
+    return card1.month === card2.month;
   }
 }
