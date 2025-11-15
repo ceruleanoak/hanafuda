@@ -2480,6 +2480,7 @@ class Game {
    */
   getPlayerLabel(index, playerCount, isTeamsMode) {
     if (index === 0) return 'Player';
+    if (playerCount === 2) return 'Opponent';
     return `Opponent ${index}`;
   }
 
