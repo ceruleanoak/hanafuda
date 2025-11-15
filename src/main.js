@@ -123,8 +123,6 @@ class Game {
     // Animation tracking
     this.lastShowcaseAnimation = -1; // Track last showcase animation to prevent repeats
 
-    // New features state
-    this.helpMode = this.gameOptions.get('helpMode'); // Load from saved options
     this.hoverX = -1;             // Mouse hover X position
     this.hoverY = -1;             // Mouse hover Y position
     this.hoveredCard3D = null;    // Currently hovered Card3D object
@@ -1558,16 +1556,11 @@ class Game {
   }
 
   toggleHelpMode() {
-    this.helpMode = !this.helpMode;
-    if (this.helpMode) {
-      this.helpButton.classList.add('active');
+    this.helpButton.classList.toggle('active');
+    if (this.helpButton.classList.contains('active')) {
       // Dismiss tutorial bubble when help is activated
       this.hideTutorial();
-    } else {
-      this.helpButton.classList.remove('active');
     }
-    // Save help mode state
-    this.gameOptions.set('helpMode', this.helpMode);
   }
 
   /**
@@ -2465,18 +2458,30 @@ class Game {
     }
 
     // Update scores - different calculation for Sakura vs Koi-Koi
+    // Only show scores when Help button is active
     const roundText = state.totalRounds > 1 ? ` (Round ${state.currentRound}/${state.totalRounds})` : '';
+    const helpActive = this.helpButton.classList.contains('active');
 
-    if (this.currentGameMode === 'sakura') {
-      // Sakura: Display accumulated points (basePoints) + match score
-      const playerTotal = (state.playerBasePoints || 0) + (state.playerMatchScore || 0);
-      const opponentTotal = (state.opponentBasePoints || 0) + (state.opponentMatchScore || 0);
-      this.playerScoreElement.textContent = playerTotal + roundText;
-      this.opponentScoreElement.textContent = opponentTotal;
+    if (helpActive) {
+      // Help is ON - show scores
+      if (this.currentGameMode === 'sakura') {
+        // Sakura: Display accumulated points (basePoints) + match score
+        const playerTotal = (state.playerBasePoints || 0) + (state.playerMatchScore || 0);
+        const opponentTotal = (state.opponentBasePoints || 0) + (state.opponentMatchScore || 0);
+        this.playerScoreElement.textContent = playerTotal + roundText;
+        this.opponentScoreElement.textContent = opponentTotal;
+      } else {
+        // Koi-Koi: Display cumulative scores
+        this.playerScoreElement.textContent = (state.playerScore || 0) + roundText;
+        this.opponentScoreElement.textContent = (state.opponentScore || 0);
+      }
+      // Make sure score display is visible
+      this.playerScoreElement.style.display = 'block';
+      this.opponentScoreElement.style.display = 'block';
     } else {
-      // Koi-Koi: Display cumulative scores
-      this.playerScoreElement.textContent = (state.playerScore || 0) + roundText;
-      this.opponentScoreElement.textContent = (state.opponentScore || 0);
+      // Help is OFF - hide scores
+      this.playerScoreElement.style.display = 'none';
+      this.opponentScoreElement.style.display = 'none';
     }
 
     // Update instructions and log if message changed
