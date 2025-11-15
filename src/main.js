@@ -1946,12 +1946,12 @@ class Game {
     }
 
     // For 4P teams mode: organize players into teams
-    // Team 1: Player 0 (You) + Player 2 (AI 1)
-    // Team 2: Player 1 (AI 2) + Player 3 (AI 3)
+    // Team 1: Player 0 (You) + Player 2 (Ally)
+    // Team 2: Player 1 (Opponent 1) + Player 3 (Opponent 2)
     if (isTeamsMode && playerCount === 4 && playerScores && playerScores.length === 4) {
       const teams = [
-        { name: 'Team 1 (You & AI 1)', players: [0, 2] },
-        { name: 'Team 2 (AI 2 & AI 3)', players: [1, 3] }
+        { name: 'Team 1: You & Ally', players: [0, 2] },
+        { name: 'Team 2: Opponents', players: [1, 3] }
       ];
 
       teams.forEach(team => {
@@ -1967,8 +1967,10 @@ class Game {
           let playerLabel;
           if (playerIndex === 0) {
             playerLabel = 'You';
+          } else if (playerIndex === 2) {
+            playerLabel = 'Ally';
           } else {
-            playerLabel = `AI ${playerIndex}`;
+            playerLabel = `Opponent ${playerIndex === 1 ? 1 : 2}`;
           }
           const isYou = playerIndex === 0;
 

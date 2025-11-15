@@ -213,6 +213,17 @@ export class Renderer {
     // Draw trick pile labels using fixed zone positions (N-player support)
     // Determine player count from card3DManager
     const playerCount = card3DManager.playerCount || 2;
+    const isTeamsMode = playerCount === 4; // Teams mode is 4-player
+
+    // Helper to get player label (You/Opponent/Ally)
+    const getPlayerLabel = (playerIndex) => {
+      if (playerIndex === 0) return 'You';
+      if (isTeamsMode && playerCount === 4) {
+        // Team assignments: P0 + P2 vs P1 + P3
+        return playerIndex === 2 ? 'Ally' : `Opponent ${playerIndex === 1 ? 1 : 2}`;
+      }
+      return `Opponent ${playerIndex}`;
+    };
 
     // Get trick configs for 2-player mode (will be used in multiple places below)
     let playerTrickConfig, opponentTrickConfig;
@@ -223,12 +234,12 @@ export class Renderer {
 
       const playerTrickCards = card3DManager.getCardsInZone('player0Trick');
       if (playerTrickCards.length > 0) {
-        this.drawTrickLabel(playerTrickConfig.position.x, playerTrickConfig.position.y, `Player: ${playerTrickCards.length}`, false);
+        this.drawTrickLabel(playerTrickConfig.position.x, playerTrickConfig.position.y, `You`, false);
       }
 
       const opponentTrickCards = card3DManager.getCardsInZone('player1Trick');
       if (opponentTrickCards.length > 0) {
-        this.drawTrickLabel(opponentTrickConfig.position.x, opponentTrickConfig.position.y, `Opponent: ${opponentTrickCards.length}`, true);
+        this.drawTrickLabel(opponentTrickConfig.position.x, opponentTrickConfig.position.y, `Opponent`, true);
       }
     } else {
       // N-player layout (3-4 players)
@@ -238,8 +249,8 @@ export class Renderer {
         const trickCards = card3DManager.getCardsInZone(trickZone);
 
         if (trickCards.length > 0) {
-          const playerLabel = i === 0 ? 'You' : `P${i + 1}`;
-          this.drawTrickLabel(trickConfig.position.x, trickConfig.position.y, `${playerLabel}: ${trickCards.length}`, i !== 0);
+          const playerLabel = getPlayerLabel(i);
+          this.drawTrickLabel(trickConfig.position.x, trickConfig.position.y, playerLabel, i !== 0);
         }
       }
     }
