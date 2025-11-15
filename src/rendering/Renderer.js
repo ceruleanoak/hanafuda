@@ -314,7 +314,7 @@ export class Renderer {
         if (hoverX >= playerTrickZone.x && hoverX <= playerTrickZone.x + playerTrickZone.width &&
             hoverY >= playerTrickZone.y && hoverY <= playerTrickZone.y + playerTrickZone.height &&
             gameState.playerCaptured.length > 0) {
-          this.drawTricksList(gameState.playerCaptured, 'You');
+          this.drawTricksList(gameState.playerCaptured, 'You', pointValueOptions);
         }
 
         // Check if mouse is in opponent trick pile zone
@@ -327,7 +327,7 @@ export class Renderer {
         if (hoverX >= opponentTrickZone.x && hoverX <= opponentTrickZone.x + opponentTrickZone.width &&
             hoverY >= opponentTrickZone.y && hoverY <= opponentTrickZone.y + opponentTrickZone.height &&
             gameState.opponentCaptured.length > 0) {
-          this.drawTricksList(gameState.opponentCaptured, 'Opponent');
+          this.drawTricksList(gameState.opponentCaptured, 'Opponent', pointValueOptions);
         }
       } else if (gameState.players) {
         // N-player trick pile hover (3-4 players)
@@ -347,7 +347,7 @@ export class Renderer {
             if (hoverX >= trickZoneRect.x && hoverX <= trickZoneRect.x + trickZoneRect.width &&
                 hoverY >= trickZoneRect.y && hoverY <= trickZoneRect.y + trickZoneRect.height) {
               const playerLabel = getPlayerLabel(i);
-              this.drawTricksList(gameState.players[i].captured || [], playerLabel);
+              this.drawTricksList(gameState.players[i].captured || [], playerLabel, pointValueOptions);
             }
           }
         }
@@ -931,8 +931,11 @@ export class Renderer {
 
   /**
    * Draw tricks list overlay when hovering over captured pile
+   * @param {Array} capturedCards - Array of card objects
+   * @param {String} title - Title for the overlay
+   * @param {Object} pointValueOptions - Optional { enabled: boolean, getValue: (card) => number }
    */
-  drawTricksList(capturedCards, title) {
+  drawTricksList(capturedCards, title, pointValueOptions = null) {
     const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
     const padding = 20;
     const cardSpacing = 10;
@@ -969,7 +972,7 @@ export class Renderer {
       const cardX = x + padding + col * (cardWidth + cardSpacing);
       const cardY = y + padding + 40 + row * (cardHeight + cardSpacing);
 
-      this.cardRenderer.drawCard(this.ctx, card, cardX, cardY, false, false);
+      this.cardRenderer.drawCard(this.ctx, card, cardX, cardY, false, false, 1.0, pointValueOptions);
     });
 
     this.ctx.restore();
