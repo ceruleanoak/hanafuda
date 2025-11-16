@@ -2267,10 +2267,28 @@ class Game {
       data.playerScores.forEach((playerScore, index) => {
         const isYou = index === 0;
 
+        // Determine player label based on player count and teams mode
+        let playerLabel;
+        if (index === 0) {
+          playerLabel = 'You';
+        } else if (displayData.isTeamsMode && playerCount === 4) {
+          // Teams mode: You (0), Opponent 1 (1), Ally (2), Opponent 2 (3)
+          if (index === 2) {
+            playerLabel = 'Ally';
+          } else if (index === 1) {
+            playerLabel = 'Opponent 1';
+          } else {
+            playerLabel = 'Opponent 2';
+          }
+        } else {
+          // Non-teams mode: You (0), Opponent 1 (1), Opponent 2 (2), Opponent 3 (3)
+          playerLabel = `Opponent ${index}`;
+        }
+
         const yakuCard = document.createElement('div');
         yakuCard.className = `yaku-card ${isYou ? 'player-you' : ''}`;
 
-        let yakuCardHTML = `<div class="yaku-card-header">${isYou ? 'You' : `Opponent ${index}`}</div>`;
+        let yakuCardHTML = `<div class="yaku-card-header">${playerLabel}</div>`;
 
         // Base points
         yakuCardHTML += `<div class="yaku-item"><strong>Base:</strong> ${playerScore.basePoints} pts</div>`;
@@ -2279,7 +2297,21 @@ class Game {
         if (playerScore.yaku.length > 0) {
           yakuCardHTML += `<div class="yaku-label"><strong>Yaku (${playerScore.yaku.length}):</strong></div>`;
           playerScore.yaku.forEach(y => {
-            const penaltyLabel = isYou ? '→ opponent' : '→ you';
+            // Determine penalty recipients based on game mode
+            let penaltyLabel;
+            if (playerCount === 2) {
+              penaltyLabel = isYou ? '→ opponent' : '→ you';
+            } else if (displayData.isTeamsMode && playerCount === 4) {
+              // Teams mode: penalty goes to the other team
+              if (index === 0 || index === 2) {
+                penaltyLabel = '→ opponents';
+              } else {
+                penaltyLabel = '→ you & ally';
+              }
+            } else {
+              // 3P or 4P non-teams: penalty goes to all other players
+              penaltyLabel = isYou ? '→ opponents' : '→ all';
+            }
             yakuCardHTML += `<div class="yaku-item">• ${y.displayName} ${penaltyLabel}</div>`;
           });
         } else {
