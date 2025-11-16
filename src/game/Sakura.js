@@ -1444,12 +1444,39 @@ export class Sakura {
           return;
         }
 
-      // Wait for animations to complete before draw phase
-      if (this.card3DManager) {
-        this.card3DManager.waitForAllAnimations(() => this.opponentDrawPhase(difficulty));
-      } else {
-        setTimeout(() => this.opponentDrawPhase(difficulty), 800);
-      }
+        // Remove from hand AFTER animation has shown it
+        currentPlayer.hand = currentPlayer.hand.filter(c => c.id !== chosenCard.id);
+
+        // Find matches
+        const matches = this.field.filter(fc => fc.month === chosenCard.month);
+
+        if (matches.length === 0) {
+          // No match - place on field
+          // Card will animate from opponentPlayedCard zone to field zone via Card3DManager
+          this.field.push(chosenCard);
+          this.message = `Player ${this.currentPlayerIndex + 1} placed on field.`;
+
+          // Clear display zone and move to draw phase
+          setTimeout(() => {
+            this.opponentPlayedCard = null;
+            this.phase = 'opponent_turn';
+            setTimeout(() => this.opponentDrawPhase(difficulty), 300);
+          }, 600);
+        } else {
+          // Match found - card will be captured
+          // Keep card visible during entire capture animation
+          const chosen = matches.length === 1 ? matches[0] : this.selectBestCapture(matches, this.currentPlayerIndex);
+          currentPlayer.captured.push(chosenCard, chosen);
+          this.field = this.field.filter(c => c.id !== chosen.id);
+          this.message = `Player ${this.currentPlayerIndex + 1} captured ${chosen.month}!`;
+
+          // Keep card displayed while capture animation plays
+          setTimeout(() => {
+            this.opponentPlayedCard = null;
+            this.phase = 'opponent_turn';
+            setTimeout(() => this.opponentDrawPhase(difficulty), 300);
+          }, 800);
+        }
       }, 600); // Close the setTimeout from line 1405
     } else {
       // No cards in hand - only draw phase
