@@ -48,6 +48,7 @@ class Game {
 
     // Game mode tracking - restore from localStorage or default to 'koikoi'
     this.currentGameMode = localStorage.getItem('currentGameMode') || 'koikoi'; // 'koikoi', 'sakura', 'match', or 'shop'
+    this.justSwitchedMode = false; // Track if we just switched game modes to prevent unwanted animations
     this.gameModeSelect = document.getElementById('game-mode-select');
 
     // Player count for Sakura (used in multi-player setup)
@@ -799,9 +800,12 @@ class Game {
     this.updateUI();
     this.statusElement.classList.remove('show');
 
-    // Initialize Card3D system from game state with Toss Across animation
+    // Initialize Card3D system from game state
+    // Don't use Toss Across animation if we just switched game modes, only for new games in same mode
+    const shouldAnimate = !this.justSwitchedMode;
+    this.justSwitchedMode = false; // Reset flag after use
     this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
-    this.card3DManager.initializeFromGameState(this.game.getState(), true);
+    this.card3DManager.initializeFromGameState(this.game.getState(), shouldAnimate);
     debugLogger.log('3dCards', '✨ Card3D system initialized for new game', null);
   }
 
@@ -811,7 +815,11 @@ class Game {
     // Hide all modals before switching game modes for clean state transition
     this.hideAllModals();
 
+    // Clear all cards from previous game mode to prevent animation artifacts
+    this.card3DManager.clear();
+
     this.currentGameMode = mode;
+    this.justSwitchedMode = true; // Flag that we just switched modes to prevent animations on next game start
     // Save game mode to localStorage so it persists across browser refreshes
     localStorage.setItem('currentGameMode', mode);
 
@@ -891,11 +899,11 @@ class Game {
         }
       });
 
-      // Apply Toss Across animation if enabled (cards end face-down for match game)
-      if (this.gameOptions.get('animationsEnabled')) {
+      // Apply Toss Across animation if enabled and we didn't just switch modes
+      if (this.gameOptions.get('animationsEnabled') && !this.justSwitchedMode) {
         this.card3DManager.applyTossAcrossAnimation(false); // false = end face down
       } else {
-        // If animations disabled, immediately position cards
+        // If animations disabled or we just switched modes, immediately position cards
         gameState.allCards.forEach(cardData => {
           const card3D = this.card3DManager.cards.get(cardData.id);
           if (card3D && cardData.position) {
@@ -907,6 +915,7 @@ class Game {
         });
       }
 
+      this.justSwitchedMode = false; // Reset flag after match mode initialization
       debugLogger.log('3dCards', '✨ Card3D system initialized for match game', null);
     } else if (mode === 'shop') {
       // For Shop mode, show the shop modal
