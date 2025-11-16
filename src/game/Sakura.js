@@ -622,6 +622,30 @@ export class Sakura {
       return this.selectFieldCard(card);
     }
 
+    // Handle hand card clicks in gaji_selection phase - allow deselecting the Gaji
+    if (this.phase === 'gaji_selection' && owner === 'player') {
+      // Check if clicking the same Gaji card - deselect it and go back
+      if (this.selectedCards.length > 0 && this.selectedCards[0].id === card.id) {
+        debugLogger.log('sakura', `⚡ Gaji deselected, returning to select_hand phase`);
+
+        // Return Gaji to hand
+        this.playerHand.push(card);
+
+        // Reset to select_hand phase
+        this.selectedCards = [];
+        this.drawnCardMatches = [];
+        this.phase = 'select_hand';
+        this.message = 'Gaji cancelled. Select a card from hand.';
+
+        return true;
+      }
+
+      // Clicking a different hand card - ignore it (player must choose field card or deselect current Gaji)
+      debugLogger.log('sakura', `⚠️ Cannot switch cards in gaji_selection phase - must choose field card or click Gaji again to deselect`);
+      this.message = 'Choose a field card to capture with Gaji, or click Gaji again to deselect it.';
+      return false;
+    }
+
     // Handle hand card selection in select_hand phase
     if (this.phase === 'select_hand' && owner === 'player') {
       // Check if card is Gaji (wild card) - only wild when IN HAND
@@ -1439,6 +1463,9 @@ export class Sakura {
 
     // Draw card
     this.drawnCard = this.deck.draw();
+
+    // Show the draw phase - critical for visual feedback (similar to human player)
+    this.phase = 'show_drawn';
     this.message = `Player ${this.currentPlayerIndex + 1} drew ${this.drawnCard.month}...`;
 
     // Check if Gaji
@@ -1816,7 +1843,8 @@ export class Sakura {
         yakuPenalty,
         yaku: this.players[i].yaku,
         roundScore,
-        isHuman: this.players[i].isHuman
+        isHuman: this.players[i].isHuman,
+        matchScore: this.players[i].matchScore // Include updated match score
       });
     }
 
@@ -1979,6 +2007,17 @@ export class Sakura {
   nextRound() {
     this.currentRound++;
     this.reset();
+
+    // Start the turn for the new round
+    if (this.currentPlayerIndex === 0) {
+      // Human player's turn - phase already set to 'select_hand' by reset()
+      this.message = 'Your turn! Select a card from your hand.';
+    } else {
+      // AI player's turn - automatically trigger after a delay
+      debugLogger.log('sakura', `🤖 Starting Round ${this.currentRound}, Player ${this.currentPlayerIndex + 1} (AI) begins`);
+      this.message = `Player ${this.currentPlayerIndex + 1}'s turn...`;
+      setTimeout(() => this.opponentTurn(), 1000);
+    }
   }
 
   /**

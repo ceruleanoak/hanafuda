@@ -3,6 +3,9 @@
  * Uses fixed anchor points for predictable animations
  */
 
+// Offset for header height (50px to account for the game header covering the game area)
+const HEADER_OFFSET = 50;
+
 export class LayoutManager {
   constructor(cardWidth = 100, cardHeight = 140) {
     this.cardWidth = cardWidth;
@@ -203,17 +206,9 @@ export class LayoutManager {
 
     // Base configs shared across all modes
     const baseConfigs = {
-      deck: {
-        type: 'stack',
-        position: { x: margin + 50, y: centerY },
-        offset: { x: 0.5, y: 0.5, z: 0.2 },
-        faceUp: 0,
-        renderLayer: 1
-      },
-
       drawnCard: {
         type: 'stack',
-        position: { x: centerX, y: 90 }, // Center-top of screen
+        position: { x: centerX, y: 90 + HEADER_OFFSET }, // Center-top of screen
         offset: { x: 0, y: 0, z: 0 },
         faceUp: 1,
         renderLayer: 6 // Above everything else to show prominently
@@ -221,7 +216,7 @@ export class LayoutManager {
 
       opponentPlayedCard: {
         type: 'stack',
-        position: { x: centerX, y: 120 }, // Center-top of screen, below drawnCard
+        position: { x: centerX, y: 120 + HEADER_OFFSET }, // Center-top of screen, below drawnCard
         offset: { x: 0, y: 0, z: 0 },
         faceUp: 1,
         renderLayer: 5 // Below drawnCard but above most other elements
@@ -230,10 +225,10 @@ export class LayoutManager {
       field: {
         type: 'grid',
         // Center field vertically between player hand (viewportHeight - 170) and opponent hand (40)
-        anchorPoint: { x: 100, y: (viewportHeight - 130) / 2 },
+        anchorPoint: { x: 100, y: (viewportHeight - 130) / 2 + HEADER_OFFSET },
         centerX: centerX,
         spacing: 115,
-        maxPerRow: 8,
+        maxPerRow: 9,
         rowSpacing: 180, // Increased from default 160 to prevent overlap (card height is 140)
         useFixedPositions: true,
         faceUp: 1,
@@ -249,7 +244,7 @@ export class LayoutManager {
         return {
           player0Hand: {
             type: 'row',
-            anchorPoint: { x: 50, y: viewportHeight - 170 },
+            anchorPoint: { x: 50, y: viewportHeight - 170 + HEADER_OFFSET },
             centerX: centerX,
             spacing: 115,
             maxCards: 8,
@@ -259,7 +254,7 @@ export class LayoutManager {
           },
           player1Hand: {
             type: 'row',
-            anchorPoint: { x: 50, y: 40 },
+            anchorPoint: { x: 50, y: 40 + HEADER_OFFSET },
             centerX: centerX,
             spacing: 115,
             maxCards: 8,
@@ -268,7 +263,7 @@ export class LayoutManager {
           },
           player0Trick: {
             type: 'fan',
-            position: { x: viewportWidth - 162, y: viewportHeight - 170 },
+            position: { x: viewportWidth - 162, y: viewportHeight - 170 + HEADER_OFFSET },
             fanOffset: { x: 8, y: 8, z: 2 },
             maxVisible: 5,
             faceUp: 1,
@@ -276,7 +271,7 @@ export class LayoutManager {
           },
           player1Trick: {
             type: 'fan',
-            position: { x: viewportWidth - 162, y: 40 },
+            position: { x: viewportWidth - 162, y: 40 + HEADER_OFFSET },
             fanOffset: { x: 8, y: 8, z: 2 },
             maxVisible: 5,
             faceUp: 1,
@@ -288,7 +283,7 @@ export class LayoutManager {
         return {
           player0Hand: {
             type: 'row',
-            anchorPoint: { x: 50, y: viewportHeight - 170 },
+            anchorPoint: { x: 50, y: viewportHeight - 170 + HEADER_OFFSET },
             centerX: centerX,
             spacing: 115,
             maxCards: 7,
@@ -298,7 +293,7 @@ export class LayoutManager {
           },
           player1Hand: {
             type: 'fan',
-            position: { x: 150, y: 100 },
+            position: { x: 150, y: 100 + HEADER_OFFSET },
             fanOffset: { x: 8, y: -8, z: 2 },
             maxVisible: 5,
             faceUp: 0,
@@ -306,7 +301,7 @@ export class LayoutManager {
           },
           player2Hand: {
             type: 'fan',
-            position: { x: viewportWidth - 150, y: 100 },
+            position: { x: viewportWidth - 150, y: 100 + HEADER_OFFSET },
             fanOffset: { x: -8, y: -8, z: 2 },
             maxVisible: 5,
             faceUp: 0,
@@ -314,7 +309,7 @@ export class LayoutManager {
           },
           player0Trick: {
             type: 'fan',
-            position: { x: viewportWidth - 162, y: viewportHeight - 170 },
+            position: { x: viewportWidth - 162, y: viewportHeight - 170 + HEADER_OFFSET },
             fanOffset: { x: 8, y: 8, z: 2 },
             maxVisible: 5,
             faceUp: 1,
@@ -322,7 +317,7 @@ export class LayoutManager {
           },
           player1Trick: {
             type: 'fan',
-            position: { x: margin + 50, y: 150 },
+            position: { x: margin + 50, y: 150 + HEADER_OFFSET },
             fanOffset: { x: 8, y: -8, z: 2 },
             maxVisible: 4,
             faceUp: 1,
@@ -330,7 +325,7 @@ export class LayoutManager {
           },
           player2Trick: {
             type: 'fan',
-            position: { x: viewportWidth - margin - 50, y: 150 },
+            position: { x: viewportWidth - margin - 50, y: 150 + HEADER_OFFSET },
             fanOffset: { x: -8, y: -8, z: 2 },
             maxVisible: 4,
             faceUp: 1,
@@ -338,12 +333,13 @@ export class LayoutManager {
           }
         };
       } else if (playerCount === 4) {
-        // 4-Player Layout: P0 bottom-center, P1 left-center, P2 top-center, P3 right-center
-        // Trick piles in four corners: P0 bottom-right, P1 bottom-left, P2 top-left, P3 top-right
+        // 4-Player Layout: You (bottom-center), Opponent1 (left-center), Opponent2 (top-center), Opponent3 (right-center)
+        // Trick piles in four corners: You (bottom-right), Opponent1 (bottom-left), Opponent2 (top-left), Opponent3 (top-right)
+        // Deck integrated into field grid at position 0
         return {
           player0Hand: {
             type: 'row',
-            anchorPoint: { x: 50, y: viewportHeight - 170 },
+            anchorPoint: { x: 50, y: viewportHeight - 170 + HEADER_OFFSET },
             centerX: centerX,
             spacing: 115,
             maxCards: 5,
@@ -353,7 +349,7 @@ export class LayoutManager {
           },
           player1Hand: {
             type: 'fan',
-            position: { x: 80, y: centerY },
+            position: { x: 80, y: centerY + HEADER_OFFSET },
             fanOffset: { x: 8, y: 8, z: 2 },
             maxVisible: 5,
             faceUp: 0,
@@ -361,7 +357,7 @@ export class LayoutManager {
           },
           player2Hand: {
             type: 'row',
-            anchorPoint: { x: 50, y: 100 },
+            anchorPoint: { x: 50, y: 100 + HEADER_OFFSET },
             centerX: centerX,
             spacing: 115,
             maxCards: 5,
@@ -370,7 +366,7 @@ export class LayoutManager {
           },
           player3Hand: {
             type: 'fan',
-            position: { x: viewportWidth - 80, y: centerY },
+            position: { x: viewportWidth - 80, y: centerY + HEADER_OFFSET },
             fanOffset: { x: -8, y: 8, z: 2 },
             maxVisible: 5,
             faceUp: 0,
@@ -378,7 +374,7 @@ export class LayoutManager {
           },
           player0Trick: {
             type: 'fan',
-            position: { x: viewportWidth - 162, y: viewportHeight - 170 },
+            position: { x: viewportWidth - 162, y: viewportHeight - 170 + HEADER_OFFSET },
             fanOffset: { x: -8, y: -8, z: 2 },
             maxVisible: 6,
             faceUp: 1,
@@ -386,7 +382,7 @@ export class LayoutManager {
           },
           player1Trick: {
             type: 'fan',
-            position: { x: margin + 50, y: viewportHeight - 170 },
+            position: { x: margin + 50, y: viewportHeight - 170 + HEADER_OFFSET },
             fanOffset: { x: 8, y: -8, z: 2 },
             maxVisible: 6,
             faceUp: 1,
@@ -394,15 +390,15 @@ export class LayoutManager {
           },
           player2Trick: {
             type: 'fan',
-            position: { x: margin + 50, y: 80 },
-            fanOffset: { x: 8, y: 8, z: 2 },
+            position: { x: margin + 50, y: 80 + HEADER_OFFSET },
+            fanOffset: { x: -8, y: 8, z: 2 },
             maxVisible: 6,
             faceUp: 1,
             renderLayer: 2
           },
           player3Trick: {
             type: 'fan',
-            position: { x: viewportWidth - margin - 50, y: 80 },
+            position: { x: viewportWidth - margin - 50, y: 80 + HEADER_OFFSET },
             fanOffset: { x: -8, y: 8, z: 2 },
             maxVisible: 6,
             faceUp: 1,

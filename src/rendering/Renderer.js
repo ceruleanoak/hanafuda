@@ -138,7 +138,7 @@ export class Renderer {
    * @param {Object} options - Render options
    */
   render3D(gameState, card3DManager, options = {}) {
-    const { helpMode = false, hoverX = -1, hoverY = -1, isModalVisible = false } = options;
+    const { helpMode = false, hoverX = -1, hoverY = -1, isModalVisible = false, isGameOver = false } = options;
 
     this.clear();
     this.drawBackground();
@@ -184,30 +184,46 @@ export class Renderer {
 
     // Draw all visible cards
     visibleCards.forEach(card3D => {
+      // Skip rendering deck cards if deck is empty (count = 0)
+      if (card3D.homeZone === 'deck' && gameState.deckCount === 0) {
+        return;
+      }
       this.cardRenderer.drawCard3D(this.ctx, card3D, false, card3D.opacity, pointValueOptions, wildCardOptions);
     });
 
-    // Draw deck counter - always show at fixed position
-    const deckConfig = LayoutManager.getZoneConfig('deck', this.displayWidth, this.displayHeight);
-    const deckCards = card3DManager.getCardsInZone('deck');
+    // Draw deck at field gridSlot 0 position (calculated from field layout)
+    if (gameState.deckCount > 0) {
+      const fieldConfig = LayoutManager.getZoneConfig('field', this.displayWidth, this.displayHeight, card3DManager.playerCount);
+      const layoutManager = new LayoutManager();
 
-    // If no cards in deck zone, still draw a deck placeholder at the fixed position
-    if (deckCards.length === 0 && gameState.deckCount >= 0) {
-      // Draw a face-down card placeholder for the deck
+      // Create a dummy card with gridSlot 0 to calculate its position
+      const dummyCard = { gridSlot: 0 };
+      const positions = layoutManager.layoutGrid([dummyCard], fieldConfig);
+      const slot0Position = positions[0];
+
+      // Draw a stacked deck representation at slot 0 position (from center)
       const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
-      this.cardRenderer.drawCard(
-        this.ctx,
-        { name: 'Deck' },
-        deckConfig.position.x - cardWidth / 2,
-        deckConfig.position.y - cardHeight / 2,
-        false,
-        true // face down
-      );
-      this.drawDeckCount(deckConfig.position.x, deckConfig.position.y, gameState.deckCount);
-    } else if (deckCards.length > 0) {
-      // Draw count on top card
-      const topCard = deckCards[deckCards.length - 1];
-      this.drawDeckCount(topCard.x, topCard.y, gameState.deckCount);
+      const stackDepth = 3; // Draw 3 cards stacked for deck visual
+      const centerX = slot0Position.x - cardWidth / 2;
+      const centerY = slot0Position.y - cardHeight / 2;
+
+      for (let i = 0; i < stackDepth; i++) {
+        const offset = i * 2; // 2px offset per card for visual depth
+        this.cardRenderer.drawCard(
+          this.ctx,
+          { name: 'Deck' },
+          centerX + offset,
+          centerY + offset,
+          false,
+          true // face down
+        );
+      }
+
+      // Draw deck count on top (at center position)
+      this.drawDeckCount(slot0Position.x, slot0Position.y, gameState.deckCount);
+
+      // Store deck position for hover detection
+      this.deckPosition = { x: slot0Position.x, y: slot0Position.y };
     }
 
     // Draw trick pile labels using fixed zone positions (N-player support)
@@ -289,19 +305,40 @@ export class Renderer {
       this.highlight3DMatchableCards(gameState, card3DManager);
     }
 
-    // Hover interactions (only if no modal is visible)
-    if (hoverX >= 0 && hoverY >= 0 && !isModalVisible) {
-      const hoveredCard = card3DManager.getCardAtPosition(hoverX, hoverY);
+    // Apply matching card animations and highlighting during select_drawn_match phase
+    if (gameState.phase === 'select_drawn_match' && gameState.drawnCard) {
+      this.animateAndHighlightMatchingCards(gameState, card3DManager, helpMode);
+    } else {
+      // Clear rotation animations from field cards when not in select_drawn_match phase
+      gameState.field.forEach(fieldCard => {
+        const card3D = card3DManager.getCard(fieldCard);
+        if (card3D && card3D.rotation !== 0) {
+          card3D.rotation = 0;
+        }
+      });
+    }
 
-      // Deck hover - show all cards grid
-      if (hoveredCard && hoveredCard.homeZone === 'deck') {
-        this.drawAllCardsGrid(gameState);
+    // Hover interactions (only if no modal is visible and game is not over)
+    if (hoverX >= 0 && hoverY >= 0 && !isModalVisible && !isGameOver) {
+      const hoveredCard = card3DManager.getCardAtPosition(hoverX, hoverY);
+      const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
+
+      // Deck hover - use dynamic deck position calculated from field grid
+      if (this.deckPosition && gameState.deckCount > 0) {
+        const deckZoneRect = {
+          x: this.deckPosition.x - cardWidth / 2,
+          y: this.deckPosition.y - cardHeight / 2,
+          width: cardWidth,
+          height: cardHeight
+        };
+        if (hoverX >= deckZoneRect.x && hoverX <= deckZoneRect.x + deckZoneRect.width &&
+            hoverY >= deckZoneRect.y && hoverY <= deckZoneRect.y + deckZoneRect.height) {
+          this.drawAllCardsGrid(gameState);
+        }
       }
 
       // Trick pile hover - use zone-based detection instead of card-based (N-player support)
       // This allows hover to work even when no cards are visible or between cards
-      const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
-
       if (playerCount === 2) {
         // 2-player trick pile hover
         // Check if mouse is in player trick pile zone
@@ -506,6 +543,44 @@ export class Renderer {
     card3DManager.getCardsInZone('player0Hand').forEach(card3D => {
       if (matchableHandCards.has(card3D.id)) {
         this.drawCardHighlight(card3D, '#ffeb3b');
+      }
+    });
+
+    this.ctx.restore();
+  }
+
+  /**
+   * Animate and highlight matching field cards during select_drawn_match phase
+   * Applies subtle rotation animation and highlighting (same style as hand card matching)
+   */
+  animateAndHighlightMatchingCards(gameState, card3DManager, helpMode) {
+    // Find field cards that match the drawn card
+    const matchingFieldCards = gameState.field.filter(fieldCard =>
+      fieldCard.month === gameState.drawnCard.month
+    );
+
+    if (matchingFieldCards.length === 0) return;
+
+    // Get current time for rotation animation (continuous back-and-forth)
+    const now = performance.now();
+    const animationCycle = 1000; // 1 second per full cycle
+    const progress = (now % animationCycle) / animationCycle; // 0 to 1
+
+    // Calculate rotation: -5% to +5% (converts to radians: ±0.087 radians = ±5 degrees)
+    const maxRotation = 0.087; // 5 degrees in radians
+    const rotation = maxRotation * Math.sin(progress * Math.PI * 2);
+
+    this.ctx.save();
+
+    // Apply animation and highlighting to matching field cards
+    matchingFieldCards.forEach(matchCard => {
+      const card3D = card3DManager.getCard(matchCard);
+      if (card3D) {
+        // Apply rotation animation
+        card3D.rotation = rotation;
+
+        // Always highlight matching field cards (same as hand card matching)
+        this.drawCardHighlight(card3D, '#ffeb3b'); // Yellow highlight like hand cards
       }
     });
 
@@ -1077,10 +1152,21 @@ export class Renderer {
 
     // Create sets for different card states
     const capturedCardIds = new Set();
-    const playerTrick = gameState.players?.[0]?.trick || gameState.playerCaptured || [];
-    const opponentTrick = gameState.players?.[1]?.trick || gameState.opponentCaptured || [];
-    playerTrick.forEach(c => capturedCardIds.add(c.id));
-    opponentTrick.forEach(c => capturedCardIds.add(c.id));
+
+    // Collect captured cards from all players (works for 2P, 3P, 4P modes)
+    if (gameState.players && Array.isArray(gameState.players)) {
+      gameState.players.forEach(player => {
+        if (player.captured) {
+          player.captured.forEach(c => capturedCardIds.add(c.id));
+        }
+      });
+    } else {
+      // Legacy 2-player format fallback
+      const playerTrick = gameState.playerCaptured || [];
+      const opponentTrick = gameState.opponentCaptured || [];
+      playerTrick.forEach(c => capturedCardIds.add(c.id));
+      opponentTrick.forEach(c => capturedCardIds.add(c.id));
+    }
 
     const playerHand = gameState.players?.[0]?.hand || gameState.playerHand || [];
     const playerHandIds = new Set(playerHand.map(c => c.id));

@@ -20,7 +20,7 @@ body {
 
 header {
   padding: 1rem 2rem;
-  background: rgba(0, 0, 0, 0.8);
+  background: hsl(7, 89%, 41%);
   border-bottom: 2px solid #333;
   display: flex;
   justify-content: space-between;
@@ -33,6 +33,14 @@ h1 {
   font-size: 1.8rem;
   color: #ff6b6b;
   margin: 0;
+  display: flex;
+  align-items: center;
+}
+
+.header-logo {
+  height: 50px;
+  width: auto;
+  object-fit: contain;
 }
 
 #game-mode-selector {
@@ -54,7 +62,7 @@ h1 {
 #game-mode-select {
   padding: 0.5rem 1rem;
   background: #1e1e1e;
-  border: 2px solid #4ecdc4;
+  border: 2px solid #8b0000;
   border-radius: 6px;
   color: #fff;
   font-size: 1rem;
@@ -64,14 +72,14 @@ h1 {
 }
 
 #game-mode-select:hover {
-  border-color: #5effd6;
+  border-color: #a00000;
   background: #2a2a2a;
 }
 
 #game-mode-select:focus {
   outline: none;
-  border-color: #5effd6;
-  box-shadow: 0 0 10px rgba(78, 205, 196, 0.3);
+  border-color: #a00000;
+  box-shadow: 0 0 10px rgba(139, 0, 0, 0.5);
 }
 
 #game-info {
@@ -103,7 +111,7 @@ h1 {
 }
 
 #score-display > span strong {
-  color: #4ecdc4;
+  color: hsl(55, 100%, 50%);
   margin-left: 0.3rem;
 }
 
@@ -133,7 +141,7 @@ h1 {
 }
 
 #score strong {
-  color: #4ecdc4;
+  color: hsl(55, 100%, 50%);
 }
 
 #help-btn,
@@ -141,9 +149,10 @@ h1 {
 #options-btn,
 #test-3d-btn,
 #animation-tester-btn,
-#new-game-btn {
+#new-game-btn,
+#card-back-btn {
   padding: 0.5rem 1.5rem;
-  background: #4ecdc4;
+  background: hsl(55, 100%, 50%);
   border: none;
   border-radius: 4px;
   color: #000;
@@ -163,8 +172,9 @@ h1 {
 #options-btn:hover,
 #test-3d-btn:hover,
 #animation-tester-btn:hover,
-#new-game-btn:hover {
-  background: #45b8b0;
+#new-game-btn:hover,
+#card-back-btn:hover {
+  background: hsl(55, 100%, 60%);
 }
 
 #help-btn.active {
@@ -196,7 +206,7 @@ main {
 
 #game-canvas {
   display: block;
-  background: #000;
+  background: hsl(137, 44%, 27%);
   cursor: pointer;
   image-rendering: crisp-edges;
   position: absolute;
@@ -227,13 +237,13 @@ main {
 
 footer {
   padding: 1rem 2rem;
-  background: rgba(0, 0, 0, 0.8);
+  background: hsl(7, 89%, 41%);
   border-top: 2px solid #333;
 }
 
 #instructions {
   text-align: center;
-  color: #aaa;
+  color: #fff;
   font-size: 1.8rem;
 }
 
@@ -259,7 +269,7 @@ footer {
   background: linear-gradient(135deg, #1e1e1e 0%, #2a2a2a 100%);
   padding: 2.5rem;
   border-radius: 12px;
-  border: 3px solid #4ecdc4;
+  border: 3px solid hsl(55, 100%, 50%);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
   text-align: center;
   min-width: 400px;
@@ -269,7 +279,7 @@ footer {
 
 .modal-content h2 {
   margin-bottom: 2rem;
-  color: #4ecdc4;
+  color: hsl(55, 100%, 50%);
   font-size: 1.8rem;
 }
 
@@ -283,19 +293,19 @@ footer {
   padding: 1rem 2rem;
   font-size: 1.2rem;
   font-weight: bold;
-  background: linear-gradient(135deg, #4ecdc4 0%, #44a09b 100%);
+  background: linear-gradient(135deg, hsl(55, 100%, 50%) 0%, hsl(55, 100%, 45%) 100%);
   color: #000;
   border: none;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s;
-  box-shadow: 0 4px 15px rgba(78, 205, 196, 0.3);
+  box-shadow: 0 4px 15px rgba(255, 211, 0, 0.3);
 }
 
 .round-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(78, 205, 196, 0.5);
-  background: linear-gradient(135deg, #5effd6 0%, #4ecdc4 100%);
+  box-shadow: 0 6px 20px rgba(255, 211, 0, 0.5);
+  background: linear-gradient(135deg, hsl(55, 100%, 60%) 0%, hsl(55, 100%, 55%) 100%);
 }
 
 .round-btn:active {
@@ -387,7 +397,7 @@ footer {
   padding: 0.75rem 1.5rem;
   font-size: 1rem;
   font-weight: bold;
-  background: #4ecdc4;
+  background: hsl(55, 100%, 50%);
   color: #000;
   border: none;
   border-radius: 6px;
@@ -396,7 +406,7 @@ footer {
 }
 
 .options-modal-content .modal-buttons button:hover {
-  background: #5effd6;
+  background: hsl(55, 100%, 60%);
   transform: translateY(-1px);
 }
 
@@ -466,7 +476,7 @@ footer {
 }
 
 .variation-item h3 {
-  color: #4ecdc4;
+  color: hsl(55, 100%, 50%);
   margin: 0;
   font-size: 1.3rem;
   flex: 1;
@@ -1167,7 +1177,7 @@ footer {
   width: 100px;
   height: 140px;
   background: linear-gradient(135deg, #2a2a2a 0%, #1e1e1e 100%);
-  border: 2px solid #4ecdc4;
+  border: 2px solid hsl(55, 100%, 50%);
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -1176,6 +1186,33 @@ footer {
   margin: 0 auto;
   transition: transform 0.6s;
   transform-style: preserve-3d;
+}
+
+.card-back-front,
+.card-back-back {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  backface-visibility: hidden;
+}
+
+.card-back-front {
+  transform: rotateY(0deg);
+}
+
+.card-back-back {
+  transform: rotateY(180deg);
+}
+
+.card-back-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 6px;
 }
 
 .card-back-item:hover .card-back-preview {
@@ -1194,13 +1231,6 @@ footer {
   }
 }
 
-.card-back-preview img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 6px;
-}
-
 .card-back-preview.placeholder {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #fff;
@@ -1208,14 +1238,14 @@ footer {
 }
 
 .card-back-item.selected .card-back-preview {
-  border-color: #ffeb3b;
-  box-shadow: 0 0 20px rgba(255, 235, 59, 0.6);
+  border-color: hsl(55, 100%, 60%);
+  box-shadow: 0 0 20px rgba(255, 235, 59, 0.8);
 }
 
 .card-back-name {
   text-align: center;
   margin-top: 0.5rem;
-  color: #4ecdc4;
+  color: hsl(55, 100%, 50%);
   font-size: 0.9rem;
   font-weight: bold;
 }

@@ -15,6 +15,7 @@ import { InitializationManager } from './utils/InitializationManager.js';
 import { AudioManager } from './utils/AudioManager.js';
 import { APP_VERSION } from './utils/version.js';
 import { CARD_BACKS, getSelectedCardBack, setSelectedCardBack } from './data/cardBacks.js';
+import { HANAFUDA_DECK } from './data/cards.js';
 import { ShopUI } from './ui/ShopUI.js';
 import { GameStateValidator } from './utils/GameStateValidator.js';
 
@@ -71,6 +72,11 @@ class Game {
     this.game = this.koikoiGame;
 
     this.renderer = new Renderer(this.canvas);
+    // Set the field background to the green color
+    this.renderer.setBackgroundColor('hsl(137, 44%, 27%)');
+    // Set the card back to the selected one
+    const selectedCardBackId = getSelectedCardBack();
+    this.renderer.cardRenderer.setCardBack(selectedCardBackId);
 
     // Initialize Card3D system
     this.card3DManager = new Card3DManager(
@@ -1628,8 +1634,15 @@ class Game {
 
     const currentCardBack = getSelectedCardBack();
 
+    // Map available card back images (only those that exist in public/assets/card-backs/)
+    const availableCardBacks = [
+      { id: 'sakura', name: 'Sakura', image: 'assets/card-backs/carback-flower.png', unlocked: true },
+      { id: 'koi', name: 'Koi', image: 'assets/card-backs/cardback-wave.png', unlocked: true },
+      { id: 'crane', name: 'Crane', image: 'assets/card-backs/carback-fan.png', unlocked: true }
+    ];
+
     // Create card back items
-    CARD_BACKS.forEach(cardBack => {
+    availableCardBacks.forEach(cardBack => {
       const item = document.createElement('div');
       item.className = 'card-back-item';
 
@@ -1641,11 +1654,15 @@ class Game {
         item.classList.add('locked');
       }
 
-      // Create preview
+      // Create preview container with flip effect
       const preview = document.createElement('div');
       preview.className = 'card-back-preview';
 
-      // Try to load the image
+      // Front of card (card back image)
+      const front = document.createElement('div');
+      front.className = 'card-back-front';
+
+      // Try to load the card back image
       const img = document.createElement('img');
       img.src = cardBack.image;
       img.alt = cardBack.name;
@@ -1653,15 +1670,28 @@ class Game {
       // Fallback to placeholder if image fails to load
       img.onerror = () => {
         img.style.display = 'none';
-        preview.classList.add('placeholder');
-        preview.textContent = '🃏';
+        front.classList.add('placeholder');
+        front.textContent = '🃏';
       };
 
       img.onload = () => {
-        preview.classList.remove('placeholder');
+        front.classList.remove('placeholder');
       };
 
-      preview.appendChild(img);
+      front.appendChild(img);
+      preview.appendChild(front);
+
+      // Back of card (random hanafuda card)
+      const back = document.createElement('div');
+      back.className = 'card-back-back';
+
+      // Get a random hanafuda card to display
+      const randomCard = HANAFUDA_DECK[Math.floor(Math.random() * HANAFUDA_DECK.length)];
+      const cardImg = document.createElement('img');
+      cardImg.src = randomCard.image;
+      cardImg.alt = randomCard.name;
+      back.appendChild(cardImg);
+      preview.appendChild(back);
 
       // Add lock icon if locked
       if (!cardBack.unlocked) {
@@ -1692,6 +1722,9 @@ class Game {
         item.addEventListener('click', () => {
           // Update selection
           setSelectedCardBack(cardBack.id);
+
+          // Update renderer with new card back
+          this.renderer.cardRenderer.setCardBack(cardBack.id);
 
           // Update UI
           document.querySelectorAll('.card-back-item').forEach(el => {
@@ -1959,9 +1992,11 @@ class Game {
           }
           const isYou = playerIndex === 0;
 
-          // Get total score based on game mode
+          // Get total score from playerScores data
           let totalScore = 0;
-          if (this.currentGameMode === 'sakura' && this.sakuraGame?.players[playerIndex]) {
+          if (playerScore && playerScore.matchScore !== undefined) {
+            totalScore = playerScore.matchScore;
+          } else if (this.currentGameMode === 'sakura' && this.sakuraGame?.players[playerIndex]) {
             totalScore = this.sakuraGame.players[playerIndex].matchScore || 0;
           }
 
@@ -1997,10 +2032,12 @@ class Game {
 
           // Get total score based on game mode
           let totalScore = 0;
-          if (this.currentGameMode === 'sakura' && this.sakuraGame?.players[index]) {
+          if (playerScore && playerScore.matchScore !== undefined) {
+            totalScore = playerScore.matchScore;
+          } else if (this.currentGameMode === 'sakura' && this.sakuraGame?.players[index]) {
             totalScore = this.sakuraGame.players[index].matchScore || 0;
-          } else if (this.currentGameMode === 'koi-koi') {
-            // For 2P Koi-Koi, use the provided totals
+          } else if (this.currentGameMode === 'koikoi' || this.currentGameMode === 'shop') {
+            // For 2P Koi-Koi/Shop, use the provided totals
             totalScore = isYou ? data.playerTotalScore : data.opponentTotalScore;
           }
 
@@ -2038,9 +2075,9 @@ class Game {
 
       let yakuCardHTML = `<div class="yaku-card-header">${playerLabel}</div>`;
 
-      // Get yaku list - from playerScore.yaku (Sakura) or from data.playerYaku/data.opponentYaku (Koi-Koi)
+      // Get yaku list - from playerScore.yaku (Sakura) or from data.playerYaku/data.opponentYaku (Koi-Koi/Shop)
       let yakuList = playerScore.yaku || [];
-      if (yakuList.length === 0 && this.currentGameMode === 'koi-koi') {
+      if (yakuList.length === 0 && (this.currentGameMode === 'koikoi' || this.currentGameMode === 'shop')) {
         yakuList = isYou ? (data.playerYaku || []) : (data.opponentYaku || []);
       }
 
@@ -2436,10 +2473,9 @@ class Game {
         if (isTeamsMode && playerCount === 4) {
           // Teams mode: Group players into Team 1 and Team 2
           // Team 1: Players 0 + 2 (You + Ally), Team 2: Players 1 + 3 (Opponents)
-          const team1Score = (state.players[0].basePoints || 0) + (state.players[0].matchScore || 0) +
-                            (state.players[2].basePoints || 0) + (state.players[2].matchScore || 0);
-          const team2Score = (state.players[1].basePoints || 0) + (state.players[1].matchScore || 0) +
-                            (state.players[3].basePoints || 0) + (state.players[3].matchScore || 0);
+          // Use matchScore only (already includes this round's contribution)
+          const team1Score = (state.players[0].matchScore || 0) + (state.players[2].matchScore || 0);
+          const team2Score = (state.players[1].matchScore || 0) + (state.players[3].matchScore || 0);
 
           const team1Span = document.createElement('span');
           team1Span.innerHTML = `Team 1: <strong>${team1Score + roundText}</strong>`;
@@ -2451,7 +2487,8 @@ class Game {
         } else {
           // Individual players: 2P, 3P, or 4P Competitive
           state.players.forEach((player, index) => {
-            const total = (player.basePoints || 0) + (player.matchScore || 0);
+            // Use matchScore only (already includes this round's contribution)
+            const total = player.matchScore || 0;
             const label = this.getPlayerLabel(index, playerCount, false);
             const scoreText = index === 0 ? total + roundText : total.toString();
             const span = document.createElement('span');
@@ -3083,6 +3120,7 @@ class Game {
             hoverX: this.hoverX,
             hoverY: this.hoverY,
             isModalVisible: this.koikoiModal.classList.contains('show'),
+            isGameOver: state.gameOver || false,
             card3DManager: this.card3DManager
           };
 

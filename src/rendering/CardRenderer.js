@@ -20,6 +20,37 @@ export class CardRenderer {
     this.loadingImages = new Set();
     // Track failed image loads to prevent retrying every frame
     this.failedImages = new Set();
+
+    // Card back selection
+    this.selectedCardBackId = 'default';
+    this.cardBackPath = 'assets/card-backs/carback-flower.png';
+  }
+
+  /**
+   * Set the selected card back by ID
+   * Maps card back IDs to image paths
+   * @param {string} cardBackId - The card back ID (e.g., 'default', 'sakura', 'koi')
+   */
+  setCardBack(cardBackId) {
+    this.selectedCardBackId = cardBackId;
+
+    // Map card back IDs to image file paths
+    const cardBackMap = {
+      'default': 'assets/card-backs/carback-flower.png', // Use flower as default
+      'sakura': 'assets/card-backs/carback-flower.png',
+      'koi': 'assets/card-backs/cardback-wave.png',
+      'moon': 'assets/card-backs/carback-flower.png', // Fallback to flower
+      'crane': 'assets/card-backs/carback-fan.png',
+      'phoenix': 'assets/card-backs/carback-flower.png' // Fallback to flower
+    };
+
+    this.cardBackPath = cardBackMap[cardBackId] || cardBackMap['default'];
+    // Preload the card back image
+    this.loadImage(this.cardBackPath).catch(() => {
+      // If loading fails, fall back to wave
+      this.cardBackPath = 'assets/card-backs/cardback-wave.png';
+      this.loadImage(this.cardBackPath);
+    });
   }
 
   /**
@@ -177,9 +208,21 @@ export class CardRenderer {
   }
 
   /**
-   * Draw card back pattern
+   * Draw card back image or fallback pattern
    */
   drawCardBack(ctx, x, y) {
+    // Try to draw the card back image
+    if (this.imageCache.has(this.cardBackPath)) {
+      const img = this.imageCache.get(this.cardBackPath);
+      try {
+        ctx.drawImage(img, x, y, this.cardWidth, this.cardHeight);
+        return;
+      } catch (e) {
+        // If drawing fails, fall through to pattern fallback
+      }
+    }
+
+    // Fallback pattern if image not loaded yet
     ctx.fillStyle = '#8b0000';
     ctx.fillRect(x + 10, y + 10, this.cardWidth - 20, this.cardHeight - 20);
 
@@ -754,9 +797,21 @@ export class CardRenderer {
   }
 
   /**
-   * Draw card back pattern with custom size
+   * Draw card back image with custom size or fallback pattern
    */
   drawCardBackScaled(ctx, x, y, width, height) {
+    // Try to draw the card back image with custom size
+    if (this.imageCache.has(this.cardBackPath)) {
+      const img = this.imageCache.get(this.cardBackPath);
+      try {
+        ctx.drawImage(img, x, y, width, height);
+        return;
+      } catch (e) {
+        // If drawing fails, fall through to pattern fallback
+      }
+    }
+
+    // Fallback pattern if image not loaded yet
     ctx.fillStyle = '#8b0000';
     ctx.fillRect(x + 10, y + 10, width - 20, height - 20);
 

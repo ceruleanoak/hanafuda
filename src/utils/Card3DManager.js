@@ -22,6 +22,7 @@ export class Card3DManager {
 
     // Dirty flags for optimization
     this.dirtyZones = new Set();
+    this.viewportChangedDirty = false; // Track if dirty zones came from viewport change
     this.renderQueueDirty = true;
     this.renderQueue = [];
 
@@ -71,6 +72,8 @@ export class Card3DManager {
     this.viewportHeight = height;
     // Mark all zones dirty to recalculate layouts
     Object.keys(this.zoneCards).forEach(zone => this.dirtyZones.add(zone));
+    // Flag that dirty zones came from viewport change (should snap, not animate)
+    this.viewportChangedDirty = true;
   }
 
   /**
@@ -131,8 +134,9 @@ export class Card3DManager {
         if (!this.cards.has(cardData.id)) {
           const card3D = new Card3D(cardData);
           // Assign grid slot for field cards to maintain fixed positions
+          // Slot 0 is reserved for deck, field cards use slots 1-8
           if (zone === 'field') {
-            card3D.gridSlot = index;
+            card3D.gridSlot = index + 1;
           }
           this.cards.set(cardData.id, card3D);
           this.assignToZone(card3D, zone, false); // Don't animate initial placement
@@ -189,14 +193,19 @@ export class Card3DManager {
     const easing = 'easeOutCubic';
     const flipTiming = 0.5;
     const peakScale = 0;
-    const rotationVariance = 20 * Math.PI / 180; // 20 degrees
+    const rotationVariance = 10 * Math.PI / 180; // 10 degrees (reduced from 20)
     const positionXVariance = 30; // Reduced from 60 to 30 (half)
     const positionYVariance = 5;
 
-    // Starting position: draw pile location (deck position)
-    const margin = 30;
-    const startX = margin + 50; // Deck x position (80)
-    const startY = this.viewportHeight / 2; // Deck y position (centerY)
+    // Starting position: calculate deck position from field grid (gridSlot 0)
+    const fieldConfig = LayoutManager.getZoneConfig('field', this.viewportWidth, this.viewportHeight, this.playerCount);
+    const layoutManager = new LayoutManager();
+    const dummyCard = { gridSlot: 0 };
+    const positions = layoutManager.layoutGrid([dummyCard], fieldConfig);
+    const slot0Position = positions[0];
+
+    const startX = slot0Position.x;
+    const startY = slot0Position.y;
     const startZ = 0;
 
     fieldCards.forEach((card3D) => {
@@ -334,6 +343,12 @@ export class Card3DManager {
       this.dirtyZones.add(oldZone);
     }
 
+    // Reset animation state to allow new zone layout to animate the card
+    // This prevents cards from getting stuck when moving zones
+    if (card3D.animationMode !== 'idle') {
+      card3D.animationMode = 'idle';
+    }
+
     // If moving to field zone, assign next available grid slot
     if (newZone === 'field' && card3D.gridSlot === undefined) {
       card3D.gridSlot = this.getNextAvailableFieldSlot();
@@ -353,20 +368,26 @@ export class Card3DManager {
 
   /**
    * Get next available grid slot for field (prioritizes top-left)
+   * Slot 0 is reserved for deck (and position 0 of each row)
+   * Field cards use slots 1-8 (row 1), then 10-17 (row 2), then 19-26 (row 3), etc.
    */
   getNextAvailableFieldSlot() {
     const fieldCards = Array.from(this.zoneCards.field);
     const occupiedSlots = new Set(fieldCards.map(card => card.gridSlot).filter(slot => slot !== undefined));
+    const maxPerRow = 9; // Grid has 9 columns (0-8), with 0 reserved
 
-    // Find first unoccupied slot (0-7, prioritizing top-left)
-    for (let slot = 0; slot < 8; slot++) {
+    // Find first unoccupied slot, skipping position 0 of each row
+    let slot = 1; // Start from slot 1 (position 0 is reserved)
+    while (true) {
+      // Skip position 0 of each row (slots 0, 9, 18, 27, etc.)
+      if (slot % maxPerRow === 0) {
+        slot++; // Skip to position 1 of next row
+      }
       if (!occupiedSlots.has(slot)) {
         return slot;
       }
+      slot++;
     }
-
-    // Fallback: return next sequential slot
-    return fieldCards.length;
   }
 
   /**
@@ -378,19 +399,29 @@ export class Card3DManager {
     this.dirtyZones.add(zone);
     this.renderQueueDirty = true;
 
-    if (!animate) {
-      // Get zone config
-      const config = LayoutManager.getZoneConfig(zone, this.viewportWidth, this.viewportHeight, this.useAnimations);
+    // Deck zone doesn't have a traditional config - handle it specially
+    if (zone === 'deck') {
+      card3D.renderLayer = 1; // Deck cards are below other elements
+      if (!animate) {
+        card3D.faceUp = 0; // Deck cards face down
+        card3D.targetFaceUp = 0;
+      }
+      return;
+    }
 
-      // Set initial face state
+    // Get zone config to set properties
+    const config = LayoutManager.getZoneConfig(zone, this.viewportWidth, this.viewportHeight, this.playerCount, this.useAnimations);
+
+    // Always set render layer (important for correct drawing order)
+    if (config.renderLayer !== undefined) {
+      card3D.renderLayer = config.renderLayer;
+    }
+
+    if (!animate) {
+      // Set initial face state when not animating
       if (config.faceUp !== undefined) {
         card3D.faceUp = config.faceUp;
         card3D.targetFaceUp = config.faceUp;
-      }
-
-      // Set render layer
-      if (config.renderLayer !== undefined) {
-        card3D.renderLayer = config.renderLayer;
       }
     }
   }
@@ -401,6 +432,29 @@ export class Card3DManager {
   relayoutZone(zone, animate = true) {
     const zoneSet = this.zoneCards[zone];
     if (!zoneSet || zoneSet.size === 0) return;
+
+    // Special handling for deck zone - deck cards are rendered separately at field gridSlot 0 position
+    if (zone === 'deck') {
+      // Position all deck cards at the field gridSlot 0 position (calculated dynamically)
+      const fieldConfig = LayoutManager.getZoneConfig('field', this.viewportWidth, this.viewportHeight, this.playerCount);
+      const fieldLayoutManager = new LayoutManager();
+      const dummyCard = { gridSlot: 0 };
+      const positions = fieldLayoutManager.layoutGrid([dummyCard], fieldConfig);
+      const slot0Position = positions[0];
+
+      // All deck cards share the same position (they're stacked visually in Renderer)
+      // Deck cards are ALWAYS snapped to their position (not animated) because they're rendered
+      // as a deck graphic, not as individual card objects. This ensures they always match
+      // the calculated gridSlot 0 position even when window is resized or zoomed.
+      Array.from(zoneSet).forEach(card3D => {
+        card3D.homePosition = { x: slot0Position.x, y: slot0Position.y, z: 0 };
+        // Always snap to position for deck cards - they don't animate as individuals
+        card3D.x = slot0Position.x;
+        card3D.y = slot0Position.y;
+        card3D.z = 0;
+      });
+      return;
+    }
 
     // For Match Game field zone, use stored positions from game state
     const isMatchGameField = this.currentGameState?.phase === 'match_game' && zone === 'field';
@@ -508,11 +562,15 @@ export class Card3DManager {
   updateDirtyZones() {
     if (this.dirtyZones.size === 0) return;
 
+    // If viewport changed, snap all cards to positions without animation
+    const shouldAnimate = this.useAnimations && !this.viewportChangedDirty;
+
     this.dirtyZones.forEach(zone => {
-      this.relayoutZone(zone, this.useAnimations);
+      this.relayoutZone(zone, shouldAnimate);
     });
 
     this.dirtyZones.clear();
+    this.viewportChangedDirty = false;
   }
 
   /**
