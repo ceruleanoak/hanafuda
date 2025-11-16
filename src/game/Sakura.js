@@ -857,8 +857,8 @@ export class Sakura {
 
     this.message = 'Drawing card from deck...';
 
-    // Brief delay to show the drawing action
-    setTimeout(() => {
+    // Wait for any ongoing animations to complete before drawing
+    const proceedWithDraw = () => {
       // Draw card
       this.drawnCard = this.deck.draw();
       debugLogger.log('sakura', `🎴 Drew card: ${this.drawnCard.name} (ID: ${this.drawnCard.id})`);
@@ -885,13 +885,29 @@ export class Sakura {
         this.message = `Drew ${this.drawnCard.month} - No match, adding to field...`;
         debugLogger.log('sakura', `➕ No match - adding drawn card to field`);
 
-        setTimeout(() => {
+        // Wait for drawn card to reach its position, then add to field
+        const drawnCard3D = this.card3DManager?.getCard(this.drawnCard);
+        const completeNoMatch = () => {
           const cardToAdd = this.drawnCard;
           this.drawnCard = null; // Clear after animation completes
           this.field.push(cardToAdd);
           this.message = 'No match. Card added to field.';
-          this.endTurn();
-        }, 900);
+
+          // Wait for card to animate to field before ending turn
+          if (this.card3DManager) {
+            this.card3DManager.waitForZoneAnimations('field', () => {
+              this.endTurn();
+            });
+          } else {
+            this.endTurn();
+          }
+        };
+
+        if (drawnCard3D && this.card3DManager) {
+          this.card3DManager.waitForCardAnimation(drawnCard3D, completeNoMatch);
+        } else {
+          setTimeout(completeNoMatch, 900);
+        }
       } else if (matches.length === 1) {
         // Single match - auto capture
         this.phase = 'show_drawn';
@@ -906,8 +922,8 @@ export class Sakura {
           const fieldCard3D = this.card3DManager.getCard(capturedCard);
 
           if (drawnCard3D && fieldCard3D) {
-            // Wait a moment to show the drawn card, then animate to field card
-            setTimeout(() => {
+            // Wait for drawn card to reach its position, then animate to field card
+            this.card3DManager.waitForCardAnimation(drawnCard3D, () => {
               drawnCard3D.tweenTo(
                 {
                   x: fieldCard3D.homePosition.x,
@@ -935,9 +951,11 @@ export class Sakura {
                 }
 
                 // Wait for trick pile animation to complete
-                setTimeout(() => this.endTurn(), 500);
+                this.card3DManager.waitForZoneAnimations('playerTrick', () => {
+                  this.endTurn();
+                });
               };
-            }, 400);
+            });
           } else {
             // Fallback if card3D not found
             setTimeout(() => {
@@ -982,8 +1000,8 @@ export class Sakura {
           const fieldCard3D = this.card3DManager.getCard(chosen);
 
           if (drawnCard3D && fieldCard3D) {
-            // Wait a moment to show the drawn card, then animate to field card
-            setTimeout(() => {
+            // Wait for drawn card to reach its position, then animate to field card
+            this.card3DManager.waitForCardAnimation(drawnCard3D, () => {
               drawnCard3D.tweenTo(
                 {
                   x: fieldCard3D.homePosition.x,
@@ -1008,9 +1026,12 @@ export class Sakura {
                   this.gajiState.isWildCard = false;
                 }
 
-                setTimeout(() => this.endTurn(), 500);
+                // Wait for trick pile animation to complete
+                this.card3DManager.waitForZoneAnimations('playerTrick', () => {
+                  this.endTurn();
+                });
               };
-            }, 400);
+            });
           } else {
             // Fallback
             setTimeout(() => {
@@ -1042,7 +1063,14 @@ export class Sakura {
           }, 900);
         }
       }
-    }, 150);
+    };
+
+    // Wait for all animations to complete before proceeding with draw
+    if (this.card3DManager) {
+      this.card3DManager.waitForAllAnimations(proceedWithDraw);
+    } else {
+      setTimeout(proceedWithDraw, 150);
+    }
 
     // Check for Hiki from drawn card
     // (This would happen if player captured 3 cards in Phase 1, then drew 4th)
@@ -1105,8 +1133,14 @@ export class Sakura {
       // AI player's turn
       debugLogger.log('sakura', `🤖 Player ${this.currentPlayerIndex} (AI) turn starting`);
       this.phase = 'opponent_turn';
-      this.message = `Player ${this.currentPlayerIndex + 1}'s turn...`;
-      setTimeout(() => this.opponentTurn(), 1000);
+      this.message = "Opponent's turn...";
+
+      // Wait for all animations to complete before opponent plays
+      if (this.card3DManager) {
+        this.card3DManager.waitForAllAnimations(() => this.opponentTurn());
+      } else {
+        setTimeout(() => this.opponentTurn(), 1000);
+      }
     }
   }
 
@@ -1410,40 +1444,12 @@ export class Sakura {
           return;
         }
 
-        // Remove from hand AFTER animation has shown it
-        currentPlayer.hand = currentPlayer.hand.filter(c => c.id !== chosenCard.id);
-
-        // Find matches
-        const matches = this.field.filter(fc => fc.month === chosenCard.month);
-
-        if (matches.length === 0) {
-          // No match - place on field
-          // Card will animate from opponentPlayedCard zone to field zone via Card3DManager
-          this.field.push(chosenCard);
-          this.message = `Player ${this.currentPlayerIndex + 1} placed on field.`;
-
-          // Clear display zone and move to draw phase
-          setTimeout(() => {
-            this.opponentPlayedCard = null;
-            this.phase = 'opponent_turn';
-            setTimeout(() => this.opponentDrawPhase(difficulty), 300);
-          }, 600);
-        } else {
-          // Match found - card will be captured
-          // Keep card visible during entire capture animation
-          const chosen = matches.length === 1 ? matches[0] : this.selectBestCapture(matches, this.currentPlayerIndex);
-          currentPlayer.captured.push(chosenCard, chosen);
-          this.field = this.field.filter(c => c.id !== chosen.id);
-          this.message = `Player ${this.currentPlayerIndex + 1} captured ${chosen.month}!`;
-
-          // Keep card displayed while capture animation plays
-          setTimeout(() => {
-            this.opponentPlayedCard = null;
-            this.phase = 'opponent_turn';
-            setTimeout(() => this.opponentDrawPhase(difficulty), 300);
-          }, 800);
-        }
-      }, 600);
+      // Wait for animations to complete before draw phase
+      if (this.card3DManager) {
+        this.card3DManager.waitForAllAnimations(() => this.opponentDrawPhase(difficulty));
+      } else {
+        setTimeout(() => this.opponentDrawPhase(difficulty), 800);
+      }
     } else {
       // No cards in hand - only draw phase
       this.opponentDrawPhase(difficulty);
@@ -1470,12 +1476,25 @@ export class Sakura {
 
     // Check if Gaji
     if (this.isGaji(this.drawnCard)) {
-      setTimeout(() => {
+      const drawnCard3D = this.card3DManager?.getCard(this.drawnCard);
+      const handleGaji = () => {
         const gajiCardRef = this.drawnCard;
         this.drawnCard = null; // Clear after animation delay
         this.handleOpponentGajiDrawn(gajiCardRef, difficulty);
-        setTimeout(() => this.endTurn(), 500);
-      }, 500);
+
+        // Wait for trick pile animation to complete
+        if (this.card3DManager) {
+          this.card3DManager.waitForZoneAnimations('opponentTrick', () => this.endTurn());
+        } else {
+          setTimeout(() => this.endTurn(), 500);
+        }
+      };
+
+      if (drawnCard3D && this.card3DManager) {
+        this.card3DManager.waitForCardAnimation(drawnCard3D, handleGaji);
+      } else {
+        setTimeout(handleGaji, 500);
+      }
       return;
     }
 
@@ -1486,36 +1505,48 @@ export class Sakura {
       // Find matches
       const matches = this.field.filter(fc => fc.month === this.drawnCard.month);
 
-      if (matches.length === 0) {
-        // No match - add to field with display delay
-        // Card is now visible at drawnCard, show it briefly before moving to field
-        // Match player draw timing (500ms + 900ms = 1400ms total)
-        setTimeout(() => {
-          this.field.push(this.drawnCard);
-          this.drawnCard = null;
-          this.message = `Player ${this.currentPlayerIndex + 1} placed card on field`;
+    if (matches.length === 0) {
+      // No match - add to field
+      const drawnCard3D = this.card3DManager?.getCard(this.drawnCard);
+      const handleNoMatch = () => {
+        const drawnCardRef = this.drawnCard;
+        this.drawnCard = null;
+        this.field.push(drawnCardRef);
+        this.message = 'Opponent drew - no match.';
+
+        // Wait for card to animate to field before ending turn
+        if (this.card3DManager) {
+          this.card3DManager.waitForZoneAnimations('field', () => this.endTurn());
+        } else {
           setTimeout(() => this.endTurn(), 500);
-        }, 550);
+        }
+      };
+
+      if (drawnCard3D && this.card3DManager) {
+        this.card3DManager.waitForCardAnimation(drawnCard3D, handleNoMatch);
       } else {
-        // Match found - animate to field card then capture
-        const chosen = matches[0];
+        setTimeout(handleNoMatch, 500);
+      }
+    } else {
+      // Match found - animate to field card then capture
+      const chosen = matches[0];
 
         if (this.card3DManager) {
           const drawnCard3D = this.card3DManager.getCard(this.drawnCard);
           const fieldCard3D = this.card3DManager.getCard(chosen);
 
-          if (drawnCard3D && fieldCard3D) {
-            // Wait to show drawn card, then animate to field card
-            setTimeout(() => {
-              drawnCard3D.tweenTo(
-                {
-                  x: fieldCard3D.homePosition.x,
-                  y: fieldCard3D.homePosition.y,
-                  z: fieldCard3D.homePosition.z + 5
-                },
-                400,
-                'easeInOutQuad'
-              );
+        if (drawnCard3D && fieldCard3D) {
+          // Wait for drawn card to reach its position, then animate to field card
+          this.card3DManager.waitForCardAnimation(drawnCard3D, () => {
+            drawnCard3D.tweenTo(
+              {
+                x: fieldCard3D.homePosition.x,
+                y: fieldCard3D.homePosition.y,
+                z: fieldCard3D.homePosition.z + 5
+              },
+              400,
+              'easeInOutQuad'
+            );
 
               drawnCard3D.onAnimationComplete = () => {
                 const drawnCardRef = this.drawnCard;
@@ -1535,10 +1566,14 @@ export class Sakura {
               this.drawnCard = null;
               currentPlayer.captured.push(drawnCardRef, chosen);
               this.field = this.field.filter(c => c.id !== chosen.id);
-              this.message = `Player ${this.currentPlayerIndex + 1} captured ${chosen.month}!`;
-              setTimeout(() => this.endTurn(), 500);
-            }, 500);
-          }
+              this.message = `Opponent captured ${chosen.month}!`;
+
+              // Wait for trick pile animation to complete
+              this.card3DManager.waitForZoneAnimations('opponentTrick', () => {
+                this.endTurn();
+              });
+            };
+          });
         } else {
           // Fallback
           setTimeout(() => {
@@ -1742,8 +1777,14 @@ export class Sakura {
       this.field.push(gajiCard);
       this.gajiState.location = 'field';
       this.gajiState.isWildCard = false;
-      this.message = `Player ${this.currentPlayerIndex + 1} played Gaji - no valid targets.`;
-      setTimeout(() => this.opponentDrawPhase(difficulty), 800);
+      this.message = 'Opponent played Gaji - no valid targets.';
+
+      // Wait for animations to complete before draw phase
+      if (this.card3DManager) {
+        this.card3DManager.waitForAllAnimations(() => this.opponentDrawPhase(difficulty));
+      } else {
+        setTimeout(() => this.opponentDrawPhase(difficulty), 800);
+      }
       return;
     }
 
@@ -1757,7 +1798,12 @@ export class Sakura {
 
     this.message = `Player ${this.currentPlayerIndex + 1} used Gaji to capture ${bestTarget.month}!`;
 
-    setTimeout(() => this.opponentDrawPhase(difficulty), 800);
+    // Wait for animations to complete before draw phase
+    if (this.card3DManager) {
+      this.card3DManager.waitForAllAnimations(() => this.opponentDrawPhase(difficulty));
+    } else {
+      setTimeout(() => this.opponentDrawPhase(difficulty), 800);
+    }
   }
 
   /**

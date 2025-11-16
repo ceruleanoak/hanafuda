@@ -692,6 +692,100 @@ export class Card3DManager {
   }
 
   /**
+   * Wait for a specific card to finish animating
+   * @param {Card3D} card3D - The card to wait for
+   * @param {Function} callback - Function to call when animation completes
+   * @param {number} maxWaitMs - Maximum time to wait (default 5000ms)
+   */
+  waitForCardAnimation(card3D, callback, maxWaitMs = 5000) {
+    if (!card3D) {
+      callback();
+      return;
+    }
+
+    const startTime = performance.now();
+
+    const check = () => {
+      const elapsed = performance.now() - startTime;
+
+      // Check if animation is complete or timeout reached
+      if (!card3D.isAnimating() || elapsed > maxWaitMs) {
+        if (elapsed > maxWaitMs) {
+          debugLogger.log('3dCards', '⚠️ Animation wait timeout exceeded', {
+            cardId: card3D.cardData?.id,
+            elapsed
+          });
+        }
+        callback();
+      } else {
+        requestAnimationFrame(check);
+      }
+    };
+
+    requestAnimationFrame(check);
+  }
+
+  /**
+   * Wait for all cards in a zone to finish animating
+   * @param {string} zone - The zone name
+   * @param {Function} callback - Function to call when all animations complete
+   * @param {number} maxWaitMs - Maximum time to wait (default 5000ms)
+   */
+  waitForZoneAnimations(zone, callback, maxWaitMs = 5000) {
+    const cardsInZone = this.getCardsInZone(zone);
+    if (cardsInZone.length === 0) {
+      callback();
+      return;
+    }
+
+    const startTime = performance.now();
+
+    const check = () => {
+      const elapsed = performance.now() - startTime;
+      const animating = cardsInZone.filter(card => card.isAnimating());
+
+      if (animating.length === 0 || elapsed > maxWaitMs) {
+        if (elapsed > maxWaitMs) {
+          debugLogger.log('3dCards', '⚠️ Zone animation wait timeout exceeded', {
+            zone,
+            stillAnimating: animating.length,
+            elapsed
+          });
+        }
+        callback();
+      } else {
+        requestAnimationFrame(check);
+      }
+    };
+
+    requestAnimationFrame(check);
+  }
+
+  /**
+   * Wait for all cards to finish animating
+   * @param {Function} callback - Function to call when all animations complete
+   * @param {number} maxWaitMs - Maximum time to wait (default 5000ms)
+   */
+  waitForAllAnimations(callback, maxWaitMs = 5000) {
+    const startTime = performance.now();
+
+    const check = () => {
+      const elapsed = performance.now() - startTime;
+
+      if (!this.isAnyAnimating() || elapsed > maxWaitMs) {
+        if (elapsed > maxWaitMs) {
+          debugLogger.log('3dCards', '⚠️ All animations wait timeout exceeded', { elapsed });
+        }
+        callback();
+      } else {
+        requestAnimationFrame(check);
+      }
+    };
+
+    requestAnimationFrame(check);
+  }
+
+  /**
    * Clear all cards
    */
   clear() {
