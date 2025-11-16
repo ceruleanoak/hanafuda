@@ -1966,6 +1966,9 @@ export class Sakura {
 
       // Standard Cumulative Scoring
       this.players[i].matchScore += score.roundScore;
+
+      // Update playerScores array with the new matchScore
+      playerScores[i].matchScore = this.players[i].matchScore;
     }
 
     // Prepare summary data (backward compatible for 2-player UI)
