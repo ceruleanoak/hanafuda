@@ -1450,6 +1450,7 @@ export class Sakura {
       } else {
         setTimeout(() => this.opponentDrawPhase(difficulty), 800);
       }
+      }, 600); // Close the setTimeout from line 1405
     } else {
       // No cards in hand - only draw phase
       this.opponentDrawPhase(difficulty);
@@ -1572,8 +1573,8 @@ export class Sakura {
               this.card3DManager.waitForZoneAnimations('opponentTrick', () => {
                 this.endTurn();
               });
-            };
-          });
+            }, 500);
+          }
         } else {
           // Fallback
           setTimeout(() => {
