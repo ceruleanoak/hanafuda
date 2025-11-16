@@ -782,7 +782,7 @@ class Game {
     });
   }
 
-  startNewGame(rounds) {
+  startNewGame(rounds, playerCount) {
     this.hideAllModals();
 
     if (this.currentGameMode === 'match') {
