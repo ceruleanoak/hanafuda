@@ -97,6 +97,9 @@ export class Card3DManager {
     // Detect and set player count if using N-player format
     if (gameState.players && Array.isArray(gameState.players)) {
       this.setPlayerCount(gameState.players.length);
+    } else {
+      // Legacy 2-player format (Koi Koi) - explicitly set player count to 2
+      this.setPlayerCount(2);
     }
 
     // Clear existing
@@ -256,6 +259,9 @@ export class Card3DManager {
     // Detect and set player count from gameState if using N-player format
     if (gameState.players && Array.isArray(gameState.players)) {
       this.setPlayerCount(gameState.players.length);
+    } else {
+      // Legacy 2-player format (Koi Koi) - explicitly set player count to 2
+      this.setPlayerCount(2);
     }
 
     // Build current zone mapping from game state
