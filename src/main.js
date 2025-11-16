@@ -2318,10 +2318,18 @@ class Game {
           yakuCardHTML += `<div class="yaku-item" style="color: #888; font-style: italic;">No yaku</div>`;
         }
 
-        // Yaku penalty
-        if (playerScore.yakuPenalty > 0) {
+        // Calculate penalty this player RECEIVES from other players' yaku
+        let penaltyReceived = 0;
+        data.playerScores.forEach((otherScore, otherIndex) => {
+          if (otherIndex !== index) {
+            penaltyReceived += otherScore.yakuPenalty;
+          }
+        });
+
+        // Show penalty received (not the penalty this player's yaku imposes)
+        if (penaltyReceived > 0) {
           yakuCardHTML += `<div class="yaku-label"><strong>Penalty:</strong></div>`;
-          yakuCardHTML += `<div class="yaku-item">-${playerScore.yakuPenalty} pts</div>`;
+          yakuCardHTML += `<div class="yaku-item">-${penaltyReceived} pts</div>`;
         }
 
         // Round total
