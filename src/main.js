@@ -944,7 +944,7 @@ class Game {
       this.showRoundModal();
     } else if (mode === 'hachihachi') {
       // For Hachi-Hachi mode, initialize 3-player game
-      this.card3DManager.playerCount = 3;
+      this.card3DManager.setPlayerCount(3);
       this.game.startGame();
       this.updateUI();
 
