@@ -1977,8 +1977,28 @@ class Game {
       const victory = data.playerTotalScore > data.opponentTotalScore;
       title.textContent = victory ? '🎉 Victory!' : '💀 Defeat';
     } else if (data.isGameOver) {
-      const winner = data.playerTotalScore > data.opponentTotalScore ? 'You Win!' :
-                     data.opponentTotalScore > data.playerTotalScore ? 'Opponent Wins!' : 'Tie Game!';
+      // Determine winner for multi-player games
+      let winner;
+      if (data.playerScores && data.playerScores.length > 2) {
+        // Multi-player: Find highest total score among all players
+        const maxScore = Math.max(...data.playerScores.map(p => p.matchScore));
+        const winners = data.playerScores.filter(p => p.matchScore === maxScore);
+
+        if (winners.length === 1) {
+          const winnerIndex = data.playerScores.indexOf(winners[0]);
+          if (winnerIndex === 0) {
+            winner = 'You Win!';
+          } else {
+            winner = `Opponent ${winnerIndex} Wins!`;
+          }
+        } else {
+          winner = 'Tie Game!';
+        }
+      } else {
+        // 2-player: Use legacy comparison
+        winner = data.playerTotalScore > data.opponentTotalScore ? 'You Win!' :
+                 data.opponentTotalScore > data.playerTotalScore ? 'Opponent Wins!' : 'Tie Game!';
+      }
       title.textContent = `Game Over - ${winner}`;
     } else {
       title.textContent = `Round ${data.currentRound} Complete!`;
