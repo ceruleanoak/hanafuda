@@ -1921,3 +1921,302 @@ footer {
     max-width: none;
   }
 }
+
+/* Enhanced Mobile Support */
+
+/* Touch-friendly button sizes for all devices */
+.touch-enabled button,
+.touch-enabled .round-btn,
+.touch-enabled .player-btn,
+.touch-enabled select,
+.touch-enabled .modal-close {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.75rem 1.5rem;
+}
+
+/* Small phones (portrait) */
+@media (max-width: 480px) {
+  body {
+    font-size: 14px;
+  }
+
+  header {
+    padding: 0.75rem 1rem;
+  }
+
+  h1 {
+    font-size: 1.3rem;
+  }
+
+  .header-logo {
+    height: 35px;
+  }
+
+  #game-mode-select {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.9rem;
+  }
+
+  .build-id {
+    font-size: 0.6rem;
+    padding: 0.15rem 0.4rem;
+  }
+
+  #score {
+    font-size: 0.85rem;
+    gap: 1rem;
+  }
+
+  /* Modal adjustments for small screens */
+  .modal-content {
+    padding: 1.5rem;
+    max-width: 95%;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .modal-content h2 {
+    font-size: 1.3rem;
+  }
+
+  .round-btn,
+  .player-btn {
+    padding: 0.75rem 1.25rem;
+    font-size: 1rem;
+  }
+
+  /* Button grid adjustments */
+  .round-buttons,
+  .player-buttons {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  /* Card back gallery */
+  .card-backs-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  /* Tutorial bubble */
+  #tutorial-bubble {
+    left: 10px;
+    right: 10px;
+    max-width: none;
+    font-size: 0.9rem;
+  }
+
+  /* Status message */
+  #game-status {
+    font-size: 1rem;
+    padding: 0.75rem 1rem;
+  }
+
+  /* Instructions */
+  #instructions {
+    font-size: 0.85rem;
+    padding: 0.5rem 1rem;
+  }
+
+  /* Loading screen adjustments */
+  .loading-progress-bar {
+    height: 6px;
+  }
+
+  .loading-percentage {
+    font-size: 1.2rem;
+  }
+}
+
+/* Medium phones and small tablets (landscape phones) */
+@media (max-width: 768px) and (min-width: 481px) {
+  header {
+    padding: 1rem 1.5rem;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+  }
+
+  .header-logo {
+    height: 40px;
+  }
+
+  .modal-content {
+    padding: 2rem;
+    max-width: 90%;
+  }
+
+  /* Two-column layout for round buttons on larger phones */
+  .round-buttons {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Tablets and larger */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .modal-content {
+    max-width: 80%;
+  }
+
+  .card-backs-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Landscape orientation optimizations for mobile */
+@media (max-height: 500px) and (orientation: landscape) {
+  header {
+    padding: 0.5rem 1rem;
+  }
+
+  h1 {
+    font-size: 1.2rem;
+  }
+
+  .header-logo {
+    height: 30px;
+  }
+
+  #game-info {
+    gap: 1rem;
+  }
+
+  #score {
+    font-size: 0.8rem;
+    gap: 0.75rem;
+  }
+
+  /* Compact modals for landscape */
+  .modal-content {
+    padding: 1rem;
+    max-height: 85vh;
+  }
+
+  .modal-content h2 {
+    font-size: 1.2rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .round-buttons,
+  .player-buttons {
+    gap: 0.5rem;
+  }
+
+  .round-btn,
+  .player-btn {
+    padding: 0.5rem 1rem;
+  }
+
+  #tutorial-bubble {
+    top: 60px;
+    font-size: 0.85rem;
+    padding: 0.6rem 1rem;
+  }
+}
+
+/* iOS-specific optimizations */
+.os-ios {
+  /* Prevent iOS text size adjustment */
+  -webkit-text-size-adjust: 100%;
+}
+
+.os-ios header {
+  /* Account for iOS safe area (notch) */
+  padding-top: max(1rem, env(safe-area-inset-top));
+}
+
+/* Android-specific optimizations */
+.os-android {
+  /* Better font rendering on Android */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Disable text selection on touch devices for better UX */
+.touch-enabled {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Allow text selection in modals and inputs */
+.touch-enabled .modal-content,
+.touch-enabled input,
+.touch-enabled select,
+.touch-enabled textarea {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+/* Improve touch feedback with active states */
+.touch-enabled button:active,
+.touch-enabled .round-btn:active,
+.touch-enabled .player-btn:active {
+  transform: scale(0.95);
+  opacity: 0.8;
+}
+
+/* Prevent double-tap zoom on buttons */
+.touch-enabled button,
+.touch-enabled .round-btn,
+.touch-enabled .player-btn {
+  touch-action: manipulation;
+}
+
+/* Prevent pull-to-refresh and overscroll on mobile */
+body {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+#app {
+  overscroll-behavior: none;
+}
+
+/* Ensure canvas doesn't cause scrolling on mobile */
+#game-canvas {
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
+
+/* High DPI display optimizations */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  /* Sharper text rendering on retina displays */
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Device-specific layout adjustments */
+.device-mobile header {
+  padding: 0.75rem 1rem;
+}
+
+.device-tablet header {
+  padding: 1rem 1.5rem;
+}
+
+/* Screen size-specific adjustments */
+.screen-small h1 {
+  font-size: 1.2rem;
+}
+
+.screen-medium h1 {
+  font-size: 1.5rem;
+}
+
+/* Orientation-specific adjustments */
+.orientation-portrait .modal-content {
+  max-height: 85vh;
+}
+
+.orientation-landscape .modal-content {
+  max-height: 90vh;
+  overflow-y: auto;
+}
