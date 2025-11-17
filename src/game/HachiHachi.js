@@ -57,6 +57,45 @@ export class HachiHachi {
 
     // Callbacks for UI
     this.uiCallback = null;
+    this.roundSummaryCallback = null;
+  }
+
+  /**
+   * Set callback for UI decisions (Sage/Shoubu)
+   */
+  setUICallback(callback) {
+    this.uiCallback = callback;
+  }
+
+  /**
+   * Set callback for round summary display
+   */
+  setRoundSummaryCallback(callback) {
+    this.roundSummaryCallback = callback;
+  }
+
+  /**
+   * Get current game state (for Card3DManager and rendering)
+   * @returns {Object} Game state object
+   */
+  getState() {
+    return {
+      phase: this.phase,
+      currentPlayer: this.currentPlayer,
+      deck: this.deck.cards,
+      field: this.field,
+      players: [
+        { hand: this.players.player.hand, captured: this.players.player.captured },
+        { hand: this.players.opponent1.hand, captured: this.players.opponent1.captured },
+        { hand: this.players.opponent2.hand, captured: this.players.opponent2.captured }
+      ],
+      gameScores: this.gameScores,
+      roundNumber: this.roundNumber,
+      totalRounds: this.totalRounds,
+      dealer: this.dealer,
+      fieldMultiplier: this.fieldMultiplier,
+      message: this.message
+    };
   }
 
   /**
@@ -418,6 +457,19 @@ export class HachiHachi {
       this.message = `${playerKey} formed dekiyaku: ${names} (${values} kan)!`;
       this.phase = 'sage_decision';
       this.currentPlayer = playerKey;
+
+      // Trigger UI callback for player decisions
+      if (this.uiCallback && playerKey === 'player') {
+        this.uiCallback('sage', {
+          playerKey,
+          dekiyakuList: newDekiyaku,
+          playerScore: this.gameScores.player,
+          opponent1Score: this.gameScores.opponent1,
+          opponent2Score: this.gameScores.opponent2,
+          roundNumber: this.roundNumber,
+          totalRounds: this.totalRounds
+        });
+      }
     }
   }
 
@@ -880,6 +932,39 @@ export class HachiHachi {
     }
 
     this.phase = 'round_end';
+
+    // Trigger round summary callback if provided
+    if (this.roundSummaryCallback) {
+      const isGameOver = this.roundNumber >= this.totalRounds;
+      const winner = isGameOver ? this.checkGameEnd() : this.roundState.roundWinner;
+
+      // Convert winner key to index (0=player, 1=opponent1, 2=opponent2)
+      const winnerIndex = winner === 'opponent1' ? 1 : (winner === 'opponent2' ? 2 : 0);
+
+      this.roundSummaryCallback({
+        roundNumber: this.roundNumber,
+        dekiyakuValue: this.roundState.roundScores[this.currentPlayer] || 0,
+        cardPointsValue: 0, // We don't separate these in the calculation
+        finalScore: this.roundState.roundScores[this.currentPlayer] || 0,
+        winner: winnerIndex,
+        scores: {
+          roundScores: [
+            this.roundState.roundScores.player || 0,
+            this.roundState.roundScores.opponent1 || 0,
+            this.roundState.roundScores.opponent2 || 0
+          ],
+          gameScores: [
+            this.gameScores.player,
+            this.gameScores.opponent1,
+            this.gameScores.opponent2
+          ]
+        },
+        fieldMultiplier: this.fieldMultiplier,
+        isGameOver: isGameOver,
+        totalRounds: this.totalRounds,
+        stats: {}
+      });
+    }
   }
 
   /**
