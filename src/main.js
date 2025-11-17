@@ -18,6 +18,7 @@ import { CARD_BACKS, getSelectedCardBack, setSelectedCardBack } from './data/car
 import { HANAFUDA_DECK } from './data/cards.js';
 import { ShopUI } from './ui/ShopUI.js';
 import { GameStateValidator } from './utils/GameStateValidator.js';
+import { deviceDetection } from './utils/DeviceDetection.js';
 
 class Game {
   constructor() {
@@ -296,6 +297,12 @@ class Game {
         this.cancelDrag();
       }
     });
+
+    // Canvas touch events for mobile support
+    this.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
+    this.canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
+    this.canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
+    this.canvas.addEventListener('touchcancel', (e) => this.handleTouchCancel(e), { passive: false });
 
     // Game mode selector
     this.gameModeSelect.addEventListener('change', (e) => this.switchGameMode(e.target.value));
@@ -1323,6 +1330,167 @@ class Game {
     this.draggedCard3D = null;
     this.draggedCardData = null;
     this.isDragging = false;
+  }
+
+  /**
+   * Get normalized coordinates from mouse or touch event
+   * @param {MouseEvent|TouchEvent} event
+   * @returns {{x: number, y: number}}
+   */
+  getEventCoordinates(event) {
+    const rect = this.canvas.getBoundingClientRect();
+
+    // Handle touch events
+    if (event.touches && event.touches.length > 0) {
+      const touch = event.touches[0];
+      return {
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top
+      };
+    }
+
+    // Handle touch end events (use changedTouches)
+    if (event.changedTouches && event.changedTouches.length > 0) {
+      const touch = event.changedTouches[0];
+      return {
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top
+      };
+    }
+
+    // Handle mouse events
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top
+    };
+  }
+
+  /**
+   * Handle touch start events
+   * @param {TouchEvent} event
+   */
+  handleTouchStart(event) {
+    // Prevent default to avoid scrolling and mouse event emulation
+    event.preventDefault();
+
+    // Only handle single touch
+    if (event.touches.length !== 1) {
+      return;
+    }
+
+    const { x, y } = this.getEventCoordinates(event);
+
+    // Store touch start time for double-tap detection
+    const now = Date.now();
+    const timeSinceLastTap = now - (this.lastTapTime || 0);
+    this.lastTapTime = now;
+    this.lastTapX = x;
+    this.lastTapY = y;
+
+    // Detect double-tap (within 300ms and close proximity)
+    if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
+      const dx = x - (this.previousTapX || 0);
+      const dy = y - (this.previousTapY || 0);
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance < 30) {
+        // Double-tap detected - create a synthetic double-click event
+        this.handleDoubleClick({
+          clientX: event.touches[0].clientX,
+          clientY: event.touches[0].clientY
+        });
+
+        // Provide haptic feedback for double-tap
+        deviceDetection.vibrate(10);
+
+        // Reset tap tracking to prevent triple-tap
+        this.lastTapTime = 0;
+        return;
+      }
+    }
+
+    this.previousTapX = x;
+    this.previousTapY = y;
+
+    // Create a synthetic mouse event to reuse existing mouse handler
+    const syntheticEvent = {
+      clientX: event.touches[0].clientX,
+      clientY: event.touches[0].clientY,
+      preventDefault: () => event.preventDefault()
+    };
+
+    // Provide haptic feedback on touch
+    deviceDetection.vibrate(5);
+
+    this.handleMouseDown(syntheticEvent);
+  }
+
+  /**
+   * Handle touch move events
+   * @param {TouchEvent} event
+   */
+  handleTouchMove(event) {
+    // Prevent default to avoid scrolling
+    event.preventDefault();
+
+    // Only handle single touch
+    if (event.touches.length !== 1) {
+      return;
+    }
+
+    const { x, y } = this.getEventCoordinates(event);
+
+    // Create a synthetic mouse event
+    const syntheticEvent = {
+      clientX: event.touches[0].clientX,
+      clientY: event.touches[0].clientY
+    };
+
+    this.handleMouseMove(syntheticEvent);
+  }
+
+  /**
+   * Handle touch end events
+   * @param {TouchEvent} event
+   */
+  handleTouchEnd(event) {
+    // Prevent default to avoid mouse event emulation
+    event.preventDefault();
+
+    // Use changedTouches since touches is empty on touchend
+    if (event.changedTouches.length !== 1) {
+      return;
+    }
+
+    const { x, y } = this.getEventCoordinates(event);
+
+    // Create a synthetic mouse event
+    const syntheticEvent = {
+      clientX: event.changedTouches[0].clientX,
+      clientY: event.changedTouches[0].clientY
+    };
+
+    // Provide haptic feedback on touch end
+    if (this.isDragging) {
+      deviceDetection.vibrate(10);
+    }
+
+    this.handleMouseUp(syntheticEvent);
+  }
+
+  /**
+   * Handle touch cancel events
+   * @param {TouchEvent} event
+   */
+  handleTouchCancel(event) {
+    // Cancel any drag in progress
+    if (this.isDragging) {
+      this.cancelDrag();
+    }
+
+    // Clear hover state
+    this.hoverX = -1;
+    this.hoverY = -1;
   }
 
   /**
@@ -4173,6 +4341,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   const game = new Game();
+
+  // Initialize device detection and add CSS classes
+  deviceDetection.addDeviceClasses();
+
+  // Log device information for debugging
+  console.log('📱 Device Info:', deviceDetection.getDeviceInfo());
 
   // Run async initialization with loading screen
   await game.initialize();
