@@ -34,6 +34,10 @@
           <option value="shop">Koi Koi Shop</option>
         </select>
       </div>
+      <!-- Mobile hamburger menu button -->
+      <button id="mobile-menu-btn" class="mobile-menu-btn" aria-label="Menu" title="Open menu">
+        <span class="hamburger-icon"></span>
+      </button>
       <div id="game-info">
         <div id="score" data-player-count="2" data-teams-mode="false">
           <div id="score-display"></div>
@@ -46,6 +50,27 @@
         <button id="new-game-btn">New Game</button>
       </div>
     </header>
+
+    <!-- Mobile Menu Overlay -->
+    <div id="mobile-menu" class="mobile-menu">
+      <div class="mobile-menu-content">
+        <div class="mobile-menu-header">
+          <h2>Menu</h2>
+          <button id="mobile-menu-close" class="mobile-menu-close" aria-label="Close menu">&times;</button>
+        </div>
+        <div class="mobile-menu-body">
+          <div id="mobile-score-display" class="mobile-score-section"></div>
+          <nav class="mobile-menu-nav">
+            <button id="mobile-new-game-btn" class="mobile-menu-item">🎮 New Game</button>
+            <button id="mobile-help-btn" class="mobile-menu-item">❓ Help</button>
+            <button id="mobile-variations-btn" class="mobile-menu-item">💣 Variations</button>
+            <button id="mobile-card-back-btn" class="mobile-menu-item">🃏 Card Back</button>
+            <button id="mobile-options-btn" class="mobile-menu-item">⚙️ Options</button>
+            <button id="mobile-animation-tester-btn" class="mobile-menu-item">🎬 Animator</button>
+          </nav>
+        </div>
+      </div>
+    </div>
 
     <main>
       <canvas id="game-canvas"></canvas>

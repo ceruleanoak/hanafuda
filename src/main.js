@@ -87,8 +87,8 @@ class Game {
     );
 
     // Set up resize callback to update Card3D viewport dimensions
-    this.renderer.setOnResizeCallback((width, height) => {
-      this.card3DManager.setViewportDimensions(width, height);
+    this.renderer.setOnResizeCallback((width, height, cardDimensions) => {
+      this.card3DManager.setViewportDimensions(width, height, cardDimensions);
 
       // Also update animation tester if it's active
       if (this.animationTesterActive) {
@@ -97,7 +97,8 @@ class Game {
 
       debugLogger.log('gameState', 'Viewport resized - Card3D updated', {
         width,
-        height
+        height,
+        cardScale: cardDimensions ? cardDimensions.scale : 1.0
       });
     });
 
@@ -303,6 +304,9 @@ class Game {
     this.canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
     this.canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
     this.canvas.addEventListener('touchcancel', (e) => this.handleTouchCancel(e), { passive: false });
+
+    // Mobile menu handlers
+    this.setupMobileMenu();
 
     // Game mode selector
     this.gameModeSelect.addEventListener('change', (e) => this.switchGameMode(e.target.value));
@@ -1491,6 +1495,88 @@ class Game {
     // Clear hover state
     this.hoverX = -1;
     this.hoverY = -1;
+  }
+
+  /**
+   * Setup mobile menu functionality
+   */
+  setupMobileMenu() {
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    const mobileMenu = document.getElementById('mobile-menu');
+    const mobileMenuClose = document.getElementById('mobile-menu-close');
+    const mobileScoreDisplay = document.getElementById('mobile-score-display');
+
+    // Open mobile menu
+    const openMobileMenu = () => {
+      mobileMenu.classList.add('active');
+      mobileMenuBtn.classList.add('active');
+      document.body.style.overflow = 'hidden'; // Prevent scrolling
+
+      // Sync score display to mobile menu
+      const desktopScoreDisplay = document.getElementById('score-display');
+      if (desktopScoreDisplay && mobileScoreDisplay) {
+        mobileScoreDisplay.innerHTML = desktopScoreDisplay.innerHTML;
+      }
+    };
+
+    // Close mobile menu
+    const closeMobileMenu = () => {
+      mobileMenu.classList.remove('active');
+      mobileMenuBtn.classList.remove('active');
+      document.body.style.overflow = ''; // Restore scrolling
+    };
+
+    // Event listeners
+    mobileMenuBtn.addEventListener('click', openMobileMenu);
+    mobileMenuClose.addEventListener('click', closeMobileMenu);
+
+    // Close menu when clicking outside the menu content
+    mobileMenu.addEventListener('click', (e) => {
+      if (e.target === mobileMenu) {
+        closeMobileMenu();
+      }
+    });
+
+    // Wire up mobile menu buttons to desktop functions
+    document.getElementById('mobile-new-game-btn').addEventListener('click', () => {
+      closeMobileMenu();
+      this.showRoundModal();
+    });
+
+    document.getElementById('mobile-help-btn').addEventListener('click', () => {
+      closeMobileMenu();
+      this.toggleHelpMode();
+    });
+
+    document.getElementById('mobile-variations-btn').addEventListener('click', () => {
+      closeMobileMenu();
+      this.toggleVariationsModal();
+    });
+
+    document.getElementById('mobile-card-back-btn').addEventListener('click', () => {
+      closeMobileMenu();
+      this.showCardBackModal();
+    });
+
+    document.getElementById('mobile-options-btn').addEventListener('click', () => {
+      closeMobileMenu();
+      this.showOptionsModal();
+    });
+
+    document.getElementById('mobile-animation-tester-btn').addEventListener('click', () => {
+      closeMobileMenu();
+      this.showAnimationTester();
+    });
+
+    // Store reference for updating score display
+    this.updateMobileScoreDisplay = () => {
+      if (mobileMenu.classList.contains('active')) {
+        const desktopScoreDisplay = document.getElementById('score-display');
+        if (desktopScoreDisplay && mobileScoreDisplay) {
+          mobileScoreDisplay.innerHTML = desktopScoreDisplay.innerHTML;
+        }
+      }
+    };
   }
 
   /**
