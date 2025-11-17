@@ -26,6 +26,15 @@ export class GameOptions {
       bothPlayersScoreEnabled: false,    // Both players score (no penalties)
       oibanaEnabled: false,              // Enable auction variant
 
+      // Hachi-Hachi Rules (88 Game)
+      hachihachiEnabled: false,          // Enable 88 game mode
+      roundsPerGame: 12,                 // Rounds in a game (typical: 12)
+      autoDecideThreshold: null,         // AI auto-decides above threshold (null=disabled)
+      escapeBonusEnabled: true,          // Escape bonus: double points when losing by >88
+      divingBonusEnabled: true,          // Diving bonus: 10x points for turning tables
+      allowDecimals: true,               // Allow decimal scoring (1 kan = 10 points)
+      fieldMultiplierMode: 'standard',   // 'standard' (1x/2x/4x) or 'cumulative'
+
       // AI Settings
       aiDifficulty: 'normal',            // 'normal' or 'advanced'
 

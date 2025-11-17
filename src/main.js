@@ -6,6 +6,8 @@ import { KoiKoi } from './game/KoiKoi.js';
 import { Sakura } from './game/Sakura.js';
 import { MatchGame } from './game/MatchGame.js';
 import { KoiKoiShop } from './game/KoiKoiShop.js';
+import { HachiHachi } from './game/HachiHachi.js';
+import { HachiHachiModals } from './ui/HachiHachiModals.js';
 import { Renderer } from './rendering/Renderer.js';
 import { debugLogger } from './utils/DebugLogger.js';
 import { GameOptions } from './game/GameOptions.js';
@@ -68,6 +70,10 @@ class Game {
 
     this.shopGame = new KoiKoiShop(this.gameOptions);
     this.shopGame.setRoundSummaryCallback((data) => this.showRoundSummary(data));
+
+    this.hachihachiGame = new HachiHachi(this.gameOptions);
+    this.hachihachiGame.setUICallback((decision, params) => this.showHachihachiDecision(decision, params));
+    this.hachihachiGame.setRoundSummaryCallback((data) => this.showHachihachiRoundSummary(data));
 
     // Set active game based on mode
     this.game = this.koikoiGame;
@@ -254,6 +260,9 @@ class Game {
         // Switch to Sakura mode
         this.switchGameMode('sakura');
         this.showRoundModal();
+      } else if (this.currentGameMode === 'hachihachi') {
+        // Switch to Hachi-Hachi mode
+        this.switchGameMode('hachihachi');
       } else {
         // Show round modal for Koi Koi
         this.showRoundModal();
@@ -861,6 +870,16 @@ class Game {
 
       // Update instructions
       this.instructionsElement.textContent = 'Sakura (Hawaiian Hanafuda) - Click cards to select them';
+    } else if (mode === 'hachihachi') {
+      this.game = this.hachihachiGame;
+
+      // Show score display for Hachi-Hachi mode
+      document.getElementById('score').style.display = 'flex';
+      document.getElementById('options-btn').style.display = 'inline-block';
+      document.getElementById('variations-btn').style.display = 'none';
+
+      // Update instructions
+      this.instructionsElement.textContent = 'Hachi-Hachi (88) - 3-player game with Sage/Shoubu decisions';
     } else {
       this.game = this.koikoiGame;
 
@@ -923,6 +942,18 @@ class Game {
     } else if (mode === 'sakura') {
       // For Sakura mode, show round modal
       this.showRoundModal();
+    } else if (mode === 'hachihachi') {
+      // For Hachi-Hachi mode, initialize 3-player game
+      this.card3DManager.playerCount = 3;
+      this.game.startGame();
+      this.updateUI();
+
+      // Initialize Card3D system from game state
+      this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
+      this.card3DManager.initializeFromGameState(this.game.getState());
+      this.justSwitchedMode = false;
+
+      debugLogger.log('3dCards', '✨ Card3D system initialized for Hachi-Hachi (3-player)', null);
     } else {
       // For Koi Koi, show round modal
       this.showRoundModal();
@@ -4123,6 +4154,53 @@ class Game {
 
     // Update easing select
     document.getElementById('easing').value = params.easing;
+  }
+
+  /**
+   * Show Hachi-Hachi Sage/Shoubu decision modal
+   */
+  async showHachihachiDecision(decision, params) {
+    if (decision === 'sage') {
+      // Player needs to make Sage/Shoubu/Cancel decision
+      await HachiHachiModals.showSageDecision({
+        dekiyakuList: params.dekiyakuList,
+        playerScore: params.playerScore,
+        opponent1Score: params.opponent1Score,
+        opponent2Score: params.opponent2Score,
+        roundNumber: params.roundNumber,
+        onSage: () => this.game.callSage(params.playerKey),
+        onShoubu: () => this.game.callShoubu(params.playerKey),
+        onCancel: () => this.game.callCancel(params.playerKey)
+      });
+    }
+  }
+
+  /**
+   * Show Hachi-Hachi round summary
+   */
+  async showHachihachiRoundSummary(data) {
+    await HachiHachiModals.showRoundSummary({
+      roundNumber: data.roundNumber,
+      dekiyakuValue: data.dekiyakuValue,
+      cardPointsValue: data.cardPointsValue,
+      finalScore: data.finalScore,
+      winner: data.winner,
+      allScores: data.scores,
+      fieldMultiplier: data.fieldMultiplier
+    });
+
+    // Continue to next round or end game
+    if (data.isGameOver) {
+      await HachiHachiModals.showGameEnd({
+        winner: data.winner,
+        finalScores: data.scores.gameScores,
+        totalRounds: data.totalRounds,
+        stats: data.stats
+      });
+      this.switchGameMode('hachihachi'); // Start new game
+    } else {
+      this.game.nextRound();
+    }
   }
 }
 
