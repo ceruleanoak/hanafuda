@@ -79,6 +79,39 @@ Documentation marking various readiness milestones.
 
 ---
 
+### Animation System Documentation (Complete ✅)
+Complete technical documentation of the animation system implementation and debugging tools.
+
+**Files:**
+- `ANIMATION_SYSTEM.md` - Multi-stage animation system architecture and events
+- `ANIMATION_OBSERVATIONS.md` - Observations and issues from animation testing
+- `DEBUGGING.md` - Debug logging system and diagnostic tools
+
+**Quick Summary:** Comprehensive animation system with multi-stage sequences, event hooks for sound integration, and extensive debugging capabilities. System is production-ready.
+
+---
+
+### Bomb Variation Investigation (Analysis Complete ✅)
+Investigation report on implementing a "bomb" variation (multi-card play mechanic).
+
+**Files:**
+- `BOMB_VARIATION_INVESTIGATION.md` - Complete feature analysis, implementation roadmap, and strategic implications
+
+**Quick Summary:** Non-standard house rule allowing players to play multiple cards simultaneously. Detailed analysis shows Medium-High implementation complexity. Feature awaits user decision on whether to implement.
+
+---
+
+### Koi-Koi Decision System (Not Implemented 🔒)
+Documentation and analysis of the koi-koi decision mechanic (not being implemented in this version).
+
+**Files:**
+- `KOIKOI_INVESTIGATION.md` - Investigation of koi-koi decision mechanic and rule variations
+- `KOI_KOI_BUG_ANALYSIS.md` - Analysis of decision logic and system behavior
+
+**Quick Summary:** Comprehensive research on koi-koi decision mechanics, point multipliers, and rule variations. Archived as project is focusing on core features only.
+
+---
+
 ## How to Use This Archive
 
 ### Finding Information
@@ -113,4 +146,8 @@ For ongoing reference, see these project root files:
 ---
 
 **Last Updated:** November 16, 2024
-**Archive Scope:** Sakura implementation + Phase A-2C development documentation
+**Archive Scope:**
+- Sakura implementation + Phase A-2C development documentation
+- Animation system technical reference
+- Bomb variation analysis
+- Koi-koi decision system research (not being implemented)
