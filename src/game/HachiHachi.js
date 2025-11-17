@@ -815,25 +815,6 @@ export class HachiHachi {
   }
 
   /**
-   * Get game state for rendering
-   */
-  getState() {
-    return {
-      phase: this.phase,
-      roundNumber: this.roundNumber,
-      currentPlayer: this.currentPlayer,
-      dealer: this.dealer,
-      fieldMultiplier: this.fieldMultiplier,
-      players: JSON.parse(JSON.stringify(this.players)),
-      field: this.field,
-      gameScores: this.gameScores,
-      roundState: this.roundState,
-      message: this.message,
-      deckRemaining: this.deck.remaining()
-    };
-  }
-
-  /**
    * Get hand of a player (cards only, not positions)
    */
   getPlayerHand(playerKey) {
