@@ -6,8 +6,13 @@ import { versionedUrl } from '../utils/version.js';
 
 export class CardRenderer {
   constructor() {
+    // Base card dimensions (will be scaled based on viewport)
+    this.baseCardWidth = 100;
+    this.baseCardHeight = 140;
     this.cardWidth = 100;
     this.cardHeight = 140;
+    this.scaleFactor = 1.0;
+
     this.padding = 5;
     this.fontSize = 11;
     this.selectedColor = '#4ecdc4';
@@ -24,6 +29,59 @@ export class CardRenderer {
     // Card back selection
     this.selectedCardBackId = 'default';
     this.cardBackPath = 'assets/card-backs/carback-flower.png';
+  }
+
+  /**
+   * Update card dimensions based on viewport size
+   * @param {number} viewportWidth - Viewport width in pixels
+   * @param {number} viewportHeight - Viewport height in pixels
+   */
+  updateCardScale(viewportWidth, viewportHeight) {
+    // Calculate scale factor based on viewport
+    // Use the smaller dimension to determine scale
+    const baseViewportWidth = 1920; // Reference desktop width
+    const baseViewportHeight = 1080; // Reference desktop height
+
+    // Calculate scale based on both width and height, use the smaller one
+    const widthScale = viewportWidth / baseViewportWidth;
+    const heightScale = viewportHeight / baseViewportHeight;
+
+    // Use the smaller scale factor to ensure cards fit
+    let scale = Math.min(widthScale, heightScale);
+
+    // Apply minimum and maximum scale limits
+    scale = Math.max(0.4, Math.min(1.2, scale)); // Clamp between 40% and 120%
+
+    // For very small screens (mobile phones), use a more aggressive scale
+    if (viewportWidth < 480) {
+      scale = Math.max(0.5, viewportWidth / 600);
+    } else if (viewportWidth < 768) {
+      scale = Math.max(0.6, viewportWidth / 1000);
+    }
+
+    this.scaleFactor = scale;
+    this.cardWidth = Math.floor(this.baseCardWidth * scale);
+    this.cardHeight = Math.floor(this.baseCardHeight * scale);
+    this.fontSize = Math.max(8, Math.floor(11 * scale));
+    this.padding = Math.max(3, Math.floor(5 * scale));
+
+    return {
+      width: this.cardWidth,
+      height: this.cardHeight,
+      scale: this.scaleFactor
+    };
+  }
+
+  /**
+   * Get current card dimensions
+   * @returns {{width: number, height: number, scale: number}}
+   */
+  getCardDimensions() {
+    return {
+      width: this.cardWidth,
+      height: this.cardHeight,
+      scale: this.scaleFactor
+    };
   }
 
   /**

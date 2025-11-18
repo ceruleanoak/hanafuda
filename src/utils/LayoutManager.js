@@ -10,6 +10,28 @@ export class LayoutManager {
   constructor(cardWidth = 100, cardHeight = 140) {
     this.cardWidth = cardWidth;
     this.cardHeight = cardHeight;
+    this.scaleFactor = 1.0;
+  }
+
+  /**
+   * Update card dimensions and calculate scaled spacing
+   * @param {number} cardWidth - Card width in pixels
+   * @param {number} cardHeight - Card height in pixels
+   * @param {number} scaleFactor - Scale factor (1.0 = 100%)
+   */
+  updateCardDimensions(cardWidth, cardHeight, scaleFactor = 1.0) {
+    this.cardWidth = cardWidth;
+    this.cardHeight = cardHeight;
+    this.scaleFactor = scaleFactor;
+  }
+
+  /**
+   * Get scaled spacing value
+   * @param {number} baseSpacing - Base spacing at 100% scale
+   * @returns {number} Scaled spacing
+   */
+  getScaledSpacing(baseSpacing) {
+    return Math.floor(baseSpacing * this.scaleFactor);
   }
 
   /**
@@ -56,7 +78,9 @@ export class LayoutManager {
    * Row layout - cards in a horizontal row
    */
   layoutRow(cards, config, useAnimations) {
-    const { anchorPoint, spacing = 115, centerX } = config;
+    const baseSpacing = config.spacing !== undefined ? config.spacing : 115;
+    const spacing = this.getScaledSpacing(baseSpacing);
+    const { anchorPoint, centerX } = config;
 
     // Always center the layout for consistent positioning
     const totalWidth = cards.length * spacing;
@@ -75,7 +99,11 @@ export class LayoutManager {
    * Grid layout - cards in rows and columns
    */
   layoutGrid(cards, config, useAnimations) {
-    const { anchorPoint, spacing = 115, maxPerRow = 8, rowSpacing = 160, useFixedPositions = false } = config;
+    const baseSpacing = config.spacing !== undefined ? config.spacing : 115;
+    const baseRowSpacing = config.rowSpacing !== undefined ? config.rowSpacing : 160;
+    const spacing = this.getScaledSpacing(baseSpacing);
+    const rowSpacing = this.getScaledSpacing(baseRowSpacing);
+    const { anchorPoint, maxPerRow = 8, useFixedPositions = false } = config;
 
     let startX;
     if (useFixedPositions) {
