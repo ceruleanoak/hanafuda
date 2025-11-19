@@ -1505,6 +1505,8 @@ class Game {
     const mobileMenu = document.getElementById('mobile-menu');
     const mobileMenuClose = document.getElementById('mobile-menu-close');
     const mobileScoreDisplay = document.getElementById('mobile-score-display');
+    const mobileGameModeSelect = document.getElementById('mobile-game-mode-select');
+    const desktopGameModeSelect = document.getElementById('game-mode-select');
 
     // Open mobile menu
     const openMobileMenu = () => {
@@ -1517,7 +1519,25 @@ class Game {
       if (desktopScoreDisplay && mobileScoreDisplay) {
         mobileScoreDisplay.innerHTML = desktopScoreDisplay.innerHTML;
       }
+
+      // Sync game mode selector to mobile menu
+      if (mobileGameModeSelect && desktopGameModeSelect) {
+        mobileGameModeSelect.value = desktopGameModeSelect.value;
+      }
     };
+
+    // Handle mobile game mode change
+    if (mobileGameModeSelect) {
+      mobileGameModeSelect.addEventListener('change', (e) => {
+        const newMode = e.target.value;
+        // Sync to desktop selector
+        if (desktopGameModeSelect) {
+          desktopGameModeSelect.value = newMode;
+        }
+        // Switch game mode
+        this.switchGameMode(newMode);
+      });
+    }
 
     // Close mobile menu
     const closeMobileMenu = () => {
