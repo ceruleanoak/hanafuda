@@ -232,6 +232,23 @@ export class LayoutManager {
     const centerY = viewportHeight / 2;
     const margin = 30;
 
+    // Calculate dynamic spacing based on viewport width
+    // For mobile, cards need to overlap more to fit on screen
+    // Base spacing at 1920px is 115 (for 100px wide cards)
+    // Dynamic spacing ensures 8 cards fit in hand, 9 cards fit in field row
+    const CARDS_IN_HAND = 8;
+    const CARDS_IN_FIELD = 9;
+    const HORIZONTAL_MARGIN = 20;
+
+    // Calculate spacing to fit cards on screen
+    const handSpacing = Math.min(115, (viewportWidth - HORIZONTAL_MARGIN) / CARDS_IN_HAND);
+    const fieldSpacing = Math.min(115, (viewportWidth - HORIZONTAL_MARGIN) / CARDS_IN_FIELD);
+
+    // Calculate row spacing based on viewport height (for field grid)
+    // Need to fit: opponent hand, 2 field rows, player hand
+    const verticalSections = 4;
+    const rowSpacing = Math.min(180, (viewportHeight - 100) / verticalSections);
+
     // Base configs shared across all modes
     const baseConfigs = {
       drawnCard: {
@@ -255,9 +272,9 @@ export class LayoutManager {
         // Center field vertically between player hand (viewportHeight - 170) and opponent hand (40)
         anchorPoint: { x: 100, y: (viewportHeight - 130) / 2 + HEADER_OFFSET },
         centerX: centerX,
-        spacing: 115,
+        spacing: fieldSpacing,
         maxPerRow: 9,
-        rowSpacing: 180, // Increased from default 160 to prevent overlap (card height is 140)
+        rowSpacing: rowSpacing,
         useFixedPositions: true,
         faceUp: 1,
         renderLayer: 3
@@ -269,12 +286,16 @@ export class LayoutManager {
     const getPlayerHandConfigs = () => {
       if (playerCount === 2) {
         // 2-Player Layout: P0 bottom, P1 top (uses indexed names for consistency)
+        // Calculate vertical positions based on viewport height for mobile
+        const playerHandY = Math.min(viewportHeight - 170, viewportHeight - rowSpacing) + HEADER_OFFSET;
+        const opponentHandY = Math.max(40, rowSpacing * 0.3) + HEADER_OFFSET;
+
         return {
           player0Hand: {
             type: 'row',
-            anchorPoint: { x: 50, y: viewportHeight - 170 + HEADER_OFFSET },
+            anchorPoint: { x: 50, y: playerHandY },
             centerX: centerX,
-            spacing: 115,
+            spacing: handSpacing,
             maxCards: 8,
             faceUp: 1,
             renderLayer: 5,
@@ -282,9 +303,9 @@ export class LayoutManager {
           },
           player1Hand: {
             type: 'row',
-            anchorPoint: { x: 50, y: 40 + HEADER_OFFSET },
+            anchorPoint: { x: 50, y: opponentHandY },
             centerX: centerX,
-            spacing: 115,
+            spacing: handSpacing,
             maxCards: 8,
             faceUp: 0,
             renderLayer: 5
@@ -308,12 +329,14 @@ export class LayoutManager {
         };
       } else if (playerCount === 3) {
         // 3-Player Layout: P0 bottom, P1 top-left, P2 top-right
+        const playerHandY = Math.min(viewportHeight - 170, viewportHeight - rowSpacing) + HEADER_OFFSET;
+
         return {
           player0Hand: {
             type: 'row',
-            anchorPoint: { x: 50, y: viewportHeight - 170 + HEADER_OFFSET },
+            anchorPoint: { x: 50, y: playerHandY },
             centerX: centerX,
-            spacing: 115,
+            spacing: handSpacing,
             maxCards: 7,
             faceUp: 1,
             renderLayer: 5,
@@ -364,12 +387,15 @@ export class LayoutManager {
         // 4-Player Layout: You (bottom-center), Opponent1 (left-center), Opponent2 (top-center), Opponent3 (right-center)
         // Trick piles in four corners: You (bottom-right), Opponent1 (bottom-left), Opponent2 (top-left), Opponent3 (top-right)
         // Deck integrated into field grid at position 0
+        const playerHandY = Math.min(viewportHeight - 170, viewportHeight - rowSpacing) + HEADER_OFFSET;
+        const opponentHandY = Math.max(100, rowSpacing * 0.7) + HEADER_OFFSET;
+
         return {
           player0Hand: {
             type: 'row',
-            anchorPoint: { x: 50, y: viewportHeight - 170 + HEADER_OFFSET },
+            anchorPoint: { x: 50, y: playerHandY },
             centerX: centerX,
-            spacing: 115,
+            spacing: handSpacing,
             maxCards: 5,
             faceUp: 1,
             renderLayer: 5,
@@ -385,9 +411,9 @@ export class LayoutManager {
           },
           player2Hand: {
             type: 'row',
-            anchorPoint: { x: 50, y: 100 + HEADER_OFFSET },
+            anchorPoint: { x: 50, y: opponentHandY },
             centerX: centerX,
-            spacing: 115,
+            spacing: handSpacing,
             maxCards: 5,
             faceUp: 0,
             renderLayer: 5
