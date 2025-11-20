@@ -249,6 +249,18 @@ export class LayoutManager {
     const verticalSections = 4;
     const rowSpacing = Math.min(180, (viewportHeight - 100) / verticalSections);
 
+    // Detect if we're on a mobile device (small viewport)
+    const isMobile = viewportWidth <= 768 || viewportHeight <= 500;
+
+    // Footer height to account for on mobile (footer is fixed at bottom)
+    const footerHeight = isMobile ? 50 : 0;
+
+    // Calculate vertical margins - move hands closer to center on small screens
+    // Use proportional positioning based on available space
+    const availableHeight = viewportHeight - footerHeight;
+    const topMargin = isMobile ? Math.max(20, availableHeight * 0.08) : 40;
+    const bottomMargin = isMobile ? Math.max(60, availableHeight * 0.15) : 170;
+
     // Base configs shared across all modes
     const baseConfigs = {
       drawnCard: {
@@ -286,9 +298,9 @@ export class LayoutManager {
     const getPlayerHandConfigs = () => {
       if (playerCount === 2) {
         // 2-Player Layout: P0 bottom, P1 top (uses indexed names for consistency)
-        // Calculate vertical positions based on viewport height for mobile
-        const playerHandY = Math.min(viewportHeight - 170, viewportHeight - rowSpacing) + HEADER_OFFSET;
-        const opponentHandY = Math.max(40, rowSpacing * 0.3) + HEADER_OFFSET;
+        // Calculate vertical positions - move hands closer to center on mobile
+        const playerHandY = viewportHeight - bottomMargin + HEADER_OFFSET;
+        const opponentHandY = topMargin + HEADER_OFFSET;
 
         return {
           player0Hand: {
@@ -329,7 +341,7 @@ export class LayoutManager {
         };
       } else if (playerCount === 3) {
         // 3-Player Layout: P0 bottom, P1 top-left, P2 top-right
-        const playerHandY = Math.min(viewportHeight - 170, viewportHeight - rowSpacing) + HEADER_OFFSET;
+        const playerHandY = viewportHeight - bottomMargin + HEADER_OFFSET;
 
         return {
           player0Hand: {
@@ -387,8 +399,8 @@ export class LayoutManager {
         // 4-Player Layout: You (bottom-center), Opponent1 (left-center), Opponent2 (top-center), Opponent3 (right-center)
         // Trick piles in four corners: You (bottom-right), Opponent1 (bottom-left), Opponent2 (top-left), Opponent3 (top-right)
         // Deck integrated into field grid at position 0
-        const playerHandY = Math.min(viewportHeight - 170, viewportHeight - rowSpacing) + HEADER_OFFSET;
-        const opponentHandY = Math.max(100, rowSpacing * 0.7) + HEADER_OFFSET;
+        const playerHandY = viewportHeight - bottomMargin + HEADER_OFFSET;
+        const opponentHandY = topMargin + HEADER_OFFSET;
 
         return {
           player0Hand: {
