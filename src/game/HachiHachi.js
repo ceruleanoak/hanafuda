@@ -295,6 +295,15 @@ export class HachiHachi {
    * 4. Click different hand card in select_field phase → switch selection
    */
   selectCard(card, owner = 'player') {
+    debugLogger.log('hachihachi', `📌 selectCard() entry point`, {
+      cardName: card.name,
+      owner: owner,
+      currentPhase: this.phase,
+      currentPlayerIndex: this.currentPlayerIndex,
+      drawnCard: this.drawnCard?.name,
+      selectedCardsCount: this.selectedCards.length
+    });
+
     // Handle field card clicks for drawn card matching (select_drawn_match phase)
     if (owner === 'field' && this.phase === 'select_drawn_match') {
       debugLogger.log('hachihachi', `🎯 selectCard: Routing to selectFieldCard for drawn match`, {
@@ -374,6 +383,12 @@ export class HachiHachi {
       }
     }
 
+    debugLogger.log('hachihachi', `❌ selectCard() returning false - no matching condition`, {
+      owner: owner,
+      currentPhase: this.phase,
+      cardName: card.name,
+      reasonMessage: 'Card click did not match any valid game phase condition'
+    });
     return false;
   }
 
