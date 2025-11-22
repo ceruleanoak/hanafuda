@@ -494,12 +494,12 @@ export class Card3D {
   }
 
   /**
-   * Get scale factor based on Z position
+   * Get scale factor (scale only, Z position is used for layering only, not perspective)
    */
   getScale() {
-    // Z affects scale: higher Z = larger scale (closer to camera)
-    const zScaleFactor = 1.0 + (this.z / 200);
-    return this.scale * zScaleFactor;
+    // Return current scale without z-based modifications
+    // Z position is used purely for render order (layering), not depth perspective
+    return this.scale;
   }
 
   /**

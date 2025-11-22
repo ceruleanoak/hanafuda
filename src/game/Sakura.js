@@ -24,6 +24,7 @@ export class Sakura {
     this.yakuChecker = new SakuraYaku();
     this.gameOptions = gameOptions;
     this.card3DManager = card3DManager;
+    this.audioManager = null; // Will be set by main.js
 
     // Game configuration
     this.totalRounds = 6; // Standard Sakura match is 6 rounds
@@ -2204,6 +2205,13 @@ export class Sakura {
    */
   setCard3DManager(card3DManager) {
     this.card3DManager = card3DManager;
+  }
+
+  /**
+   * Set audio manager for sound effects
+   */
+  setAudioManager(audioManager) {
+    this.audioManager = audioManager;
   }
 
   /**

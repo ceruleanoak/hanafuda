@@ -45,6 +45,8 @@ export class Card3DManager {
     for (let i = 0; i < playerCount; i++) {
       zones[`player${i}Hand`] = new Set();
       zones[`player${i}Trick`] = new Set();
+      // Teyaku display zones for Hachi-Hachi (3-player mode)
+      zones[`player${i}Teyaku`] = new Set();
     }
 
     return zones;
@@ -111,6 +113,11 @@ export class Card3DManager {
 
     cardSources.push({ cards: gameState.deck?.cards || [], zone: 'deck' });
     cardSources.push({ cards: gameState.field || [], zone: 'field' });
+
+    // Add drawn card if present
+    if (gameState.drawnCard) {
+      cardSources.push({ cards: [gameState.drawnCard], zone: 'drawnCard' });
+    }
 
     // Use indexed player format for all player counts
     if (gameState.players && Array.isArray(gameState.players)) {
@@ -271,7 +278,8 @@ export class Card3DManager {
     for (const [cardId, newZone] of currentMapping) {
       const card3D = this.cards.get(cardId);
       if (!card3D) {
-        debugLogger.logAnimationWarning('Card not found in Card3D system', { cardId });
+        // Card not yet initialized in Card3D system - skip it
+        // This can happen during initial setup or after switching game modes
         continue;
       }
 

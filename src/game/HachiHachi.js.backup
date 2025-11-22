@@ -1,0 +1,1512 @@
+import { Deck } from './Deck.js';
+import { Teyaku } from './Teyaku.js';
+import { Dekiyaku } from './Dekiyaku.js';
+import { debugLogger } from '../utils/DebugLogger.js';
+
+/**
+ * Hachi-Hachi (88) - Three-player hanafuda game
+ *
+ * A traditional Japanese gambling game with complex scoring involving:
+ * - Teyaku (hand combinations) - scored at round start
+ * - Dekiyaku (captured combinations) - scored when formed
+ * - Field multipliers - affect all point exchanges
+ * - Sage/Shoubu decision - continue or end round
+ */
+export class HachiHachi {
+  /**
+   * Initialize a new Hachi-Hachi game
+   * @param {GameOptions} gameOptions - Game configuration
+   */
+  constructor(gameOptions = {}) {
+    this.gameOptions = gameOptions;
+    this.audioManager = null; // Will be set by main.js
+
+    // Game state
+    this.deck = new Deck();
+    this.phase = 'setup'; // setup, teyaku, select_hand, select_field, playing, choose_match, choose_drawn_match, sage_decision, round_end, game_end
+    this.currentPlayer = null; // 'player', 'opponent1', 'opponent2'
+    this.dealer = null;
+    this.fieldMultiplier = 1; // 1x (small field), 2x (large field), 4x (grand field)
+
+    // Player states
+    this.players = {
+      player: { hand: [], captured: [], teyakuScore: 0, teyakuClaimed: [] },
+      opponent1: { hand: [], captured: [], teyakuScore: 0, teyakuClaimed: [] },
+      opponent2: { hand: [], captured: [], teyakuScore: 0, teyakuClaimed: [] }
+    };
+
+    this.field = [];
+
+    // Round state
+    this.roundState = {
+      teyakuPaid: false,
+      sagesCalled: {}, // { 'player': true, 'opponent1': false, 'opponent2': true }
+      sageCancelCalled: null, // player who called cancel
+      dekiyakuFormed: {}, // { 'player': [dekiyaku list], ... }
+      roundWinner: null,
+      roundScores: {} // { 'player': points, ... }
+    };
+
+    // Game state
+    this.roundNumber = 0;
+    this.gameScores = {
+      player: 0,
+      opponent1: 0,
+      opponent2: 0
+    };
+
+    this.message = '';
+
+    // Callbacks for UI
+    this.uiCallback = null;
+    this.roundSummaryCallback = null;
+    this.teyakuPaymentCallback = null;
+
+    // 3D animation system reference
+    this.card3DManager = null;
+
+    // Teyaku card display zones
+    this.teyakuDisplay = {};
+
+    // AI turn timing
+    this.aiTurnStartTime = null;
+
+    // Current card and matches for choosing
+    this.currentCard = null;
+    this.currentMatches = [];
+
+    // Selected card for two-click selection
+    this.selectedCards = [];
+
+    // Drawn card display
+    this.drawnCard = null;
+    this.drawnCardMatches = [];
+  }
+
+  /**
+   * Set callback for UI decisions (Sage/Shoubu)
+   */
+  setUICallback(callback) {
+    this.uiCallback = callback;
+  }
+
+  /**
+   * Set callback for round summary display
+   */
+  setRoundSummaryCallback(callback) {
+    this.roundSummaryCallback = callback;
+  }
+
+  /**
+   * Set callback for teyaku payment grid display
+   */
+  setTeyakuPaymentCallback(callback) {
+    this.teyakuPaymentCallback = callback;
+  }
+
+  /**
+   * Set Card3DManager reference for 3D animation
+   */
+  setCard3DManager(card3DManager) {
+    this.card3DManager = card3DManager;
+  }
+
+  /**
+   * Set audio manager for sound effects
+   */
+  setAudioManager(audioManager) {
+    this.audioManager = audioManager;
+  }
+
+  /**
+   * Update game state (called from main game loop)
+   * Handles AI opponent turns
+   * @param {number} deltaTime - Time elapsed since last frame
+   */
+  update(deltaTime = 0) {
+    // Handle AI opponent turns
+    if ((this.phase === 'playing' || this.phase === 'select_hand') && this.currentPlayer !== 'player') {
+      // Initialize AI turn timer if needed
+      if (!this.aiTurnStartTime) {
+        this.aiTurnStartTime = Date.now();
+      }
+
+      // Add a small delay before AI makes a move (for UX)
+      const elapsedTime = Date.now() - this.aiTurnStartTime;
+      if (elapsedTime > 800) {
+        this.makeAIMove(this.currentPlayer);
+        this.aiTurnStartTime = null;
+      }
+    }
+
+    // Handle AI choosing from drawn card matches
+    if (this.phase === 'choose_drawn_match' && this.currentPlayer !== 'player') {
+      // Initialize AI choice timer if needed
+      if (!this.aiTurnStartTime) {
+        this.aiTurnStartTime = Date.now();
+      }
+
+      // Add a small delay before AI chooses
+      const elapsedTime = Date.now() - this.aiTurnStartTime;
+      if (elapsedTime > 800) {
+        // AI chooses first matching card
+        if (this.currentMatches && this.currentMatches.length > 0) {
+          this.chooseMatch(this.currentPlayer, this.currentMatches[0]);
+        }
+        this.aiTurnStartTime = null;
+      }
+    }
+  }
+
+  /**
+   * Make an AI move for the given opponent
+   * @param {string} playerKey - 'opponent1' or 'opponent2'
+   */
+  makeAIMove(playerKey) {
+    const hand = this.players[playerKey].hand;
+    if (hand.length === 0) {
+      this.nextPlayer();
+      return;
+    }
+
+    // AI strategy: prioritize matching cards, then play random card
+    const matchingCards = hand.filter(card =>
+      this.field.some(fc => fc.month === card.month)
+    );
+
+    let cardToPlay;
+    if (matchingCards.length > 0) {
+      // Prefer matching cards - pick first one
+      cardToPlay = matchingCards[0];
+    } else {
+      // No matches - play first card
+      cardToPlay = hand[0];
+    }
+
+    // Call selectCard for consistency with new two-phase system
+    if (this.phase === 'select_hand' && this.currentPlayer === playerKey) {
+      this.selectCard(cardToPlay, 'player');
+
+      // If selectCard moved to select_field phase, also complete field selection
+      if (this.phase === 'select_field' && this.currentMatches.length > 0) {
+        // Pick first matching card (simple strategy)
+        const fieldCard = this.currentMatches[0];
+        this.selectCard(fieldCard, 'field');
+      }
+    } else {
+      // Fallback to direct playCard for other phases
+      this.playCard(playerKey, cardToPlay);
+    }
+  }
+
+  /**
+   * Get current game state (for Card3DManager and rendering)
+   * @returns {Object} Game state object
+   */
+  getState() {
+    return {
+      phase: this.phase,
+      currentPlayer: this.currentPlayer,
+      deck: this.deck.cards,
+      deckCount: this.deck.count,
+      field: this.field,
+      drawnCard: this.drawnCard,
+      drawnCardMatches: this.drawnCardMatches,
+      players: [
+        { hand: this.players.player.hand, captured: this.players.player.captured },
+        { hand: this.players.opponent1.hand, captured: this.players.opponent1.captured },
+        { hand: this.players.opponent2.hand, captured: this.players.opponent2.captured }
+      ],
+      gameScores: this.gameScores,
+      roundNumber: this.roundNumber,
+      totalRounds: this.totalRounds,
+      dealer: this.dealer,
+      fieldMultiplier: this.fieldMultiplier,
+      message: this.message,
+      teyakuDisplay: this.teyakuDisplay
+    };
+  }
+
+  /**
+   * Start a new game
+   * @param {number} numRounds - Number of rounds to play (default 12)
+   */
+  startGame(numRounds = 12) {
+    this.totalRounds = numRounds;
+    this.roundNumber = 0;
+    this.gameScores = { player: 0, opponent1: 0, opponent2: 0 };
+    this.dealer = 'player'; // Can be randomized
+    this.startRound();
+  }
+
+  /**
+   * Start a new round
+   */
+  startRound() {
+    this.roundNumber++;
+    this.phase = 'setup';
+
+    // Reset round state
+    this.roundState = {
+      teyakuPaid: false,
+      sagesCalled: {},
+      sageCancelCalled: null,
+      dekiyakuFormed: {},
+      roundWinner: null,
+      roundScores: {}
+    };
+
+    // Reset player states
+    Object.keys(this.players).forEach(playerKey => {
+      this.players[playerKey] = {
+        hand: [],
+        captured: [],
+        teyakuScore: 0,
+        teyakuClaimed: []
+      };
+    });
+
+    this.field = [];
+    this.currentPlayer = null;
+    this.message = `Round ${this.roundNumber} starting...`;
+
+    // Deal cards
+    this.dealCards();
+  }
+
+  /**
+   * Deal cards to players and field
+   * Hachi-Hachi deal: 4-3-3-3 to players, 3-3 to field
+   * Results in: 7 cards per player, 6 cards on field
+   */
+  dealCards() {
+    this.deck.shuffle();
+
+    const dealOrder = ['player', 'opponent1', 'opponent2'];
+    const playerHands = { player: [], opponent1: [], opponent2: [] };
+    const fieldCards = [];
+
+    // Deal 4 cards to each player (starting from player to right of dealer)
+    for (let i = 0; i < 4; i++) {
+      dealOrder.forEach(playerKey => {
+        playerHands[playerKey].push(this.deck.draw());
+      });
+    }
+
+    // Deal 3 cards face-up to field
+    for (let i = 0; i < 3; i++) {
+      fieldCards.push(this.deck.draw());
+    }
+
+    // Deal 3 more cards to each player
+    for (let i = 0; i < 3; i++) {
+      dealOrder.forEach(playerKey => {
+        playerHands[playerKey].push(this.deck.draw());
+      });
+    }
+
+    // Deal 3 more cards face-up to field
+    for (let i = 0; i < 3; i++) {
+      fieldCards.push(this.deck.draw());
+    }
+
+    // Check for misdeal (4 cards of same month on field)
+    if (this.isMisdeal(fieldCards)) {
+      this.message = 'Misdeal! 4 cards of same month on field. Redealing...';
+      this.dealCards();
+      return;
+    }
+
+    // Set hands and field
+    this.players.player.hand = playerHands.player;
+    this.players.opponent1.hand = playerHands.opponent1;
+    this.players.opponent2.hand = playerHands.opponent2;
+    this.field = fieldCards;
+
+    // Calculate field multiplier based on brights on field
+    this.calculateFieldMultiplier();
+
+    // Detect all teyaku for display
+    this.showTeyakuPaymentGrid();
+  }
+
+  /**
+   * Check if a misdeal occurred (4 cards of same month on field)
+   * @param {Array} fieldCards - Cards on the field
+   * @returns {boolean} true if misdeal
+   */
+  isMisdeal(fieldCards) {
+    const monthCounts = {};
+    fieldCards.forEach(card => {
+      monthCounts[card.month] = (monthCounts[card.month] || 0) + 1;
+    });
+
+    return Object.values(monthCounts).some(count => count === 4);
+  }
+
+  /**
+   * Calculate field multiplier based on bright cards on field
+   * Small field (no brights): 1x
+   * Large field (Jan/Mar/Aug brights): 2x
+   * Grand field (Nov/Dec brights): 4x
+   */
+  calculateFieldMultiplier() {
+    const largeBrightMonths = ['January', 'March', 'August']; // Pine, Cherry Blossom, Eulalia/Moon
+    const grandBrightMonths = ['November', 'December']; // Willow, Paulownia
+
+    const fieldMonths = this.field.map(card => card.month);
+
+    const hasGrandBright = fieldMonths.some(m => grandBrightMonths.includes(m));
+    const hasLargeBright = fieldMonths.some(m => largeBrightMonths.includes(m));
+
+    if (hasGrandBright) {
+      this.fieldMultiplier = 4;
+      this.message += ' (Grand Field: 4× multiplier)';
+    } else if (hasLargeBright) {
+      this.fieldMultiplier = 2;
+      this.message += ' (Large Field: 2× multiplier)';
+    } else {
+      this.fieldMultiplier = 1;
+      this.message += ' (Small Field: 1× multiplier)';
+    }
+  }
+
+  /**
+   * Show teyaku payment grid modal (teaching moment for payment system)
+   * Detects all teyaku, calculates payments, and shows grid to player
+   */
+  showTeyakuPaymentGrid() {
+    this.phase = 'teyaku_display';
+    this.message = 'Review teyaku payments...';
+
+    // Detect teyaku for all players
+    const playerTeyaku = Teyaku.detectTeyaku(this.players.player.hand);
+    const opponent1Teyaku = Teyaku.detectTeyaku(this.players.opponent1.hand);
+    const opponent2Teyaku = Teyaku.detectTeyaku(this.players.opponent2.hand);
+
+    // Store these for later reference
+    this.players.player.teyakuClaimed = playerTeyaku;
+    this.players.opponent1.teyakuClaimed = opponent1Teyaku;
+    this.players.opponent2.teyakuClaimed = opponent2Teyaku;
+
+    // Display opponent teyaku cards face-up for player reference
+    if (opponent1Teyaku.length > 0) {
+      this.displayOpponentTeyakuCards('opponent1', opponent1Teyaku);
+    }
+    if (opponent2Teyaku.length > 0) {
+      this.displayOpponentTeyakuCards('opponent2', opponent2Teyaku);
+    }
+
+    // If we have a callback, trigger it
+    if (this.teyakuPaymentCallback) {
+      this.teyakuPaymentCallback({
+        roundNumber: this.roundNumber,
+        playerTeyaku: playerTeyaku,
+        opponent1Teyaku: opponent1Teyaku,
+        opponent2Teyaku: opponent2Teyaku,
+        fieldMultiplier: this.fieldMultiplier,
+        onContinue: () => {
+          // After grid is acknowledged, process teyaku and start main game
+          this.processAllTeyaku();
+        }
+      });
+    } else {
+      // No callback provided - just process immediately
+      this.processAllTeyaku();
+    }
+  }
+
+  /**
+   * Display opponent teyaku cards face-up in reference zone
+   * @param {string} playerKey - 'opponent1' or 'opponent2'
+   * @param {Array} teyakuList - List of teyaku objects
+   */
+  displayOpponentTeyakuCards(playerKey, teyakuList) {
+    // Collect all cards from teyaku (cardsInvolved)
+    const teyakuCards = [];
+    teyakuList.forEach(teyaku => {
+      if (teyaku.cardsInvolved && Array.isArray(teyaku.cardsInvolved)) {
+        teyakuCards.push(...teyaku.cardsInvolved);
+      }
+    });
+
+    // Store cards for display zone (for UI reference)
+    const zoneKey = playerKey === 'opponent1' ? 'player1Teyaku' : 'player2Teyaku';
+
+    if (!this.teyakuDisplay) {
+      this.teyakuDisplay = {};
+    }
+    this.teyakuDisplay[zoneKey] = teyakuCards;
+
+    // Move cards to teyaku display zone in Card3D system so they render face-up
+    if (this.card3DManager && teyakuCards.length > 0) {
+      teyakuCards.forEach(card => {
+        const card3D = this.card3DManager.getCard(card);
+        if (card3D) {
+          this.card3DManager.moveCardToZone(card3D, zoneKey);
+          // Force face-up for teyaku display
+          card3D.targetFaceUp = 1;
+        }
+      });
+    }
+  }
+
+  /**
+   * Player claims teyaku from their hand
+   * @param {string} playerKey - 'player', 'opponent1', or 'opponent2'
+   */
+  claimTeyaku(playerKey) {
+    const hand = this.players[playerKey].hand;
+    const teyakuList = Teyaku.detectTeyaku(hand);
+
+    // Score teyaku (player gets from each opponent)
+    let teyakuValue = 0;
+    teyakuList.forEach(t => {
+      teyakuValue += t.value;
+    });
+
+    this.players[playerKey].teyakuScore = teyakuValue * this.fieldMultiplier;
+    this.players[playerKey].teyakuClaimed = teyakuList;
+
+    if (teyakuList.length > 0) {
+      const teyakuNames = teyakuList.map(t => t.name).join(', ');
+      this.message = `${playerKey} claimed teyaku: ${teyakuNames} (${teyakuValue} kan)`;
+    }
+  }
+
+  /**
+   * All players claim their teyaku
+   */
+  processAllTeyaku() {
+    ['player', 'opponent1', 'opponent2'].forEach(playerKey => {
+      this.claimTeyaku(playerKey);
+    });
+
+    this.roundState.teyakuPaid = true;
+    this.phase = 'playing';
+    this.currentPlayer = this.dealer;
+
+    // If player is dealer, start in select_hand phase for proper interaction
+    if (this.dealer === 'player') {
+      this.phase = 'select_hand';
+      this.message = 'Your turn! Select a card from your hand.';
+    } else {
+      this.message = `${this.dealer} starts. Play begins...`;
+    }
+  }
+
+  /**
+   * Play a card from hand to field
+   * @param {string} playerKey - Player making the move
+   * @param {object} card - Card from hand to play
+   * @returns {boolean} true if move is valid
+   */
+  playCard(playerKey, card) {
+    if (this.currentPlayer !== playerKey) {
+      this.message = 'Not your turn!';
+      return false;
+    }
+
+    if (this.phase !== 'playing' && this.phase !== 'choose_match') {
+      this.message = 'Not in playing phase!';
+      return false;
+    }
+
+    // Remove card from hand
+    const cardIndex = this.players[playerKey].hand.findIndex(
+      c => c.id === card.id
+    );
+    if (cardIndex === -1) {
+      this.message = 'Card not in hand!';
+      return false;
+    }
+
+    this.players[playerKey].hand.splice(cardIndex, 1);
+
+    // Check for matches on field
+    const matches = this.field.filter(fc => fc.month === card.month);
+
+    if (matches.length === 0) {
+      // No match - card stays on field
+      this.field.push(card);
+      this.message = `${playerKey} played ${card.name} - no match`;
+      this.phase = 'waiting_for_draw';
+    } else if (matches.length === 1) {
+      // One match - capture both
+      this.captureCards(playerKey, [card, matches[0]]);
+      this.message = `${playerKey} matched and captured`;
+      this.phase = 'waiting_for_draw';
+    } else if (matches.length === 2) {
+      // Two matches - player chooses which to capture
+      this.message = `${playerKey} can match with 2 cards. Which one?`;
+      this.phase = 'choose_match';
+      this.currentCard = card;
+      this.currentMatches = matches;
+      return true;
+    } else if (matches.length === 3) {
+      // Three matches - capture all with played card
+      this.captureCards(playerKey, [card, ...matches]);
+      this.message = `${playerKey} matched all 3 and captured`;
+      this.phase = 'waiting_for_draw';
+    }
+
+    // Draw a card from deck
+    this.drawCard(playerKey);
+    return true;
+  }
+
+  /**
+   * Choose which card to capture when multiple matches exist
+   * @param {string} playerKey - Player making the choice
+   * @param {object} targetCard - The field card to capture
+   */
+  chooseMatch(playerKey, targetCard) {
+    if (this.phase !== 'choose_match' && this.phase !== 'choose_drawn_match') {
+      this.message = 'Not in choose match phase!';
+      return false;
+    }
+
+    if (this.currentPlayer !== playerKey) {
+      this.message = 'Not your turn!';
+      return false;
+    }
+
+    // Validate target is in current matches
+    if (!this.currentMatches.some(m => m.id === targetCard.id)) {
+      this.message = 'Invalid target card!';
+      return false;
+    }
+
+    this.captureCards(playerKey, [this.currentCard, targetCard]);
+
+    if (this.phase === 'choose_match') {
+      this.message = `${playerKey} chose and captured`;
+      this.phase = 'waiting_for_draw';
+      this.drawCard(playerKey);
+    } else {
+      // choose_drawn_match - move to next player after draw
+      this.message = `${playerKey} drew and captured`;
+      this.drawnCard = null;
+      this.drawnCardMatches = [];
+      this.nextPlayer();
+
+      // If next player is human, switch to select_hand phase
+      if (this.currentPlayer === 'player' && this.phase === 'playing') {
+        this.phase = 'select_hand';
+        this.message = 'Your turn! Select a card from your hand.';
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Capture cards and add to score pile
+   * @param {string} playerKey - Player capturing
+   * @param {array} cards - Cards to capture
+   */
+  captureCards(playerKey, cards) {
+    cards.forEach(card => {
+      // Remove from field if present
+      const fieldIndex = this.field.findIndex(fc => fc.id === card.id);
+      if (fieldIndex !== -1) {
+        this.field.splice(fieldIndex, 1);
+      }
+    });
+
+    // Add to score pile
+    this.players[playerKey].captured.push(...cards);
+
+    // Check for dekiyaku after capture
+    this.checkDekiyaku(playerKey);
+  }
+
+  /**
+   * Draw card from deck and play it
+   * @param {string} playerKey - Player drawing
+   */
+  drawCard(playerKey) {
+    if (this.phase === 'waiting_for_draw') {
+      // Clear the waiting state
+      this.phase = 'playing';
+    }
+
+    if (this.deck.isEmpty()) {
+      // No more cards - hand exhausted, move to scoring
+      this.phase = 'hand_exhausted';
+      this.message = 'All cards played - evaluating round...';
+      this.calculateScores();
+      return;
+    }
+
+    const drawnCard = this.deck.draw();
+
+    // Store drawn card for display
+    this.drawnCard = drawnCard;
+
+    const matches = this.field.filter(fc => fc.month === drawnCard.month);
+    this.drawnCardMatches = matches;
+
+    if (matches.length === 0) {
+      // No match - card goes to field
+      this.field.push(drawnCard);
+      this.message = `${playerKey} drew ${drawnCard.name} - no match`;
+      this.drawnCard = null;
+      this.drawnCardMatches = [];
+      this.nextPlayer();
+
+      // If next player is human, switch to select_hand phase
+      if (this.currentPlayer === 'player') {
+        this.phase = 'select_hand';
+        this.message = 'Your turn! Select a card from your hand.';
+      }
+    } else if (matches.length === 1) {
+      // One match - capture both
+      this.captureCards(playerKey, [drawnCard, matches[0]]);
+      this.message = `${playerKey} drew match`;
+      this.drawnCard = null;
+      this.drawnCardMatches = [];
+      this.nextPlayer();
+
+      // If next player is human, switch to select_hand phase
+      if (this.currentPlayer === 'player') {
+        this.phase = 'select_hand';
+        this.message = 'Your turn! Select a card from your hand.';
+      }
+    } else if (matches.length === 2 || matches.length === 3) {
+      // Two or three matches - player chooses
+      this.message = `${playerKey} drew matching card - choose which to capture`;
+      this.phase = 'choose_drawn_match';
+      this.currentCard = drawnCard;
+      this.currentMatches = matches;
+      // Keep drawnCard and drawnCardMatches set for display
+      return;
+    }
+  }
+
+  /**
+   * Select a card for two-phase matching system (similar to Sakura)
+   * First click selects from hand, second click matches from field
+   * @param {object} card - Card data object
+   * @param {string} location - 'player' (from hand) or 'field' (from field)
+   * @returns {boolean} true if selection was handled
+   */
+  selectCard(card, location = 'player') {
+    // Only allow selection during player's turn
+    if (this.currentPlayer !== 'player') {
+      this.message = 'Not your turn!';
+      return false;
+    }
+
+    // In teyaku phase, prevent card selection
+    if (this.phase === 'teyaku' || this.phase === 'teyaku_display') {
+      this.message = 'Waiting for teyaku evaluation...';
+      return false;
+    }
+
+    // Handle select_hand phase - selecting from hand
+    if (this.phase === 'playing' || !this.selectedCards.length) {
+      // Click on hand card to select it
+      if (location === 'player' && this.players.player.hand.some(c => c.id === card.id)) {
+        // Find matches on field for this card
+        const matches = this.field.filter(fc => fc.month === card.month);
+
+        // Store selection
+        this.selectedCards = [card];
+
+        if (matches.length === 0) {
+          // No matches available - message guides player to double-click to place on field
+          this.message = `${card.name} selected. Double-click to place on field.`;
+          this.phase = 'select_hand';
+          return true;
+        } else if (matches.length === 1) {
+          // Single match - move to select_field phase
+          this.currentMatches = matches;
+          this.message = `${card.name} selected. Click ${matches[0].name} to capture.`;
+          this.phase = 'select_field';
+          return true;
+        } else if (matches.length >= 2) {
+          // Multiple matches - move to select_field phase to choose
+          this.currentMatches = matches;
+          this.message = `${card.name} selected. Click one of ${matches.length} matching cards to capture.`;
+          this.phase = 'select_field';
+          return true;
+        }
+      }
+
+      // Deselect by clicking empty area or same card again
+      if (location === 'field' && this.selectedCards.length === 0) {
+        this.message = 'Select a card from your hand first.';
+        return false;
+      }
+
+      return false;
+    }
+
+    // Handle select_field phase - selecting from field
+    if (this.phase === 'select_field') {
+      // Click on field card to capture
+      if (location === 'field') {
+        // Validate that clicked card is in current matches
+        if (!this.currentMatches.some(m => m.id === card.id)) {
+          this.message = 'Invalid selection! Click a matching card.';
+          return false;
+        }
+
+        // Play the selected hand card and capture the field card
+        const handCard = this.selectedCards[0];
+        this.playCardWithMatch(handCard, card);
+        this.selectedCards = [];
+        return true;
+      }
+
+      // Click on another hand card to switch selection
+      if (location === 'player') {
+        // Start new selection
+        const matches = this.field.filter(fc => fc.month === card.month);
+        this.selectedCards = [card];
+        this.currentMatches = matches;
+
+        if (matches.length === 0) {
+          this.message = `${card.name} selected. Double-click to place on field.`;
+          this.phase = 'select_hand';
+        } else {
+          this.message = `${card.name} selected. Click a matching card to capture.`;
+          this.phase = 'select_field';
+        }
+        return true;
+      }
+
+      return false;
+    }
+
+    // Handle choose_match phase (drawn card with multiple matches)
+    if (this.phase === 'choose_match' && location === 'field') {
+      if (this.currentMatches.some(m => m.id === card.id)) {
+        return this.chooseMatch('player', card);
+      }
+      this.message = 'Invalid selection!';
+      return false;
+    }
+
+    // Handle choose_drawn_match phase (drawn card with multiple matches)
+    if (this.phase === 'choose_drawn_match' && location === 'field') {
+      if (this.currentMatches.some(m => m.id === card.id)) {
+        return this.chooseMatch('player', card);
+      }
+      this.message = 'Invalid selection!';
+      return false;
+    }
+
+    return false;
+  }
+
+  /**
+   * Play a selected hand card with a specific field match
+   * Used when player selects both hand and field cards
+   * @param {object} handCard - Card from hand
+   * @param {object} fieldCard - Card from field to match with
+   */
+  playCardWithMatch(handCard, fieldCard) {
+    if (this.currentPlayer !== 'player') {
+      this.message = 'Not your turn!';
+      return false;
+    }
+
+    // Remove card from hand
+    const cardIndex = this.players.player.hand.findIndex(c => c.id === handCard.id);
+    if (cardIndex === -1) {
+      this.message = 'Card not in hand!';
+      return false;
+    }
+
+    this.players.player.hand.splice(cardIndex, 1);
+
+    // Capture both cards
+    this.captureCards('player', [handCard, fieldCard]);
+    this.message = `Matched and captured ${fieldCard.name}`;
+    this.phase = 'waiting_for_draw';
+    this.selectedCards = [];
+
+    // Draw a card from deck
+    this.drawCard('player');
+    return true;
+  }
+
+  /**
+   * Place a card on the field without matching (called via double-click)
+   * @param {object} card - Card to place
+   */
+  placeCardOnField(card) {
+    if (this.currentPlayer !== 'player') {
+      this.message = 'Not your turn!';
+      return false;
+    }
+
+    if (this.phase !== 'select_hand') {
+      this.message = 'Can only place card after selecting from hand!';
+      return false;
+    }
+
+    // Remove card from hand
+    const cardIndex = this.players.player.hand.findIndex(c => c.id === card.id);
+    if (cardIndex === -1) {
+      this.message = 'Card not in hand!';
+      return false;
+    }
+
+    this.players.player.hand.splice(cardIndex, 1);
+
+    // Place card on field
+    this.field.push(card);
+    this.message = `${card.name} placed on field`;
+    this.phase = 'waiting_for_draw';
+    this.selectedCards = [];
+
+    // Draw a card from deck
+    this.drawCard('player');
+    return true;
+  }
+
+  /**
+   * Handle card click from UI (for player hand or field cards)
+   * @param {string} cardId - Card ID that was clicked
+   * @returns {boolean} true if click was handled
+   */
+  handleCardClick(cardId) {
+    debugLogger.log('gameState', `📍 handleCardClick called with cardId: ${cardId}`, {
+      currentPlayer: this.currentPlayer,
+      phase: this.phase
+    });
+
+    // Only process clicks during player's turn
+    if (this.currentPlayer !== 'player') {
+      debugLogger.log('gameState', `❌ Not player's turn: ${this.currentPlayer}`, null);
+      this.message = 'Not your turn!';
+      return false;
+    }
+
+    // Find the card
+    const card = this.findCardById(cardId);
+    if (!card) {
+      debugLogger.log('gameState', `❌ Card not found: ${cardId}`, null);
+      return false;
+    }
+
+    debugLogger.log('gameState', `✅ Found card: ${card.name}`, null);
+
+    // Different handling based on game phase
+    if (this.phase === 'playing' || this.phase === 'choose_match') {
+      debugLogger.log('gameState', `Phase is ${this.phase}, checking card location...`, {
+        inPlayerHand: this.players.player.hand.some(c => c.id === cardId),
+        inMatches: this.currentMatches.some(c => c.id === cardId)
+      });
+
+      // Try to play card from hand
+      if (this.players.player.hand.some(c => c.id === cardId)) {
+        debugLogger.log('gameState', `🎴 Playing card from hand: ${card.name}`, null);
+        return this.playCard('player', card);
+      }
+      // Or choose a match if in choose_match phase
+      if (this.phase === 'choose_match' && this.currentMatches.some(c => c.id === cardId)) {
+        debugLogger.log('gameState', `🎯 Choosing match: ${card.name}`, null);
+        return this.chooseMatch('player', card) !== false;
+      }
+    } else if (this.phase === 'choose_drawn_match') {
+      debugLogger.log('gameState', `Phase is choose_drawn_match, checking if card in matches...`, {
+        inMatches: this.currentMatches.some(c => c.id === cardId)
+      });
+
+      // Player choosing which field card to match with drawn card
+      if (this.currentMatches.some(c => c.id === cardId)) {
+        debugLogger.log('gameState', `🎯 Choosing drawn match: ${card.name}`, null);
+        return this.chooseMatch('player', card) !== false;
+      }
+    } else {
+      debugLogger.log('gameState', `❌ Invalid phase for card clicks: ${this.phase}`, null);
+    }
+
+    return false;
+  }
+
+  /**
+   * Find a card by ID across all locations
+   * @param {string} cardId - Card ID to find
+   * @returns {Object|null} Card object or null
+   */
+  findCardById(cardId) {
+    // Check player hand
+    let card = this.players.player.hand.find(c => c.id === cardId);
+    if (card) return card;
+
+    // Check field
+    card = this.field.find(c => c.id === cardId);
+    if (card) return card;
+
+    // Check current matches (for choosing)
+    if (this.currentMatches && this.currentMatches.find(c => c.id === cardId)) {
+      return this.currentMatches.find(c => c.id === cardId);
+    }
+
+    return null;
+  }
+
+  /**
+   * Check if player has formed dekiyaku after capture
+   * @param {string} playerKey - Player to check
+   */
+  checkDekiyaku(playerKey) {
+    const newDekiyaku = Dekiyaku.detectDekiyaku(this.players[playerKey].captured);
+    this.roundState.dekiyakuFormed[playerKey] = newDekiyaku;
+
+    if (newDekiyaku.length > 0) {
+      const names = newDekiyaku.map(d => d.name).join(', ');
+      const values = newDekiyaku.map(d => d.value).join(', ');
+      this.message = `${playerKey} formed dekiyaku: ${names} (${values} kan)!`;
+      this.phase = 'sage_decision';
+      this.currentPlayer = playerKey;
+
+      // Trigger UI callback for player decisions
+      if (this.uiCallback && playerKey === 'player') {
+        this.uiCallback('sage', {
+          playerKey,
+          dekiyakuList: newDekiyaku,
+          playerScore: this.gameScores.player,
+          opponent1Score: this.gameScores.opponent1,
+          opponent2Score: this.gameScores.opponent2,
+          roundNumber: this.roundNumber,
+          totalRounds: this.totalRounds
+        });
+      }
+    }
+  }
+
+  /**
+   * Player calls sage (continue playing)
+   * @param {string} playerKey - Player making the call
+   * @returns {boolean} true if valid
+   */
+  callSage(playerKey) {
+    if (this.phase !== 'sage_decision') {
+      this.message = 'Not in sage decision phase!';
+      return false;
+    }
+
+    if (this.currentPlayer !== playerKey) {
+      this.message = 'Not your decision to make!';
+      return false;
+    }
+
+    this.roundState.sagesCalled[playerKey] = true;
+    this.message = `${playerKey} calls SAGE - round continues...`;
+    this.phase = 'playing';
+    this.nextPlayer();
+
+    // If next player is human, switch to select_hand phase
+    if (this.currentPlayer === 'player') {
+      this.phase = 'select_hand';
+      this.message = 'Your turn! Select a card from your hand.';
+    }
+    return true;
+  }
+
+  /**
+   * Player calls shoubu (end round)
+   * @param {string} playerKey - Player making the call
+   * @returns {boolean} true if valid
+   */
+  callShoubu(playerKey) {
+    if (this.phase !== 'sage_decision') {
+      this.message = 'Not in sage decision phase!';
+      return false;
+    }
+
+    if (this.currentPlayer !== playerKey) {
+      this.message = 'Not your decision to make!';
+      return false;
+    }
+
+    this.roundState.roundWinner = playerKey;
+    this.phase = 'round_end';
+    this.message = `${playerKey} calls SHOUBU - round ends!`;
+    this.calculateScores();
+    return true;
+  }
+
+  /**
+   * Player calls cancel (end round with reduced score)
+   * Only valid if player previously called sage
+   * @param {string} playerKey - Player making the call
+   * @returns {boolean} true if valid
+   */
+  callCancel(playerKey) {
+    if (this.phase !== 'playing') {
+      this.message = 'Can only cancel during playing phase!';
+      return false;
+    }
+
+    if (this.currentPlayer !== playerKey) {
+      this.message = 'Not your turn!';
+      return false;
+    }
+
+    if (!this.roundState.sagesCalled[playerKey]) {
+      this.message = 'Can only cancel if you called sage!';
+      return false;
+    }
+
+    this.roundState.sageCancelCalled = playerKey;
+    this.roundState.roundWinner = playerKey;
+    this.phase = 'round_end';
+    this.message = `${playerKey} cancels sage - round ends with reduced score!`;
+    this.calculateScores();
+    return true;
+  }
+
+  /**
+   * Move to next player in turn order
+   */
+  nextPlayer() {
+    const playerOrder = ['player', 'opponent1', 'opponent2'];
+    const currentIndex = playerOrder.indexOf(this.currentPlayer);
+    this.currentPlayer = playerOrder[(currentIndex + 1) % 3];
+  }
+
+  /**
+   * Calculate round scores and determine winner
+   */
+  calculateScores() {
+    // Check for special cases first
+    if (this.checkSpecialCases()) {
+      return;
+    }
+
+    // Check if any player has dekiyaku
+    const hasDekiyaku = Object.values(this.roundState.dekiyakuFormed)
+      .some(list => list && list.length > 0);
+
+    if (hasDekiyaku) {
+      this.scoreDekiyakuRound();
+    } else {
+      this.scoreCardPointsRound();
+    }
+  }
+
+  /**
+   * Check for special cases that override all scoring
+   * Special cases: All Eights, Double Eights, Sixteen Chaff
+   * @returns {boolean} true if special case found and handled
+   */
+  checkSpecialCases() {
+    // All Eights: All 3 players have exactly 88 points
+    const playerCards = {
+      player: this.getCardPoints(this.players.player.captured),
+      opponent1: this.getCardPoints(this.players.opponent1.captured),
+      opponent2: this.getCardPoints(this.players.opponent2.captured)
+    };
+
+    const allEights = Object.values(playerCards).every(p => p === 88);
+    if (allEights) {
+      this.roundState.roundWinner = this.dealer;
+      this.roundState.roundScores = {
+        player: 0,
+        opponent1: 0,
+        opponent2: 0
+      };
+
+      // Dealer gets 10 kan from each opponent
+      const dealerPayment = 10 * 2 * this.fieldMultiplier;
+      if (this.dealer === 'player') {
+        this.roundState.roundScores.player = dealerPayment;
+        this.roundState.roundScores.opponent1 = -10 * this.fieldMultiplier;
+        this.roundState.roundScores.opponent2 = -10 * this.fieldMultiplier;
+      } else if (this.dealer === 'opponent1') {
+        this.roundState.roundScores.opponent1 = dealerPayment;
+        this.roundState.roundScores.player = -10 * this.fieldMultiplier;
+        this.roundState.roundScores.opponent2 = -10 * this.fieldMultiplier;
+      } else {
+        this.roundState.roundScores.opponent2 = dealerPayment;
+        this.roundState.roundScores.player = -10 * this.fieldMultiplier;
+        this.roundState.roundScores.opponent1 = -10 * this.fieldMultiplier;
+      }
+
+      this.message = 'All Eights! Dealer collects 10 kan from each player.';
+      this.applyRoundScores();
+      return true;
+    }
+
+    // Double Eights: One player has 168+ points (80+ above par of 88)
+    for (const [playerKey, points] of Object.entries(playerCards)) {
+      if (points >= 168) {
+        this.roundState.roundWinner = playerKey;
+        const excessPoints = points - 168;
+        const payment = (10 + excessPoints) * this.fieldMultiplier;
+
+        this.roundState.roundScores = {
+          player: 0,
+          opponent1: 0,
+          opponent2: 0
+        };
+        this.roundState.roundScores[playerKey] = payment * 2;
+        const otherPlayers = ['player', 'opponent1', 'opponent2'].filter(p => p !== playerKey);
+        otherPlayers.forEach(p => {
+          this.roundState.roundScores[p] = -payment;
+        });
+
+        this.message = `Double Eights! ${playerKey} collects ${payment} kan from each player.`;
+        this.applyRoundScores();
+        return true;
+      }
+    }
+
+    // Sixteen Chaff: One player has 16+ chaff cards (willow counts as chaff)
+    for (const [playerKey, captured] of Object.entries({
+      player: this.players.player.captured,
+      opponent1: this.players.opponent1.captured,
+      opponent2: this.players.opponent2.captured
+    })) {
+      const chaffCount = this.getChaffCount(captured);
+      if (chaffCount >= 16) {
+        this.roundState.roundWinner = playerKey;
+        const excessChaff = chaffCount - 16;
+        const payment = (12 + excessChaff * 2) * this.fieldMultiplier;
+
+        this.roundState.roundScores = {
+          player: 0,
+          opponent1: 0,
+          opponent2: 0
+        };
+        this.roundState.roundScores[playerKey] = payment * 2;
+        const otherPlayers = ['player', 'opponent1', 'opponent2'].filter(p => p !== playerKey);
+        otherPlayers.forEach(p => {
+          this.roundState.roundScores[p] = -payment;
+        });
+
+        this.message = `Sixteen Chaff! ${playerKey} collects ${payment} kan from each player.`;
+        this.applyRoundScores();
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Score round where dekiyaku were formed
+   * Handles: Shoubu win, Cancel win, Hands exhausted with sage calls
+   */
+  scoreDekiyakuRound() {
+    // Initialize scores
+    this.roundState.roundScores = {
+      player: 0,
+      opponent1: 0,
+      opponent2: 0
+    };
+
+    // Case 1: Player called shoubu
+    if (this.roundState.roundWinner && !this.roundState.sageCancelCalled) {
+      const winner = this.roundState.roundWinner;
+      const dekiyakuList = this.roundState.dekiyakuFormed[winner];
+      const dekiyakuValue = Dekiyaku.calculateValue(dekiyakuList);
+
+      // Pay teyaku first
+      this.payTeyaku();
+
+      // Winner gets paid by opponents
+      const otherPlayers = ['player', 'opponent1', 'opponent2'].filter(p => p !== winner);
+      otherPlayers.forEach(opponent => {
+        let payment = dekiyakuValue * this.fieldMultiplier;
+
+        // If opponent called sage, they pay double
+        if (this.roundState.sagesCalled[opponent]) {
+          payment = payment * 2;
+        }
+
+        this.roundState.roundScores[opponent] -= payment;
+        this.roundState.roundScores[winner] += payment;
+      });
+
+      this.message = `${winner} wins with ${dekiyakuValue} kan dekiyaku!`;
+    }
+    // Case 2: Player called cancel
+    else if (this.roundState.sageCancelCalled) {
+      const canceller = this.roundState.sageCancelCalled;
+      const dekiyakuList = this.roundState.dekiyakuFormed[canceller];
+      const dekiyakuValue = Dekiyaku.calculateValue(dekiyakuList);
+
+      // Pay teyaku first
+      this.payTeyaku();
+
+      // Canceller gets half payment from opponents
+      const payment = (dekiyakuValue / 2) * this.fieldMultiplier;
+      const otherPlayers = ['player', 'opponent1', 'opponent2'].filter(p => p !== canceller);
+      otherPlayers.forEach(opponent => {
+        this.roundState.roundScores[opponent] -= payment;
+        this.roundState.roundScores[canceller] += payment;
+      });
+
+      this.message = `${canceller} cancels sage - gets half dekiyaku value (${dekiyakuValue / 2} kan)`;
+    }
+    // Case 3: All cards played with sage calls (hands exhausted)
+    else if (this.phase === 'hand_exhausted') {
+      // Pay teyaku
+      this.payTeyaku();
+
+      // All players with dekiyaku get half payment
+      const playersWithDekiyaku = ['player', 'opponent1', 'opponent2'].filter(
+        p => this.roundState.dekiyakuFormed[p] && this.roundState.dekiyakuFormed[p].length > 0
+      );
+
+      playersWithDekiyaku.forEach(playerKey => {
+        const dekiyakuValue = Dekiyaku.calculateValue(this.roundState.dekiyakuFormed[playerKey]);
+        const payment = (dekiyakuValue / 2) * this.fieldMultiplier;
+
+        const otherPlayers = ['player', 'opponent1', 'opponent2'].filter(p => p !== playerKey);
+        otherPlayers.forEach(opponent => {
+          this.roundState.roundScores[opponent] -= payment;
+          this.roundState.roundScores[playerKey] += payment;
+        });
+      });
+
+      // First sage caller is winner
+      const firstSageCaller = this.getFirstSageCaller();
+      this.roundState.roundWinner = firstSageCaller;
+      this.message = 'Hands exhausted with sage calls - all players paid half dekiyaku';
+    }
+
+    this.applyRoundScores();
+  }
+
+  /**
+   * Score round based on card points
+   * Par value is 88 points for 3 players
+   */
+  scoreCardPointsRound() {
+    // Pay teyaku first
+    this.payTeyaku();
+
+    // Initialize scores based on card points
+    this.roundState.roundScores = {
+      player: 0,
+      opponent1: 0,
+      opponent2: 0
+    };
+
+    const playerCards = {
+      player: this.getCardPoints(this.players.player.captured),
+      opponent1: this.getCardPoints(this.players.opponent1.captured),
+      opponent2: this.getCardPoints(this.players.opponent2.captured)
+    };
+
+    // Calculate scores: (Points - 88) × Field Multiplier
+    const PAR_VALUE = 88;
+    let winnerKey = null;
+    let maxPoints = 0;
+
+    for (const [playerKey, points] of Object.entries(playerCards)) {
+      const score = (points - PAR_VALUE) * this.fieldMultiplier;
+      this.roundState.roundScores[playerKey] = score;
+
+      if (points > maxPoints) {
+        maxPoints = points;
+        winnerKey = playerKey;
+      }
+    }
+
+    this.roundState.roundWinner = winnerKey;
+    this.message = `Card points: ${JSON.stringify(playerCards)}. ${winnerKey} wins with ${maxPoints} points!`;
+
+    this.applyRoundScores();
+  }
+
+  /**
+   * End the round
+   */
+  endRound() {
+    this.phase = 'round_end';
+    this.message = 'Round ended - all cards played';
+    this.calculateScores();
+  }
+
+  /**
+   * Get hand of a player (cards only, not positions)
+   */
+  getPlayerHand(playerKey) {
+    return this.players[playerKey].hand;
+  }
+
+  /**
+   * Get captured cards of a player
+   */
+  getPlayerCaptured(playerKey) {
+    return this.players[playerKey].captured;
+  }
+
+  /**
+   * Get field cards
+   */
+  getField() {
+    return this.field;
+  }
+
+  /**
+   * Get card points for a set of captured cards
+   * Bright = 20 points
+   * Animal = 10 points
+   * Ribbon = 5 points
+   * Chaff = 1 point
+   * @param {Array} captured - Captured cards
+   * @returns {number} Total points
+   */
+  getCardPoints(captured) {
+    return captured.reduce((sum, card) => {
+      if (card.type === 'bright') return sum + 20;
+      if (card.type === 'animal') return sum + 10;
+      if (card.type === 'ribbon') return sum + 5;
+      return sum + 1; // chaff
+    }, 0);
+  }
+
+  /**
+   * Get chaff count (willow cards count as chaff)
+   * @param {Array} captured - Captured cards
+   * @returns {number} Total chaff count
+   */
+  getChaffCount(captured) {
+    return captured.filter(c => c.type === 'chaff' || c.month === 11).length;
+  }
+
+  /**
+   * Pay teyaku earned at the start of the round
+   * Each player gets teyaku payment from opponents
+   */
+  payTeyaku() {
+    ['player', 'opponent1', 'opponent2'].forEach(playerKey => {
+      const teyakuValue = this.players[playerKey].teyakuScore;
+      if (teyakuValue > 0) {
+        const otherPlayers = ['player', 'opponent1', 'opponent2'].filter(p => p !== playerKey);
+        otherPlayers.forEach(opponent => {
+          if (!this.roundState.roundScores[opponent]) {
+            this.roundState.roundScores[opponent] = 0;
+          }
+          this.roundState.roundScores[opponent] -= teyakuValue;
+          this.roundState.roundScores[playerKey] += teyakuValue;
+        });
+      }
+    });
+  }
+
+  /**
+   * Get first player who called sage (used for hand exhaustion winner)
+   * Returns null if no one called sage
+   * @returns {string|null} Player key who first called sage
+   */
+  getFirstSageCaller() {
+    const playerOrder = ['player', 'opponent1', 'opponent2'];
+    // Dealer and anti-clockwise would need proper turn tracking
+    // For now, return first one found in sagesCalled
+    for (const player of playerOrder) {
+      if (this.roundState.sagesCalled[player]) {
+        return player;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Apply round scores to game scores and prepare for next round
+   */
+  applyRoundScores() {
+    ['player', 'opponent1', 'opponent2'].forEach(playerKey => {
+      this.gameScores[playerKey] += this.roundState.roundScores[playerKey] || 0;
+    });
+
+    // Update dealer for next round
+    if (this.roundState.roundWinner) {
+      this.dealer = this.roundState.roundWinner;
+    }
+
+    this.phase = 'round_end';
+
+    // Trigger round summary callback if provided
+    if (this.roundSummaryCallback) {
+      const isGameOver = this.roundNumber >= this.totalRounds;
+      const winner = isGameOver ? this.checkGameEnd() : this.roundState.roundWinner;
+
+      // Convert winner key to index (0=player, 1=opponent1, 2=opponent2)
+      const winnerIndex = winner === 'opponent1' ? 1 : (winner === 'opponent2' ? 2 : 0);
+
+      this.roundSummaryCallback({
+        roundNumber: this.roundNumber,
+        dekiyakuValue: this.roundState.roundScores[this.currentPlayer] || 0,
+        cardPointsValue: 0, // We don't separate these in the calculation
+        finalScore: this.roundState.roundScores[this.currentPlayer] || 0,
+        winner: winnerIndex,
+        scores: {
+          roundScores: [
+            this.roundState.roundScores.player || 0,
+            this.roundState.roundScores.opponent1 || 0,
+            this.roundState.roundScores.opponent2 || 0
+          ],
+          gameScores: [
+            this.gameScores.player,
+            this.gameScores.opponent1,
+            this.gameScores.opponent2
+          ]
+        },
+        fieldMultiplier: this.fieldMultiplier,
+        isGameOver: isGameOver,
+        totalRounds: this.totalRounds,
+        // Add comprehensive scoring breakdown for modal display
+        teyaku: {
+          player: this.players.player.teyakuClaimed || [],
+          opponent1: this.players.opponent1.teyakuClaimed || [],
+          opponent2: this.players.opponent2.teyakuClaimed || []
+        },
+        dekiyaku: {
+          player: this.roundState.dekiyakuFormed.player || [],
+          opponent1: this.roundState.dekiyakuFormed.opponent1 || [],
+          opponent2: this.roundState.dekiyakuFormed.opponent2 || []
+        },
+        stats: {}
+      });
+    }
+  }
+
+  /**
+   * Check if game is over and return winner
+   * @returns {string|null} Winning player key or null if game continues
+   */
+  checkGameEnd() {
+    if (this.roundNumber >= this.totalRounds) {
+      // Find winner (highest score)
+      let winner = 'player';
+      let maxScore = this.gameScores.player;
+
+      if (this.gameScores.opponent1 > maxScore) {
+        winner = 'opponent1';
+        maxScore = this.gameScores.opponent1;
+      }
+      if (this.gameScores.opponent2 > maxScore) {
+        winner = 'opponent2';
+        maxScore = this.gameScores.opponent2;
+      }
+
+      return winner;
+    }
+    return null;
+  }
+
+  /**
+   * Advance to next round
+   */
+  nextRound() {
+    if (this.roundNumber >= this.totalRounds) {
+      this.phase = 'game_end';
+      this.message = `Game over! Winner: ${this.checkGameEnd()}`;
+      return;
+    }
+
+    this.startRound();
+  }
+}

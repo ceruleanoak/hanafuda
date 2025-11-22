@@ -195,6 +195,87 @@ Each zone has:
 - Match pause: 400ms to observe match
 - Phase transitions: Handled by game logic timing
 
+## Hachi-Hachi (88) Game Rules and Implementation
+
+### Overview
+Hachi-Hachi is a 3-player hanafuda gambling game where the goal is to accumulate the most card points. The name comes from the par value of 88 - each third of the 264 total card points in the deck.
+
+### Game Flow
+1. **Dealing**: Dealer distributes 8 cards to each player + 8 to field (4 at a time)
+2. **Teyaku Declaration**: Players declare hand combinations (teyaku) - settled via direct payments
+3. **Main Play**: Players play cards and capture field cards, earning deck yaku
+4. **Shoubu/Sage Decision**: Player with highest score decides to end (Shoubu) or continue (Sage)
+5. **Round End**: Round winner determined, scores calculated with multipliers
+
+### Teyaku (Hand Combinations)
+Scoring combinations held at start of round:
+
+**Group A (Common)**:
+- All Chaff: 4 kan
+- All Bright: 7 kan
+- All Animal: 5 kan
+- All Ribbon: 5 kan
+- Triplet: 2 kan
+- Two Brights: 3 kan
+- Flush (5+ same type): 4 kan
+
+**Group B (Advanced)**:
+- Four Three (specific suit distribution): 20 kan
+- Three Poetry Red Ribbons: 7 kan
+- Three Inro: 6 kan
+- Three Sake Cup: 6 kan
+- Blue Ribbons: 4 kan
+- Willow Combination: 20 kan (special)
+
+### Teyaku Payment Rule (CRITICAL)
+**Each player WITH teyaku collects their teyaku value from EACH OTHER PLAYER individually.**
+
+Example (Small Field, 1× multiplier):
+- You: No teyaku (0 kan)
+- Opponent 1: One Bright (4 kan)
+- Opponent 2: Red (2 kan)
+
+**Payments:**
+- Opp1 collects 4 kan from You
+- Opp1 collects 4 kan from Opp2
+- Opp2 collects 2 kan from You
+- Opp2 collects 2 kan from Opp1
+
+**Net Settlement:**
+- You: -4 (to Opp1) -2 (to Opp2) = **-6 kan**
+- Opp1: +4 (from You) -2 (to Opp2) +4 (from Opp2) = **+6 kan**
+- Opp2: +2 (from You) -4 (to Opp1) +2 (from Opp1) = **0 kan**
+
+### Field Multiplier
+Applied to ALL scoring (teyaku, dekiyaku, and card point differences):
+- **1× (Small Field)**: No bright cards on field
+- **2× (Large Field / Big Deal)**: Bright cards from Pine (1), Cherry Blossom (3), or Eulalia/Moon (8) on field
+- **4× (Grand Field / Great Deal)**: Bright cards from Willow (11) or Paulownia (12) on field
+
+Priority: If multiple bright cards are present, use the highest multiplier (4× takes precedence over 2×).
+
+The multiplier is applied **during calculation** (value × multiplier), not after settlement. It affects teyaku payments, dekiyaku values, and card point differences equally.
+
+### Dekiyaku (Captured Combinations)
+Scoring combinations formed by captured cards during play:
+- Three Brights: 8 kan
+- Four Brights: 16 kan (if available in deck)
+- Poetry Ribbons: 5 kan
+- Animal Pairs: 1 kan each (max 3 for total 3 kan)
+
+### Par Value Scoring
+Card points are calculated as: (Total captured points - 88) × Field Multiplier
+
+Example:
+- Player captured 120 points: (120 - 88) × 1 = 32 kan
+- Player captured 80 points: (80 - 88) × 1 = -8 kan
+
+### Implementation Notes
+- Teyaku payment grid shown immediately after dealing (teaching moment)
+- Field multiplier calculated from field state before play begins
+- All point values recalculated if field multiplier changes (should not happen mid-round)
+- Zero-sum principle: All payments sum to 0 each round
+
 ---
 
 *This file is for AI assistant context only. For user documentation, see README.md*

@@ -9,6 +9,7 @@ export class MatchGame {
   constructor(gameOptions = null) {
     this.deck = new Deck();
     this.gameOptions = gameOptions;
+    this.audioManager = null; // Will be set by main.js
     this.animationQueue = [];
     this.isAnimating = false;
 
@@ -34,6 +35,13 @@ export class MatchGame {
     this.originalViewportHeight = null;
 
     this.reset();
+  }
+
+  /**
+   * Set audio manager for sound effects
+   */
+  setAudioManager(audioManager) {
+    this.audioManager = audioManager;
   }
 
   /**

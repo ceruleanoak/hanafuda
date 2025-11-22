@@ -146,18 +146,29 @@ export class Renderer {
     // Get all visible cards sorted by render order
     const visibleCards = card3DManager.getVisibleCards();
 
-    // Determine if we should show point values (Sakura mode)
-    const pointValueOptions = gameState.isSakuraMode ? {
+    // Determine if we should show point values (Sakura and Hachi-Hachi modes)
+    const pointValueOptions = (gameState.isSakuraMode || gameState.isHachihachiMode) ? {
       enabled: true,
       getValue: (card) => {
-        // Sakura point values (corrected from KoiKoi defaults)
-        const SAKURA_VALUES = {
-          'bright': 20,  // All bright cards = 20 points
-          'ribbon': 10,  // All ribbon cards = 10 points
-          'animal': 5,   // All animal cards = 5 points
-          'chaff': 0     // All chaff cards = 0 points
-        };
-        return SAKURA_VALUES[card.type] || 0;
+        if (gameState.isSakuraMode) {
+          // Sakura point values
+          const SAKURA_VALUES = {
+            'bright': 20,  // All bright cards = 20 points
+            'ribbon': 10,  // All ribbon cards = 10 points
+            'animal': 5,   // All animal cards = 5 points
+            'chaff': 0     // All chaff cards = 0 points
+          };
+          return SAKURA_VALUES[card.type] || 0;
+        } else {
+          // Hachi-Hachi point values
+          const HACHIHACHI_VALUES = {
+            'bright': 20,  // All bright cards = 20 points
+            'ribbon': 5,   // All ribbon cards = 5 points
+            'animal': 10,  // All animal cards = 10 points
+            'chaff': 1     // All chaff cards = 1 point
+          };
+          return HACHIHACHI_VALUES[card.type] || 0;
+        }
       }
     } : null;
 
@@ -276,29 +287,9 @@ export class Renderer {
       this.draw3DYakuInfo(gameState, card3DManager);
     }
 
-    // Only show drawn/played card popups when 3D animations are disabled
-    // When 3D animations are ON, cards are rendered in the 3D system instead
-    if (!card3DManager.useAnimations) {
-      // Draw drawn card if present (during drawing phases)
-      if (gameState.drawnCard && (
-        gameState.phase === 'select_drawn_match' ||
-        gameState.phase === 'show_drawn' ||
-        gameState.phase === 'drawing' ||
-        gameState.phase === 'opponent_drawing' ||
-        gameState.phase === 'opponent_drawn'
-      )) {
-        const centerX = this.displayWidth / 2;
-        const drawnCardY = 30 + 60; // Top of screen
-        this.drawDrawnCardHover(gameState.drawnCard, centerX, drawnCardY, gameState.phase);
-      }
-
-      // Draw opponent played card if present
-      if (gameState.opponentPlayedCard && gameState.phase === 'opponent_playing') {
-        const centerX = this.displayWidth / 2;
-        const playedCardY = 30 + 60; // Top of screen
-        this.drawOpponentPlayedCardHover(gameState.opponentPlayedCard, centerX, playedCardY);
-      }
-    }
+    // Drawn card is rendered in 3D card system (via visibleCards above)
+    // but this section provides fallback rendering for legacy mode or highlight
+    // Note: drawnCard zone cards are included in visibleCards through getVisibleCards()
 
     // Show help mode highlighting (but not while animations are playing)
     if (helpMode && gameState.phase === 'select_hand' && !card3DManager.isAnyAnimating()) {

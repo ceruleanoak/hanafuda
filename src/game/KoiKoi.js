@@ -17,6 +17,7 @@ export class KoiKoi {
     this.animationQueue = [];
     this.isAnimating = false;
     this.gameOptions = gameOptions;
+    this.audioManager = null; // Will be set by main.js
     this.uiCallback = null; // Will be set by main.js to show koi-koi modal
     this.roundSummaryCallback = null; // Will be set by main.js to show round summary modal
     this.opponentKoikoiCallback = null; // Will be set by main.js to show opponent koi-koi notification
@@ -52,6 +53,13 @@ export class KoiKoi {
     };
 
     this.reset();
+  }
+
+  /**
+   * Set audio manager for playing sound effects
+   */
+  setAudioManager(audioManager) {
+    this.audioManager = audioManager;
   }
 
   /**
@@ -673,6 +681,11 @@ export class KoiKoi {
       this.phase = 'celebrate';
       this.message = `🎉 Celebrate! All 4 ${handCard.month} cards captured!`;
 
+      // Play snap sound for 4-card capture
+      if (this.audioManager) {
+        this.audioManager.playSnapSound();
+      }
+
       setTimeout(() => {
         // Remove all matching cards from field
         this.field = this.field.filter(c => c.month !== handCard.month);
@@ -697,6 +710,11 @@ export class KoiKoi {
     // Add to captured
     this.playerCaptured.push(handCard, fieldCard);
 
+    // Play snap sound when cards match
+    if (this.audioManager) {
+      this.audioManager.playSnapSound();
+    }
+
     this.selectedCards = [];
     this.updateYaku('player', true); // Defer decision during hand phase
 
@@ -717,6 +735,11 @@ export class KoiKoi {
 
       // Add all 4 cards to captured
       this.playerCaptured.push(this.drawnCard, ...sameMonthOnField);
+
+      // Play snap sound for 4-card capture
+      if (this.audioManager) {
+        this.audioManager.playSnapSound();
+      }
 
       this.drawnCard = null;
       this.drawnCardMatches = [];
@@ -744,6 +767,11 @@ export class KoiKoi {
 
     // Add to captured
     this.playerCaptured.push(this.drawnCard, fieldCard);
+
+    // Play snap sound when cards match
+    if (this.audioManager) {
+      this.audioManager.playSnapSound();
+    }
 
     this.drawnCard = null;
     this.drawnCardMatches = [];

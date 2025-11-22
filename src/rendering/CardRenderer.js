@@ -317,6 +317,9 @@ export class CardRenderer {
     } else if (pointValue === 5) {
       badgeColor = '#2196F3'; // Blue for 5 points
       textColor = '#ffffff';
+    } else if (pointValue === 10) {
+      badgeColor = '#FF6B35'; // Orange for 10 points
+      textColor = '#ffffff';
     } else if (pointValue === 20) {
       badgeColor = '#FFC107'; // Gold for 20 points
       textColor = '#000000';
@@ -386,6 +389,9 @@ export class CardRenderer {
       textColor = '#ffffff';
     } else if (pointValue === 5) {
       badgeColor = '#2196F3'; // Blue for 5 points
+      textColor = '#ffffff';
+    } else if (pointValue === 10) {
+      badgeColor = '#FF6B35'; // Orange for 10 points
       textColor = '#ffffff';
     } else if (pointValue === 20) {
       badgeColor = '#FFC107'; // Gold for 20 points
