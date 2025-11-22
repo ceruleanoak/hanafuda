@@ -297,11 +297,23 @@ export class HachiHachi {
   selectCard(card, owner = 'player') {
     // Handle field card clicks for drawn card matching (select_drawn_match phase)
     if (owner === 'field' && this.phase === 'select_drawn_match') {
+      debugLogger.log('hachihachi', `🎯 selectCard: Routing to selectFieldCard for drawn match`, {
+        phase: this.phase,
+        owner: owner,
+        card: card.name,
+        drawnCard: this.drawnCard?.name
+      });
       return this.selectFieldCard(card);
     }
 
     // Handle field card clicks for hand card matching (select_field phase)
     if (owner === 'field' && this.phase === 'select_field') {
+      debugLogger.log('hachihachi', `🎯 selectCard: Routing to selectFieldCard for hand match`, {
+        phase: this.phase,
+        owner: owner,
+        card: card.name,
+        selectedCard: this.selectedCards[0]?.name
+      });
       return this.selectFieldCard(card);
     }
 
@@ -399,6 +411,14 @@ export class HachiHachi {
    * Player selects field card to match
    */
   selectFieldCard(fieldCard) {
+    debugLogger.log('hachihachi', `🔷 selectFieldCard() called`, {
+      fieldCard: fieldCard.name,
+      phase: this.phase,
+      drawnCard: this.drawnCard?.name,
+      selectedCards: this.selectedCards.map(c => c.name),
+      selectedCardsLength: this.selectedCards.length
+    });
+
     // Handle drawn card matching (select_drawn_match phase)
     if (this.phase === 'select_drawn_match' && this.drawnCard) {
       debugLogger.log('hachihachi', `📍 selectFieldCard() called in select_drawn_match phase`, {
@@ -653,6 +673,13 @@ export class HachiHachi {
       // Multiple matches (2 cards) - player/AI must choose which one to match
       this.phase = 'select_drawn_match';
       this.message = `Drew ${card.name} - Select which card to match`;
+      debugLogger.log('hachihachi', `📍 Entering select_drawn_match phase for Player ${this.currentPlayerIndex}`, {
+        drawnCard: card.name,
+        matchCount: matches.length,
+        matchedCards: matches.map(m => m.name),
+        isHumanPlayer: this.currentPlayerIndex === 0,
+        isAI: this.currentPlayerIndex > 0
+      });
       if (this.currentPlayerIndex > 0) {
         // AI player - choose first match
         setTimeout(() => {
