@@ -4343,6 +4343,11 @@ class Game {
       this.switchGameMode('hachihachi'); // Start new game
     } else {
       this.game.nextRound();
+      this.updateUI();
+
+      // Reinitialize Card3D system for the new round to reset positions
+      this.card3DManager.initializeFromGameState(this.game.getState(), true);
+      debugLogger.log('3dCards', '✨ Card3D system reinitialized for Hachi-Hachi next round', null);
     }
   }
 }

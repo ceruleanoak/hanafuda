@@ -178,7 +178,14 @@ export class HachiHachi {
       this.message = 'Game Over!';
       return;
     }
+    debugLogger.log('hachihachi', `🔄 Starting round ${this.currentRound} of ${this.totalRounds}`, null);
     this.reset();
+    debugLogger.log('hachihachi', `✅ Round ${this.currentRound} initialized - ${this.field.length} field cards, ${this.players[0].hand.length} player cards`, {
+      fieldCards: this.field.map(c => c.name),
+      player0Hand: this.players[0].hand.length,
+      player1Hand: this.players[1].hand.length,
+      player2Hand: this.players[2].hand.length
+    });
   }
 
   /**
