@@ -653,13 +653,13 @@ export class HachiHachi {
 
       // If new dekiyaku was just captured, pause for Shoubu/Sage decision
       if (newDekiyakuGained) {
-        // Check if deck is empty - if so, automatically end round with Shoubu
-        if (this.deck.count === 0) {
-          debugLogger.log('hachihachi', `🎯 AUTOMATIC SHOUBU - Deck empty after drawn card dekiyaku!`, {
+        // Check if player's hand is empty - if so, they cannot get a second dekiyaku, auto-Shoubu
+        if (this.players[this.currentPlayerIndex].hand.length === 0) {
+          debugLogger.log('hachihachi', `🎯 AUTOMATIC SHOUBU - Player's hand is empty (cannot form 2nd dekiyaku)!`, {
             player: this.currentPlayerIndex,
             newDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`),
             totalDekiyakuValue: newDekiyaku.reduce((sum, d) => sum + d.value, 0),
-            reason: 'Last card in deck - game must end'
+            reason: 'No cards left in hand to continue playing'
           });
           // Auto-call Shoubu (end round immediately)
           this.callShoubu(this.currentPlayerIndex);
@@ -672,6 +672,7 @@ export class HachiHachi {
             newDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`),
             totalDekiyakuValue: newDekiyaku.reduce((sum, d) => sum + d.value, 0),
             phase: 'shoubu_decision',
+            handRemaining: this.players[this.currentPlayerIndex].hand.length,
             deckRemaining: this.deck.count
           });
           this.phase = 'shoubu_decision';
@@ -684,6 +685,7 @@ export class HachiHachi {
           debugLogger.log('hachihachi', `⚠️ Opponent ${this.currentPlayerIndex} captured dekiyaku from drawn match - auto-choosing SAGE`, {
             newDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`),
             totalDekiyakuValue: newDekiyaku.reduce((sum, d) => sum + d.value, 0),
+            handRemaining: this.players[this.currentPlayerIndex].hand.length,
             deckRemaining: this.deck.count
           });
           setTimeout(() => this.nextPlayer(), 300);
@@ -785,13 +787,14 @@ export class HachiHachi {
 
     // If new dekiyaku was just captured, pause for Shoubu/Sage decision
     if (newDekiyakuGained) {
-      // Check if deck is empty - if so, automatically end round with Shoubu
-      if (this.deck.count === 0) {
-        debugLogger.log('hachihachi', `🎯 AUTOMATIC SHOUBU - Deck empty after dekiyaku capture!`, {
+      // Check if player's hand is empty - if so, they cannot get a second dekiyaku, auto-Shoubu
+      if (this.players[this.currentPlayerIndex].hand.length === 0) {
+        debugLogger.log('hachihachi', `🎯 AUTOMATIC SHOUBU - Player's hand is empty (cannot form 2nd dekiyaku)!`, {
           player: this.currentPlayerIndex,
           newDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`),
           totalDekiyakuValue: newDekiyaku.reduce((sum, d) => sum + d.value, 0),
-          reason: 'No more cards to draw - game must end'
+          matchContext: `${handCard.name} ↔ ${fieldCard.name}`,
+          reason: 'No cards left in hand to continue playing'
         });
         // Auto-call Shoubu (end round immediately)
         this.callShoubu(this.currentPlayerIndex);
@@ -805,6 +808,7 @@ export class HachiHachi {
           totalDekiyakuValue: newDekiyaku.reduce((sum, d) => sum + d.value, 0),
           phase: 'shoubu_decision',
           matchContext: `${handCard.name} ↔ ${fieldCard.name}`,
+          handRemaining: this.players[this.currentPlayerIndex].hand.length,
           deckRemaining: this.deck.count
         });
         this.phase = 'shoubu_decision';
@@ -817,6 +821,7 @@ export class HachiHachi {
         debugLogger.log('hachihachi', `⚠️ Opponent ${this.currentPlayerIndex} captured dekiyaku - auto-choosing SAGE`, {
           newDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`),
           totalDekiyakuValue: newDekiyaku.reduce((sum, d) => sum + d.value, 0),
+          handRemaining: this.players[this.currentPlayerIndex].hand.length,
           deckRemaining: this.deck.count
         });
         this.proceedToDrawPhase();
