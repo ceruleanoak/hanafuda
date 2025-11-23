@@ -75,6 +75,7 @@ class Game {
     this.hachihachiGame.setUICallback((decision, params) => this.showHachihachiDecision(decision, params));
     this.hachihachiGame.setRoundSummaryCallback((data) => this.showHachihachiRoundSummary(data));
     this.hachihachiGame.setTeyakuPaymentCallback((params) => this.showTeyakuPaymentGrid(params));
+    this.hachihachiGame.setOpponentDecisionCallback((params) => this.showOpponentDecision(params));
 
     // Set active game based on mode
     this.game = this.koikoiGame;
@@ -2538,6 +2539,58 @@ class Game {
         <p>They're pressing their luck! If you score next, you'll get double points!</p>
       </div>
     `;
+
+    // Show notification
+    notification.classList.add('show');
+
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+      notification.classList.remove('show');
+    }, 3000);
+  }
+
+  /**
+   * Show opponent Shoubu/Sage/Cancel decision notification
+   */
+  showOpponentDecision(params) {
+    const { playerIndex, decision, dekiyakuValue } = params;
+    const playerName = playerIndex === 1 ? 'Opponent 1' : 'Opponent 2';
+
+    // Create notification element if it doesn't exist
+    let notification = document.getElementById('opponent-decision-notification');
+    if (!notification) {
+      notification = document.createElement('div');
+      notification.id = 'opponent-decision-notification';
+      notification.className = 'opponent-decision-notification';
+      document.body.appendChild(notification);
+    }
+
+    // Set notification content based on decision
+    let content = '';
+    if (decision === 'shoubu') {
+      content = `
+        <div class="notification-content">
+          <h3>🛑 ${playerName} Called Shoubu!</h3>
+          <p>They ended the round with ${dekiyakuValue} kan in dekiyaku.</p>
+        </div>
+      `;
+    } else if (decision === 'sage') {
+      content = `
+        <div class="notification-content">
+          <h3>⚔️ ${playerName} Called Sage!</h3>
+          <p>They're continuing to try for more dekiyaku (${dekiyakuValue} kan currently).</p>
+        </div>
+      `;
+    } else if (decision === 'cancel') {
+      content = `
+        <div class="notification-content">
+          <h3>🔄 ${playerName} Chose Cancel!</h3>
+          <p>They gave up on dekiyaku and will receive par value only.</p>
+        </div>
+      `;
+    }
+
+    notification.innerHTML = content;
 
     // Show notification
     notification.classList.add('show');

@@ -109,6 +109,10 @@ export class HachiHachi {
     this.teyakuPaymentCallback = callback;
   }
 
+  setOpponentDecisionCallback(callback) {
+    this.opponentDecisionCallback = callback;
+  }
+
   /**
    * Reset game state for new round
    */
@@ -153,6 +157,9 @@ export class HachiHachi {
     for (let i = 0; i < 3; i++) {
       this.sageBaselineKakuyaku[i] = 0; // Will be set when sage is called
     }
+
+    // Track opponent decisions for display in round summary
+    this.opponentDecisions = {}; // { playerIndex: { decision, dekiyakuValue } }
 
     // Deal and start round
     this.deal();
@@ -1098,6 +1105,24 @@ export class HachiHachi {
       totalValue: player.dekiyaku.reduce((sum, d) => sum + d.value, 0)
     });
 
+    // Store opponent decision for display in summary
+    if (playerIndex !== 0) {
+      this.opponentDecisions[playerIndex] = {
+        decision: 'shoubu',
+        dekiyakuValue: player.dekiyaku.reduce((sum, d) => sum + d.value, 0)
+      };
+    }
+
+    // Notify UI of opponent decision if not player 0
+    if (playerIndex !== 0 && this.opponentDecisionCallback) {
+      this.opponentDecisionCallback({
+        playerIndex: playerIndex,
+        decision: 'shoubu',
+        dekiyakuList: player.dekiyaku,
+        dekiyakuValue: player.dekiyaku.reduce((sum, d) => sum + d.value, 0)
+      });
+    }
+
     // CRITICAL: When someone calls Shoubu, finalize ALL players' current dekiyaku
     // This ensures all players' dekiyaku are locked in for settlement
     for (let i = 0; i < 3; i++) {
@@ -1133,6 +1158,24 @@ export class HachiHachi {
       riskNote: 'Will lose all points if no improvement before round ends'
     });
 
+    // Store opponent decision for display in summary
+    if (playerIndex !== 0) {
+      this.opponentDecisions[playerIndex] = {
+        decision: 'sage',
+        dekiyakuValue: currentDekiyakuValue
+      };
+    }
+
+    // Notify UI of opponent decision if not player 0
+    if (playerIndex !== 0 && this.opponentDecisionCallback) {
+      this.opponentDecisionCallback({
+        playerIndex: playerIndex,
+        decision: 'sage',
+        dekiyakuList: player.dekiyaku,
+        dekiyakuValue: currentDekiyakuValue
+      });
+    }
+
     // Mark as sage player and store baseline
     this.sagePlayers.add(playerIndex);
     this.sageBaselineKakuyaku[playerIndex] = currentDekiyakuValue;
@@ -1159,6 +1202,24 @@ export class HachiHachi {
       currentValue: player.dekiyaku.reduce((sum, d) => sum + d.value, 0),
       safetyNote: 'Will receive par value (0 kan) instead of dekiyaku'
     });
+
+    // Store opponent decision for display in summary
+    if (playerIndex !== 0) {
+      this.opponentDecisions[playerIndex] = {
+        decision: 'cancel',
+        dekiyakuValue: player.dekiyaku.reduce((sum, d) => sum + d.value, 0)
+      };
+    }
+
+    // Notify UI of opponent decision if not player 0
+    if (playerIndex !== 0 && this.opponentDecisionCallback) {
+      this.opponentDecisionCallback({
+        playerIndex: playerIndex,
+        decision: 'cancel',
+        dekiyakuList: player.dekiyaku,
+        dekiyakuValue: player.dekiyaku.reduce((sum, d) => sum + d.value, 0)
+      });
+    }
 
     // Cancel sage if they were playing sage
     this.sagePlayers.delete(playerIndex);
@@ -1435,27 +1496,11 @@ export class HachiHachi {
       });
 
       // Calculate score breakdown for each player
+      // NOTE: roundScore has already been modified with teyaku, dekiyaku, and card payments
+      // We need to decompose it back to show each component for display
       const scoreBreakdown = this.players.map((player, i) => {
-        // Get teyaku settlement (already calculated and applied in applyTeyakuSettlements)
+        // Get teyaku settlement (already applied in applyTeyakuSettlements)
         const teyakuScore = this.teyakuSettlements[i] || 0;
-
-        // Get dekiyaku value (from roundScore after card score)
-        const dekiyakuList = player.finalizedDekiyaku || player.dekiyaku || [];
-        let dekiyakuScore = 0;
-        if (dekiyakuList.length > 0) {
-          dekiyakuScore = dekiyakuList.reduce((sum, d) => sum + (d.value || 0), 0) * this.fieldMultiplier;
-          // Calculate net (collect from others if this player has dekiyaku, pay if others have)
-          dekiyakuScore = dekiyakuScore * 2; // Collect from 2 other players
-          for (let j = 0; j < 3; j++) {
-            if (i !== j) {
-              const otherDekiyakuValue = (this.players[j].finalizedDekiyaku || this.players[j].dekiyaku || [])
-                .reduce((sum, d) => sum + (d.value || 0), 0) * this.fieldMultiplier;
-              if (otherDekiyakuValue > 0) {
-                dekiyakuScore -= otherDekiyakuValue;
-              }
-            }
-          }
-        }
 
         // Get card points score (par value calculation)
         const cardPoints = player.captured.reduce((sum, card) => {
@@ -1463,15 +1508,16 @@ export class HachiHachi {
         }, 0);
         const cardScore = (cardPoints - this.PAR_VALUE) * this.fieldMultiplier;
 
-        // Calculate round total: teyaku + par + dekiyaku (all applied at round end)
-        const roundTotal = teyakuScore + dekiyakuScore + cardScore;
+        // Calculate dekiyaku component: roundTotal - teyaku - card score
+        // roundScore = teyaku + card score + dekiyaku
+        const dekiyakuScore = roundScores[i] - teyakuScore - cardScore;
 
         return {
           teyakuScore: teyakuScore,
           potScore: 0, // Placeholder for future pot implementation
           dekiyakuScore: dekiyakuScore,
           parScore: cardScore, // Par value score (capturedPoints - 88) × multiplier
-          roundTotal: roundTotal // Complete round score applied at round end
+          roundTotal: roundScores[i] // Use actual roundScore which has all components
         };
       });
 
@@ -1483,6 +1529,7 @@ export class HachiHachi {
         dekiyaku: dekiyakuData,
         cardBreakdown: cardBreakdown,
         scoreBreakdown: scoreBreakdown,
+        opponentDecisions: this.opponentDecisions,
         allScores: {
           roundScores: roundScores,
           gameScores: gameScores

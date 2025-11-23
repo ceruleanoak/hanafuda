@@ -257,7 +257,7 @@ export class HachiHachiModals {
    */
   static showRoundSummary(params) {
     return new Promise((resolve) => {
-      const { roundNumber, winner, allScores, fieldMultiplier, teyaku, dekiyaku, cardBreakdown, scoreBreakdown, stats } = params;
+      const { roundNumber, winner, allScores, fieldMultiplier, teyaku, dekiyaku, cardBreakdown, scoreBreakdown, opponentDecisions, stats } = params;
 
       // Create modal overlay
       const overlay = document.createElement('div');
@@ -590,6 +590,31 @@ export class HachiHachiModals {
       });
 
       modal.appendChild(scoresDiv);
+
+      // Opponent decisions footer
+      if (opponentDecisions && Object.keys(opponentDecisions).length > 0) {
+        const decisionsDiv = document.createElement('div');
+        decisionsDiv.style.cssText = `
+          margin-top: 20px;
+          padding-top: 15px;
+          border-top: 1px solid #444;
+          font-size: 11px;
+          color: #aaa;
+        `;
+
+        let decisionsHtml = '<div style="font-weight: bold; margin-bottom: 8px; color: #d4af37;">Opponent Decisions:</div>';
+
+        for (const [playerIndex, decision] of Object.entries(opponentDecisions)) {
+          const playerName = playerIndex === '1' ? 'Opponent 1' : 'Opponent 2';
+          const decisionText = decision.decision === 'shoubu' ? '🛑 Shoubu' :
+                              decision.decision === 'sage' ? '⚔️ Sage' :
+                              '🔄 Cancel';
+          decisionsHtml += `<div style="margin-left: 8px; margin-bottom: 4px;">${playerName}: ${decisionText} (${decision.dekiyakuValue} kan)</div>`;
+        }
+
+        decisionsDiv.innerHTML = decisionsHtml;
+        modal.appendChild(decisionsDiv);
+      }
 
       // Continue button
       const buttonDiv = document.createElement('div');
