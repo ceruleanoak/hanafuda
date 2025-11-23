@@ -8,13 +8,13 @@
 
 export class HachiHachiModals {
   /**
-   * Create and show Sage/Shoubu decision modal
-   * @param {Object} params - {dekiyakuList, playerScore, roundNumber, onSage, onShoubu, onCancel}
+   * Create and show Sage/Shoubu decision modal with interactive information
+   * @param {Object} params - {dekiyakuList, playerScore, roundNumber, onSage, onShoubu, onCancel, allPlayers, deckRemaining, fieldCardCount, parValue, fieldMultiplier}
    * @returns {Promise} Resolves when user makes decision
    */
   static showSageDecision(params) {
     return new Promise((resolve) => {
-      const { dekiyakuList, playerScore, roundNumber, opponent1Score, opponent2Score } = params;
+      const { dekiyakuList, playerScore, roundNumber, opponent1Score, opponent2Score, allPlayers = [], deckRemaining = 0, fieldCardCount = 0, parValue = 88, fieldMultiplier = 1 } = params;
 
       // Calculate dekiyaku value
       const dekiyakuValue = dekiyakuList.reduce((sum, d) => sum + d.value, 0);
@@ -33,6 +33,7 @@ export class HachiHachiModals {
         align-items: center;
         justify-content: center;
         z-index: 1000;
+        pointer-events: none;
       `;
 
       // Create modal content
@@ -43,17 +44,23 @@ export class HachiHachiModals {
         border: 3px solid #d4af37;
         border-radius: 12px;
         padding: 30px;
-        max-width: 500px;
+        max-width: 900px;
+        max-height: 85vh;
         color: white;
         font-family: Arial, sans-serif;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        overflow-y: auto;
+        pointer-events: auto;
       `;
 
       // Title
       const title = document.createElement('h2');
       title.textContent = 'Dekiyaku Formed!';
       title.style.cssText = `
-        margin: 0 0 20px 0;
+        margin: 0;
         font-size: 28px;
         color: #d4af37;
         text-align: center;
@@ -67,7 +74,6 @@ export class HachiHachiModals {
         background: rgba(0, 0, 0, 0.3);
         border-radius: 8px;
         padding: 15px;
-        margin-bottom: 20px;
       `;
 
       dekiyakuList.forEach(yaku => {
@@ -103,22 +109,77 @@ export class HachiHachiModals {
       yakuListDiv.appendChild(totalLine);
       modal.appendChild(yakuListDiv);
 
-      // Current score display
-      const scoreDiv = document.createElement('div');
-      scoreDiv.style.cssText = `
-        background: rgba(0, 0, 0, 0.3);
+      // ===== HELP SECTION - Large, bold instructions =====
+      const helpDiv = document.createElement('div');
+      helpDiv.style.cssText = `
+        background: rgba(212, 175, 55, 0.15);
+        border: 3px solid #ffd93d;
         border-radius: 8px;
-        padding: 15px;
-        margin-bottom: 20px;
-        font-size: 14px;
+        padding: 20px;
+        font-size: 16px;
         line-height: 1.8;
       `;
-      scoreDiv.innerHTML = `
-        <div><strong>Your Current Score:</strong> ${playerScore} kan</div>
-        <div><strong>Opponent 1:</strong> ${opponent1Score} kan</div>
-        <div><strong>Opponent 2:</strong> ${opponent2Score} kan</div>
+
+      // Main help text
+      const helpTitle = document.createElement('div');
+      helpTitle.style.cssText = `
+        font-size: 20px;
+        font-weight: bold;
+        color: #ffd93d;
+        margin-bottom: 15px;
+        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.7);
       `;
-      modal.appendChild(scoreDiv);
+      helpTitle.textContent = '👇 HOVER OVER ZONES BELOW TO REVIEW:';
+      helpDiv.appendChild(helpTitle);
+
+      // Player info with hand counts
+      const playerNames = ['You', 'Opponent 1', 'Opponent 2'];
+      const playerInfoDiv = document.createElement('div');
+      playerInfoDiv.style.cssText = `
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 15px;
+      `;
+
+      if (allPlayers && allPlayers.length >= 3) {
+        playerNames.forEach((name, idx) => {
+          const hand = allPlayers[idx]?.hand || [];
+          const captured = allPlayers[idx]?.captured || [];
+          const playerCard = document.createElement('div');
+          playerCard.style.cssText = `
+            background: ${idx === 0 ? 'rgba(107, 207, 127, 0.2)' : 'rgba(100, 100, 100, 0.2)'};
+            border: 2px solid ${idx === 0 ? '#90ee90' : '#aaa'};
+            border-radius: 6px;
+            padding: 12px;
+            text-align: center;
+          `;
+          playerCard.innerHTML = `
+            <div style="font-weight: bold; color: ${idx === 0 ? '#90ee90' : '#fff'}; margin-bottom: 6px;">${name}</div>
+            <div style="font-size: 14px;">✋ Hand: <strong>${hand.length}</strong></div>
+            <div style="font-size: 14px;">🎯 Captured: <strong>${captured.length}</strong></div>
+          `;
+          playerInfoDiv.appendChild(playerCard);
+        });
+      }
+      helpDiv.appendChild(playerInfoDiv);
+
+      // Instructions for hover zones
+      const instructionsDiv = document.createElement('div');
+      instructionsDiv.style.cssText = `
+        background: rgba(0, 0, 0, 0.3);
+        border-left: 4px solid #ffd93d;
+        padding: 12px;
+        border-radius: 4px;
+        font-size: 14px;
+      `;
+      instructionsDiv.innerHTML = `
+        <div style="margin-bottom: 8px;"><strong>🎴 DRAW PILE</strong> - Hover to see remaining cards in deck</div>
+        <div><strong>📚 TRICK PILES</strong> - Hover over each player's corner to see captured cards</div>
+      `;
+      helpDiv.appendChild(instructionsDiv);
+
+      modal.appendChild(helpDiv);
 
       // Decision explanation
       const explainDiv = document.createElement('div');
@@ -126,7 +187,6 @@ export class HachiHachiModals {
         background: rgba(212, 175, 55, 0.1);
         border-left: 4px solid #d4af37;
         padding: 12px;
-        margin-bottom: 20px;
         font-size: 13px;
         line-height: 1.6;
       `;
@@ -137,13 +197,13 @@ export class HachiHachiModals {
       `;
       modal.appendChild(explainDiv);
 
-      // Button container
+      // Button container (spans full width at bottom)
       const buttonDiv = document.createElement('div');
       buttonDiv.style.cssText = `
         display: grid;
         grid-template-columns: 1fr 1fr 1fr;
         gap: 12px;
-        margin-top: 20px;
+        grid-column: 1;
       `;
 
       // Helper function to create buttons
@@ -634,8 +694,8 @@ export class HachiHachiModals {
         margin-bottom: 20px;
         font-weight: bold;
       `;
-      const winnerName = winner === 0 ? 'You' : `Opponent ${winner}`;
-      winnerDiv.textContent = `${winnerName} Wins!`;
+      const winnerText = winner === 0 ? 'You Win!' : `Opponent ${winner} Wins!`;
+      winnerDiv.textContent = winnerText;
       modal.appendChild(winnerDiv);
 
       // Final scores
@@ -857,7 +917,7 @@ export class HachiHachiModals {
       } else {
         youHTML += '<div style="font-size: 13px; color: #999;">  No teyaku</div>';
       }
-      youHTML += `<div style="font-weight: bold; color: #90ee90; margin-top: 8px;">Total: ${playerPayment >= 0 ? '+' : ''}${playerPayment} kan</div>`;
+      youHTML += `<div style="font-weight: bold; color: ${playerPayment >= 0 ? '#90ee90' : '#ff6b6b'}; margin-top: 8px;">Total: ${playerPayment >= 0 ? '+' : ''}${playerPayment} kan</div>`;
       youSection.innerHTML = youHTML;
       detailsDiv.appendChild(youSection);
 

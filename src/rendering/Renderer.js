@@ -182,13 +182,14 @@ export class Renderer {
         // Check if this is the Gaji card
         if (card.id !== GAJI_CARD_ID) return false;
 
-        // Check Gaji state - only wild when in hand or just drawn
+        // Check Gaji state - only wild when in hand, just drawn, or in selection mode
         const gajiState = gameState.gajiState;
         if (!gajiState) return false;
 
-        // Wild when in player's hand, opponent's hand (we can see it), or just drawn
+        // Wild when in player's hand, opponent's hand (we can see it), just drawn, or in selection mode
         return gajiState.location === 'player_hand' ||
                gajiState.location === 'opponent_hand' ||
+               gajiState.inSelection === true ||
                (gajiState.location === 'deck' && gameState.drawnCard && gameState.drawnCard.id === GAJI_CARD_ID);
       }
     } : null;

@@ -53,10 +53,49 @@ export class HachiHachi {
   }
 
   /**
-   * Set callback for UI decisions (not used in this simplified version)
+   * Set callback for UI decisions
    */
   setUICallback(callback) {
     this.uiCallback = callback;
+  }
+
+  /**
+   * Trigger UI decision modal for Shoubu/Sage/Cancel
+   * @private
+   */
+  _triggerShoubuSageDecision() {
+    if (this.uiCallback && this.currentPlayerIndex === 0) {
+      const allPlayers = this.players.map(p => ({
+        hand: p.hand,
+        captured: p.captured,
+        dekiyaku: p.dekiyaku,
+        roundScore: p.roundScore || 0,
+        isHuman: p.isHuman
+      }));
+
+      debugLogger.log('hachihachi', `📞 Invoking UI callback for Shoubu/Sage/Cancel decision`, {
+        player: 0,
+        dekiyakuList: this.players[0].dekiyaku,
+        deckCount: this.deck.count,
+        fieldCards: this.field.length
+      });
+
+      // Call UI with decision parameters
+      this.uiCallback('sage', {
+        playerKey: 0,
+        dekiyakuList: this.players[0].dekiyaku,
+        playerScore: allPlayers[0].roundScore,
+        opponent1Score: allPlayers[1].roundScore,
+        opponent2Score: allPlayers[2].roundScore,
+        roundNumber: this.currentRound,
+        // Additional data for enhanced UI
+        fieldMultiplier: this.fieldMultiplier,
+        deckRemaining: this.deck.count,
+        fieldCardCount: this.field.length,
+        allPlayers: allPlayers,
+        parValue: this.PAR_VALUE
+      });
+    }
   }
 
   /**
@@ -76,7 +115,10 @@ export class HachiHachi {
   reset() {
     this.deck = new Deck();
 
-    // Initialize 3 players
+    // Preserve cumulative game scores from previous rounds
+    const previousGameScores = this.players ? this.players.map(p => p.gameScore || 0) : [0, 0, 0];
+
+    // Initialize 3 players (resetting round state while preserving game scores)
     this.players = [];
     for (let i = 0; i < 3; i++) {
       this.players[i] = {
@@ -87,6 +129,7 @@ export class HachiHachi {
         dekiyaku: [],
         dekiyakuScore: 0,
         roundScore: 0,
+        gameScore: previousGameScores[i], // Preserve cumulative score
         isHuman: (i === 0)
       };
     }
@@ -101,6 +144,15 @@ export class HachiHachi {
     this.currentPlayerIndex = 0;
     this.message = '';
     this.teyakuDisplay = {};
+
+    // Sage decision state tracking
+    // Track which players have called sage (risky continuation)
+    // If they don't improve by end of round, they lose all points
+    this.sagePlayers = new Set(); // Players who chose sage
+    this.sageBaselineKakuyaku = {}; // Track dekiyaku value at time of sage decision
+    for (let i = 0; i < 3; i++) {
+      this.sageBaselineKakuyaku[i] = 0; // Will be set when sage is called
+    }
 
     // Deal and start round
     this.deal();
@@ -130,24 +182,73 @@ export class HachiHachi {
   }
 
   /**
+   * Check if field has 4 cards of the same month (invalid deal)
+   * @returns {boolean} true if field is invalid
+   */
+  isInvalidField() {
+    const monthCounts = {};
+    for (const card of this.field) {
+      monthCounts[card.month] = (monthCounts[card.month] || 0) + 1;
+      if (monthCounts[card.month] === 4) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Deal cards: 8 to each player, 8 to field (4-4)
    */
   deal() {
     debugLogger.log('hachihachi', `Dealing round ${this.currentRound}`);
 
-    // Deal 4 field cards
-    this.field = this.deck.drawMultiple(4);
+    // Keep dealing until we get a valid field
+    let validDeal = false;
+    let dealAttempts = 0;
+    const maxAttempts = 100; // Safety limit
 
-    // Deal 8 cards to each player
-    for (let i = 0; i < 8; i++) {
-      for (let p = 0; p < 3; p++) {
-        const card = this.deck.draw();
-        if (card) this.players[p].hand.push(card);
+    while (!validDeal && dealAttempts < maxAttempts) {
+      dealAttempts++;
+
+      // Reset deck and hands for re-deal
+      if (dealAttempts > 1) {
+        this.deck = new Deck();
+        for (let i = 0; i < 3; i++) {
+          this.players[i].hand = [];
+        }
+      }
+
+      // Deal 4 field cards
+      this.field = this.deck.drawMultiple(4);
+
+      // Deal 8 cards to each player
+      for (let i = 0; i < 8; i++) {
+        for (let p = 0; p < 3; p++) {
+          const card = this.deck.draw();
+          if (card) this.players[p].hand.push(card);
+        }
+      }
+
+      // Deal remaining 4 field cards
+      this.field.push(...this.deck.drawMultiple(4));
+
+      // Check if field is valid (no 4 of the same month)
+      if (this.isInvalidField()) {
+        debugLogger.log('hachihachi', `⚠️ Invalid field detected (4 cards of same month) - re-dealing...`, {
+          attempt: dealAttempts,
+          fieldCards: this.field.map(c => `${c.name} (${c.month})`)
+        });
+      } else {
+        validDeal = true;
+        debugLogger.log('hachihachi', `✅ Valid field dealt after ${dealAttempts} attempt(s)`, {
+          fieldCards: this.field.map(c => `${c.name} (${c.month})`)
+        });
       }
     }
 
-    // Deal remaining 4 field cards
-    this.field.push(...this.deck.drawMultiple(4));
+    if (!validDeal) {
+      console.error('Failed to deal valid field after', maxAttempts, 'attempts');
+    }
 
     // Calculate field multiplier
     this.calculateFieldMultiplier();
@@ -158,22 +259,43 @@ export class HachiHachi {
 
   /**
    * Calculate field multiplier (1×, 2×, 4×)
+   * Based on specific bright cards in the field:
+   * - 4× (Grand Field): Rain Man (November) or Phoenix (December)
+   * - 2× (Large Field): Crane (January), Curtain (March), or Moon (August)
+   * - 1× (Small Field): No multiplier cards
    */
   calculateFieldMultiplier() {
-    const largeBrightMonths = ['January', 'March', 'August'];
-    const grandBrightMonths = ['November', 'December'];
+    // Specific bright cards that trigger multipliers (card names as they appear in cards.js)
+    const largeBrightCards = ['January - bright - crane', 'March - bright - curtain', 'August - bright - moon'];
+    const grandBrightCards = ['November - bright - rain man', 'December - bright - phoenix'];
 
-    const fieldMonths = this.field.map(c => c.month);
+    // Check for specific cards in the field
+    const hasGrandBright = this.field.some(c => grandBrightCards.includes(c.name));
+    const hasLargeBright = this.field.some(c => largeBrightCards.includes(c.name));
 
-    if (fieldMonths.some(m => grandBrightMonths.includes(m))) {
+    if (hasGrandBright) {
       this.fieldMultiplier = 4;
-    } else if (fieldMonths.some(m => largeBrightMonths.includes(m))) {
+      const grandCard = this.field.find(c => grandBrightCards.includes(c.name));
+      debugLogger.log('hachihachi', `🔴 Field multiplier: 4× (GRAND - ${grandCard.name})`, {
+        fieldCards: this.field.map(c => `${c.name} (${c.type})`),
+        triggeringCard: `${grandCard.name}`,
+        multiplier: this.fieldMultiplier
+      });
+    } else if (hasLargeBright) {
       this.fieldMultiplier = 2;
+      const largeCard = this.field.find(c => largeBrightCards.includes(c.name));
+      debugLogger.log('hachihachi', `🟡 Field multiplier: 2× (LARGE - ${largeCard.name})`, {
+        fieldCards: this.field.map(c => `${c.name} (${c.type})`),
+        triggeringCard: `${largeCard.name}`,
+        multiplier: this.fieldMultiplier
+      });
     } else {
       this.fieldMultiplier = 1;
+      debugLogger.log('hachihachi', `⚪ Field multiplier: 1× (SMALL - No multiplier cards)`, {
+        fieldCards: this.field.map(c => `${c.name} (${c.type})`),
+        multiplier: this.fieldMultiplier
+      });
     }
-
-    debugLogger.log('hachihachi', `Field multiplier: ${this.fieldMultiplier}×`);
   }
 
   /**
@@ -243,10 +365,10 @@ export class HachiHachi {
       getTeyakuTotal(this.teyakuPaymentData.opponent2Teyaku)
     ];
 
-    // Store teyaku settlements for later display in scoreBreakdown
+    // Store teyaku settlements for later calculation at round end
     this.teyakuSettlements = [];
 
-    // Apply teyaku settlements to gameScore
+    // Calculate (but do not apply) teyaku settlements - will be applied at round end
     for (let i = 0; i < 3; i++) {
       let netPayment = 0;
 
@@ -262,16 +384,12 @@ export class HachiHachi {
         }
       }
 
-      // Store for later display
+      // Store for later application at round end
       this.teyakuSettlements[i] = netPayment;
 
-      // Apply to game score immediately
-      this.players[i].gameScore = (this.players[i].gameScore || 0) + netPayment;
-
-      debugLogger.log('hachihachi', `💳 Player ${i} teyaku settlement applied:`, {
+      debugLogger.log('hachihachi', `💳 Player ${i} teyaku settlement calculated (will apply at round end):`, {
         teyakuValue: teyakuValues[i],
-        netPayment: netPayment,
-        gameScoreAfter: this.players[i].gameScore
+        netPayment: netPayment
       });
     }
   }
@@ -331,6 +449,12 @@ export class HachiHachi {
       // Find matching cards on field
       const matches = this.field.filter(fc => fc.month === card.month);
 
+      debugLogger.log('hachihachi', `🎴 Hand card selected: ${card.name} (${card.month})`, {
+        fieldCards: this.field.map(c => `${c.name} (${c.month})`),
+        matchCount: matches.length,
+        matchedCards: matches.map(m => `${m.name} (${m.month})`)
+      });
+
       // Store selected card and matches info
       this.selectedCards = [card];
       this.drawnCardMatches = matches;
@@ -350,16 +474,30 @@ export class HachiHachi {
     if (this.phase === 'select_field' && owner === 'player') {
       // Check if clicking the SAME card - try to place it on field
       if (this.selectedCards[0].id === card.id) {
-        // Check if matches exist - if so, cannot place
+        // Recalculate fresh matches for this specific hand card (don't use drawnCardMatches which is from drawn card phase)
         const matches = this.field.filter(fc => fc.month === card.month);
+
+        debugLogger.log('hachihachi', `🔍 Hand card placement attempt: ${card.name} (${card.month})`, {
+          fieldCards: this.field.map(c => `${c.name} (${c.month})`),
+          matchCount: matches.length,
+          matchedCards: matches.map(m => `${m.name} (${m.month})`)
+        });
 
         if (matches.length > 0) {
           // Matches exist - cannot place on field, must match
           this.message = `You must match with a card on the field (${matches.length} match${matches.length > 1 ? 'es' : ''} available)`;
+          debugLogger.log('hachihachi', `❌ Cannot place card - matches exist`, {
+            selectedCard: card.name,
+            matches: matches.map(m => m.name)
+          });
           return false;
         }
 
         // No matches - allow placing on field
+        debugLogger.log('hachihachi', `✅ Placing card on field - no matches`, {
+          card: card.name,
+          month: card.month
+        });
         return this.placeCardOnField(card);
       }
 
@@ -415,6 +553,19 @@ export class HachiHachi {
       fieldSize: this.field.length
     });
 
+    // Assign gridSlot to the hand card NOW, before drawing the next card
+    // This ensures when the drawn card is placed on field, the hand card's slot is already reserved
+    if (this.card3DManager && this.card3DManager.cards.has(card.id)) {
+      const card3D = this.card3DManager.cards.get(card.id);
+      if (card3D && card3D.gridSlot === undefined) {
+        card3D.gridSlot = this.card3DManager.getNextAvailableFieldSlot();
+        debugLogger.log('hachihachi', `📍 Pre-assigned gridSlot ${card3D.gridSlot} to hand card ${card.name} before drawing`, {
+          cardId: card.id,
+          slot: card3D.gridSlot
+        });
+      }
+    }
+
     this.selectedCards = [];
     this.drawnCardMatches = [];
     this.proceedToDrawPhase();
@@ -446,6 +597,18 @@ export class HachiHachi {
       const currentPlayer = this.players[this.currentPlayerIndex];
       const drawnCard = this.drawnCard;
 
+      // Validate that drawn card and field card have the same month
+      if (drawnCard.month !== fieldCard.month) {
+        debugLogger.log('hachihachi', `❌ Invalid match attempt: drawn card month doesn't match field card`, {
+          drawnCardMonth: drawnCard.month,
+          fieldCardMonth: fieldCard.month,
+          drawnCard: drawnCard.name,
+          fieldCard: fieldCard.name
+        });
+        this.message = `Cards must match by month! ${drawnCard.name} (${drawnCard.month}) cannot match ${fieldCard.name} (${fieldCard.month})`;
+        return false;
+      }
+
       debugLogger.log('hachihachi', `✅ Player ${this.currentPlayerIndex} matched drawn card: ${drawnCard.name} ↔ ${fieldCard.name}`, {
         drawnCard: drawnCard.name,
         fieldCard: fieldCard.name,
@@ -475,29 +638,48 @@ export class HachiHachi {
       this.drawnCardMatches = [];
 
       // If new dekiyaku was just captured, pause for Shoubu/Sage decision
-      if (newDekiyakuGained && this.currentPlayerIndex === 0) {
-        // Player is human - show decision UI
-        debugLogger.log('hachihachi', `🎯 SHOUBU/SAGE DECISION TRIGGERED for human player!`, {
-          newDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`),
-          totalDekiyakuValue: newDekiyaku.reduce((sum, d) => sum + d.value, 0),
-          phase: 'shoubu_decision'
-        });
-        this.phase = 'shoubu_decision';
-        this.message = `Dekiyaku captured! Choose: SHOUBU (end round) or SAGE (continue playing)`;
-        // UI will handle the decision callback
-        return true;
-      } else if (newDekiyakuGained && this.currentPlayerIndex > 0) {
-        // Opponent - auto decide (for now, auto-sage to be aggressive)
-        debugLogger.log('hachihachi', `⚠️ Opponent ${this.currentPlayerIndex} captured dekiyaku from drawn match - auto-choosing SAGE`, {
-          newDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`),
-          totalDekiyakuValue: newDekiyaku.reduce((sum, d) => sum + d.value, 0)
-        });
-        setTimeout(() => this.nextPlayer(), 300);
+      if (newDekiyakuGained) {
+        // Check if deck is empty - if so, automatically end round with Shoubu
+        if (this.deck.count === 0) {
+          debugLogger.log('hachihachi', `🎯 AUTOMATIC SHOUBU - Deck empty after drawn card dekiyaku!`, {
+            player: this.currentPlayerIndex,
+            newDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`),
+            totalDekiyakuValue: newDekiyaku.reduce((sum, d) => sum + d.value, 0),
+            reason: 'Last card in deck - game must end'
+          });
+          // Auto-call Shoubu (end round immediately)
+          this.callShoubu(this.currentPlayerIndex);
+          return true;
+        }
+
+        if (this.currentPlayerIndex === 0) {
+          // Player is human - show decision UI
+          debugLogger.log('hachihachi', `🎯 SHOUBU/SAGE DECISION TRIGGERED for human player!`, {
+            newDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`),
+            totalDekiyakuValue: newDekiyaku.reduce((sum, d) => sum + d.value, 0),
+            phase: 'shoubu_decision',
+            deckRemaining: this.deck.count
+          });
+          this.phase = 'shoubu_decision';
+          this.message = `Dekiyaku captured! Choose: SHOUBU (end round) or SAGE (continue playing)`;
+          // Trigger UI decision
+          this._triggerShoubuSageDecision();
+          return true;
+        } else if (this.currentPlayerIndex > 0) {
+          // Opponent - auto decide (for now, auto-sage to be aggressive)
+          debugLogger.log('hachihachi', `⚠️ Opponent ${this.currentPlayerIndex} captured dekiyaku from drawn match - auto-choosing SAGE`, {
+            newDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`),
+            totalDekiyakuValue: newDekiyaku.reduce((sum, d) => sum + d.value, 0),
+            deckRemaining: this.deck.count
+          });
+          setTimeout(() => this.nextPlayer(), 300);
+        }
       } else {
         // No new dekiyaku - proceed to next player
         debugLogger.log('hachihachi', `ℹ️ No new dekiyaku from drawn match - proceeding to next player`, {
           currentPlayerIndex: this.currentPlayerIndex,
-          allDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`).join(', ') || 'none'
+          allDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`).join(', ') || 'none',
+          deckRemaining: this.deck.count
         });
         setTimeout(() => this.nextPlayer(), 300);
       }
@@ -506,9 +688,38 @@ export class HachiHachi {
     }
 
     // Handle hand card matching (select_field phase)
-    if (this.selectedCards.length === 0) return false;
+    if (this.selectedCards.length === 0) {
+      debugLogger.log('hachihachi', `❌ selectFieldCard: No selected hand card`, {
+        phase: this.phase,
+        selectedCardsLength: this.selectedCards.length,
+        fieldCard: fieldCard.name
+      });
+      return false;
+    }
 
     const handCard = this.selectedCards[0];
+
+    debugLogger.log('hachihachi', `🎯 selectFieldCard: Attempting hand-field match`, {
+      phase: this.phase,
+      handCard: handCard.name,
+      handCardMonth: handCard.month,
+      fieldCard: fieldCard.name,
+      fieldCardMonth: fieldCard.month,
+      currentPlayerIndex: this.currentPlayerIndex
+    });
+
+    // CRITICAL: Validate that hand card and field card have the same month
+    // Only cards of the same month can be matched
+    if (handCard.month !== fieldCard.month) {
+      debugLogger.log('hachihachi', `❌ Invalid match attempt: hand card month doesn't match field card`, {
+        handCardMonth: handCard.month,
+        fieldCardMonth: fieldCard.month,
+        handCard: handCard.name,
+        fieldCard: fieldCard.name
+      });
+      this.message = `Cards must match by month! ${handCard.name} (${handCard.month}) cannot match ${fieldCard.name} (${fieldCard.month})`;
+      return false;
+    }
 
     // Remove from hand
     const currentPlayer = this.players[this.currentPlayerIndex];
@@ -559,30 +770,49 @@ export class HachiHachi {
     this.drawnCardMatches = [];
 
     // If new dekiyaku was just captured, pause for Shoubu/Sage decision
-    if (newDekiyakuGained && this.currentPlayerIndex === 0) {
-      // Player is human - show decision UI
-      debugLogger.log('hachihachi', `🎯 SHOUBU/SAGE DECISION TRIGGERED for human player!`, {
-        newDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`),
-        totalDekiyakuValue: newDekiyaku.reduce((sum, d) => sum + d.value, 0),
-        phase: 'shoubu_decision',
-        matchContext: `${handCard.name} ↔ ${fieldCard.name}`
-      });
-      this.phase = 'shoubu_decision';
-      this.message = `Dekiyaku captured! Choose: SHOUBU (end round) or SAGE (continue playing)`;
-      // UI will handle the decision callback
-      return true;
-    } else if (newDekiyakuGained && this.currentPlayerIndex > 0) {
-      // Opponent - auto decide (for now, auto-sage to be aggressive)
-      debugLogger.log('hachihachi', `⚠️ Opponent ${this.currentPlayerIndex} captured dekiyaku - auto-choosing SAGE`, {
-        newDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`),
-        totalDekiyakuValue: newDekiyaku.reduce((sum, d) => sum + d.value, 0)
-      });
-      this.proceedToDrawPhase();
+    if (newDekiyakuGained) {
+      // Check if deck is empty - if so, automatically end round with Shoubu
+      if (this.deck.count === 0) {
+        debugLogger.log('hachihachi', `🎯 AUTOMATIC SHOUBU - Deck empty after dekiyaku capture!`, {
+          player: this.currentPlayerIndex,
+          newDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`),
+          totalDekiyakuValue: newDekiyaku.reduce((sum, d) => sum + d.value, 0),
+          reason: 'No more cards to draw - game must end'
+        });
+        // Auto-call Shoubu (end round immediately)
+        this.callShoubu(this.currentPlayerIndex);
+        return true;
+      }
+
+      if (this.currentPlayerIndex === 0) {
+        // Player is human - show decision UI
+        debugLogger.log('hachihachi', `🎯 SHOUBU/SAGE DECISION TRIGGERED for human player!`, {
+          newDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`),
+          totalDekiyakuValue: newDekiyaku.reduce((sum, d) => sum + d.value, 0),
+          phase: 'shoubu_decision',
+          matchContext: `${handCard.name} ↔ ${fieldCard.name}`,
+          deckRemaining: this.deck.count
+        });
+        this.phase = 'shoubu_decision';
+        this.message = `Dekiyaku captured! Choose: SHOUBU (end round) or SAGE (continue playing)`;
+        // Trigger UI decision
+        this._triggerShoubuSageDecision();
+        return true;
+      } else if (this.currentPlayerIndex > 0) {
+        // Opponent - auto decide (for now, auto-sage to be aggressive)
+        debugLogger.log('hachihachi', `⚠️ Opponent ${this.currentPlayerIndex} captured dekiyaku - auto-choosing SAGE`, {
+          newDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`),
+          totalDekiyakuValue: newDekiyaku.reduce((sum, d) => sum + d.value, 0),
+          deckRemaining: this.deck.count
+        });
+        this.proceedToDrawPhase();
+      }
     } else {
       // No new dekiyaku - continue normally
       debugLogger.log('hachihachi', `ℹ️ No new dekiyaku from hand card match - proceeding to draw phase`, {
         currentPlayerIndex: this.currentPlayerIndex,
-        allDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`).join(', ') || 'none'
+        allDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`).join(', ') || 'none',
+        deckRemaining: this.deck.count
       });
       this.proceedToDrawPhase();
     }
@@ -666,7 +896,8 @@ export class HachiHachi {
           });
           this.phase = 'shoubu_decision';
           this.message = `Dekiyaku captured! Choose: SHOUBU (end round) or SAGE (continue playing)`;
-          // UI will handle the decision callback
+          // Trigger UI decision
+          this._triggerShoubuSageDecision();
           return;
         } else if (newDekiyakuGained && this.currentPlayerIndex > 0) {
           // Opponent - auto decide (for now, auto-sage to be aggressive)
@@ -750,7 +981,8 @@ export class HachiHachi {
           });
           this.phase = 'shoubu_decision';
           this.message = `Dekiyaku captured! Choose: SHOUBU (end round) or SAGE (continue playing)`;
-          // UI will handle the decision callback
+          // Trigger UI decision
+          this._triggerShoubuSageDecision();
           return;
         } else if (newDekiyakuGained && this.currentPlayerIndex > 0) {
           // Opponent - auto decide (for now, auto-sage to be aggressive)
@@ -823,11 +1055,19 @@ export class HachiHachi {
     // Select the card (enters select_field phase)
     this.selectCard(cardToPlay, 'player');
 
+    // CRITICAL: Calculate fresh matches for this opponent's card, not reuse player's drawnCardMatches
+    const freshMatches = this.field.filter(fc => fc.month === cardToPlay.month);
+
+    debugLogger.log('hachihachi', `🤖 Opponent ${this.currentPlayerIndex} turn: playing ${cardToPlay.name}`, {
+      freshMatches: freshMatches.map(m => `${m.name} (${m.month})`),
+      matchCount: freshMatches.length
+    });
+
     // Check if there are matches
-    if (this.drawnCardMatches.length > 0) {
-      // Match with first matching card
+    if (freshMatches.length > 0) {
+      // Match with first matching field card
       setTimeout(() => {
-        this.selectFieldCard(this.drawnCardMatches[0]);
+        this.selectFieldCard(freshMatches[0]);
       }, 400);
     } else {
       // Place on field
@@ -838,34 +1078,106 @@ export class HachiHachi {
   }
 
   /**
-   * Player chooses SHOUBU (end round)
+   * Call method for SHOUBU decision (end round)
    * The dekiyaku they currently have will be finalized and counted
+   * @param {number} playerKey - Player index (0=player, 1-2=opponents)
    */
-  chooseShoubu() {
-    const player = this.players[this.currentPlayerIndex];
-    debugLogger.log('hachihachi', `🛑 Player ${this.currentPlayerIndex} chose SHOUBU (end round)`, {
+  callShoubu(playerKey) {
+    const playerIndex = typeof playerKey === 'number' ? playerKey : this.currentPlayerIndex;
+    const player = this.players[playerIndex];
+
+    debugLogger.log('hachihachi', `🛑 Player ${playerIndex} chose SHOUBU (end round)`, {
       dekiyaku: player.dekiyaku.map(d => d.name),
       totalValue: player.dekiyaku.reduce((sum, d) => sum + d.value, 0)
     });
-    // Mark dekiyaku as finalized (no further changes allowed)
-    player.finalizedDekiyaku = player.dekiyaku; // Store finalized version
+
+    // CRITICAL: When someone calls Shoubu, finalize ALL players' current dekiyaku
+    // This ensures all players' dekiyaku are locked in for settlement
+    for (let i = 0; i < 3; i++) {
+      this.players[i].finalizedDekiyaku = this.players[i].dekiyaku.slice();
+      debugLogger.log('hachihachi', `🔒 Player ${i} dekiyaku finalized:`, {
+        dekiyaku: this.players[i].finalizedDekiyaku.map(d => d.name).join(', ') || 'none',
+        totalValue: this.players[i].finalizedDekiyaku.reduce((sum, d) => sum + d.value, 0)
+      });
+    }
+
+    // Remove from sage players if they were in it (cancelled sage)
+    this.sagePlayers.delete(playerIndex);
+
     // End the round with current dekiyaku
+    this.phase = 'round_end';
     this.endRound();
   }
 
   /**
-   * Player chooses SAGE (continue playing)
+   * Call method for SAGE decision (continue playing)
    * Risk: if they don't improve, they lose all points at end of round
+   * @param {number} playerKey - Player index (0=player, 1-2=opponents)
    */
-  chooseSage() {
-    const player = this.players[this.currentPlayerIndex];
-    debugLogger.log('hachihachi', `⚔️ Player ${this.currentPlayerIndex} chose SAGE (continue playing)`, {
+  callSage(playerKey) {
+    const playerIndex = typeof playerKey === 'number' ? playerKey : this.currentPlayerIndex;
+    const player = this.players[playerIndex];
+
+    const currentDekiyakuValue = player.dekiyaku.reduce((sum, d) => sum + d.value, 0);
+
+    debugLogger.log('hachihachi', `⚔️ Player ${playerIndex} chose SAGE (continue playing)`, {
       currentDekiyaku: player.dekiyaku.map(d => d.name),
-      currentValue: player.dekiyaku.reduce((sum, d) => sum + d.value, 0),
+      currentValue: currentDekiyakuValue,
       riskNote: 'Will lose all points if no improvement before round ends'
     });
+
+    // Mark as sage player and store baseline
+    this.sagePlayers.add(playerIndex);
+    this.sageBaselineKakuyaku[playerIndex] = currentDekiyakuValue;
+
+    // Clear finalized dekiyaku (can still improve)
+    player.finalizedDekiyaku = undefined;
+
     // Continue to draw phase (dekiyaku will be updated if new ones are captured)
     this.proceedToDrawPhase();
+  }
+
+  /**
+   * Call method for CANCEL SAGE decision (reduce to par)
+   * "Safe" option - gets par value score instead of trying for more
+   * This is a way to cancel a previous sage decision and settle for par
+   * @param {number} playerKey - Player index (0=player, 1-2=opponents)
+   */
+  callCancel(playerKey) {
+    const playerIndex = typeof playerKey === 'number' ? playerKey : this.currentPlayerIndex;
+    const player = this.players[playerIndex];
+
+    debugLogger.log('hachihachi', `🔄 Player ${playerIndex} chose CANCEL (reduce to par value)`, {
+      currentDekiyaku: player.dekiyaku.map(d => d.name),
+      currentValue: player.dekiyaku.reduce((sum, d) => sum + d.value, 0),
+      safetyNote: 'Will receive par value (0 kan) instead of dekiyaku'
+    });
+
+    // Cancel sage if they were playing sage
+    this.sagePlayers.delete(playerIndex);
+
+    // Store special flag to indicate cancel was chosen
+    // This prevents dekiyaku from being scored
+    player.cancelledSage = true;
+    player.finalizedDekiyaku = []; // Empty dekiyaku - only par value scores
+
+    // End the round (with no dekiyaku)
+    this.phase = 'round_end';
+    this.endRound();
+  }
+
+  /**
+   * Legacy method for backward compatibility
+   */
+  chooseShoubu() {
+    this.callShoubu(this.currentPlayerIndex);
+  }
+
+  /**
+   * Legacy method for backward compatibility
+   */
+  chooseSage() {
+    this.callSage(this.currentPlayerIndex);
   }
 
   /**
@@ -948,6 +1260,36 @@ export class HachiHachi {
       });
     }
 
+    // Apply SAGE PENALTY: if player called sage but didn't improve, lose all points
+    for (let i = 0; i < 3; i++) {
+      const player = this.players[i];
+
+      // Check if player called sage
+      if (this.sagePlayers.has(i)) {
+        const baselineValue = this.sageBaselineKakuyaku[i] || 0;
+        const finalDekiyakuValue = (player.dekiyaku || []).reduce((sum, d) => sum + d.value, 0);
+
+        debugLogger.log('hachihachi', `🎲 Sage Decision Outcome for Player ${i}:`, {
+          baselineValue: baselineValue,
+          finalValue: finalDekiyakuValue,
+          improved: finalDekiyakuValue > baselineValue,
+          penalty: finalDekiyakuValue <= baselineValue ? 'LOSE ALL POINTS' : 'none'
+        });
+
+        // If no improvement, lose all points (including card points)
+        if (finalDekiyakuValue <= baselineValue) {
+          debugLogger.log('hachihachi', `💥 Player ${i} called SAGE but didn't improve! Losing all points this round.`, {
+            baselineDecision: baselineValue,
+            finalValue: finalDekiyakuValue,
+            scoreBefore: player.roundScore,
+            scoreAfter: 0
+          });
+          player.roundScore = 0; // Lose everything - no card points, no dekiyaku
+          player.dekiyaku = []; // Clear dekiyaku
+        }
+      }
+    }
+
     // Apply dekiyaku settlement (true zero-sum: only players with dekiyaku gain points)
     // Each player with dekiyaku collects that amount from each other player who doesn't have it
     for (let i = 0; i < 3; i++) {
@@ -968,14 +1310,18 @@ export class HachiHachi {
         player.roundScore += dekiyakuSettlement;
 
         debugLogger.log('hachihachi', `💰 Player ${i} dekiyaku settlement:`, {
-          dekiyaku: dekiyakuToCount.map(d => d.name).join(', '),
+          dekiyaku: dekiyakuToCount.map(d => `${d.name}(${d.value}kan)`).join(', '),
+          baseValue: dekiyakuToCount.reduce((sum, d) => sum + d.value, 0),
+          fieldMultiplier: `${this.fieldMultiplier}×`,
           valuePerPlayer: dekiyakuValue,
-          totalCollected: dekiyakuSettlement
+          totalCollected: dekiyakuSettlement,
+          newRoundScore: player.roundScore
         });
       }
 
       // Pay for other players' dekiyaku
       let totalToPay = 0;
+      const paymentDetails = [];
       for (let j = 0; j < 3; j++) {
         if (i !== j) {
           const otherDekiyakuToCount = this.players[j].finalizedDekiyaku || (this.players[j].dekiyaku && this.players[j].dekiyaku.length > 0 ? this.players[j].dekiyaku : []);
@@ -986,13 +1332,22 @@ export class HachiHachi {
           if (otherDekiyakuValue > 0) {
             player.roundScore -= otherDekiyakuValue; // Pay to other player
             totalToPay += otherDekiyakuValue;
+            paymentDetails.push({
+              toPlayer: j,
+              dekiyaku: otherDekiyakuToCount.map(d => `${d.name}(${d.value}kan)`).join(', '),
+              baseValue: otherDekiyakuToCount.reduce((sum, d) => sum + d.value, 0),
+              fieldMultiplier: `${this.fieldMultiplier}×`,
+              amount: otherDekiyakuValue
+            });
           }
         }
       }
 
       if (totalToPay > 0) {
         debugLogger.log('hachihachi', `💸 Player ${i} dekiyaku payments:`, {
-          totalOwed: totalToPay
+          totalOwed: totalToPay,
+          payments: paymentDetails,
+          newRoundScore: player.roundScore
         });
       }
     }
@@ -1101,12 +1456,15 @@ export class HachiHachi {
         }, 0);
         const cardScore = (cardPoints - this.PAR_VALUE) * this.fieldMultiplier;
 
+        // Calculate round total: teyaku + par + dekiyaku (all applied at round end)
+        const roundTotal = teyakuScore + dekiyakuScore + cardScore;
+
         return {
           teyakuScore: teyakuScore,
           potScore: 0, // Placeholder for future pot implementation
           dekiyakuScore: dekiyakuScore,
           parScore: cardScore, // Par value score (capturedPoints - 88) × multiplier
-          roundTotal: teyakuScore + 0 + dekiyakuScore + cardScore // Sum all components
+          roundTotal: roundTotal // Complete round score applied at round end
         };
       });
 
@@ -1131,8 +1489,6 @@ export class HachiHachi {
         }
       });
     }
-
-    this.nextRound();
   }
 
   /**

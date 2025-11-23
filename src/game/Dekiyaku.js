@@ -100,12 +100,12 @@ export class Dekiyaku {
    * - Paulownia with Phoenix (Dec)
    */
   static checkFiveBrights(captured) {
-    const brightMonths = [1, 3, 8, 11, 12];
+    const brightMonths = ['January', 'March', 'August', 'November', 'December'];
     const hasBrights = brightMonths.map(m =>
       this.hasCardOfMonthAndType(captured, m, 'bright')
     );
 
-    const monthNames = {1: 'Pine/Jan', 3: 'Cherry/Mar', 8: 'Moon/Aug', 11: 'Willow/Nov', 12: 'Phoenix/Dec'};
+    const monthNames = {'January': 'Pine/Jan', 'March': 'Cherry/Mar', 'August': 'Moon/Aug', 'November': 'Willow/Nov', 'December': 'Phoenix/Dec'};
     const status = brightMonths.map((m, i) => `${monthNames[m]}: ${hasBrights[i] ? '✓' : '✗'}`).join(', ');
     debugLogger.log('hachihachi', `🔍 Checking Five Brights: ${status}`);
 
@@ -131,8 +131,8 @@ export class Dekiyaku {
    * but we check for any 4)
    */
   static checkFourBrights(captured) {
-    const brightMonths = [1, 3, 8, 11, 12];
-    const monthNames = {1: 'Pine/Jan', 3: 'Cherry/Mar', 8: 'Moon/Aug', 11: 'Willow/Nov', 12: 'Phoenix/Dec'};
+    const brightMonths = ['January', 'March', 'August', 'November', 'December'];
+    const monthNames = {'January': 'Pine/Jan', 'March': 'Cherry/Mar', 'August': 'Moon/Aug', 'November': 'Willow/Nov', 'December': 'Phoenix/Dec'};
     const foundBrights = [];
 
     for (const month of brightMonths) {
@@ -166,9 +166,9 @@ export class Dekiyaku {
    * Some variants score +1 kan for each additional ribbon beyond 7
    */
   static checkSevenRibbons(captured) {
-    // Get all ribbon cards except Willow ribbon (month 11)
+    // Get all ribbon cards except Willow ribbon (November)
     const ribbons = captured.filter(c =>
-      c.type === 'ribbon' && c.month !== 11
+      c.type === 'ribbon' && c.month !== 'November'
     );
 
     debugLogger.log('hachihachi', `🔍 Checking Seven Ribbons: found ${ribbons.length} ribbon cards (need 7)`);
@@ -196,8 +196,8 @@ export class Dekiyaku {
    * - Cherry Blossom with Poetry Ribbon (Mar)
    */
   static checkPoetryRibbons(captured) {
-    const poetryMonths = [1, 2, 3];
-    const monthNames = {1: 'Jan', 2: 'Feb', 3: 'Mar'};
+    const poetryMonths = ['January', 'February', 'March'];
+    const monthNames = {'January': 'Jan', 'February': 'Feb', 'March': 'Mar'};
     const hasPoetry = poetryMonths.map(m =>
       this.hasPoetryRibbon(captured, m)
     );
@@ -229,8 +229,8 @@ export class Dekiyaku {
    * - Maple with Blue Ribbon (Oct)
    */
   static checkBlueRibbons(captured) {
-    const blueMonths = [5, 9, 10];
-    const monthNames = {5: 'May', 9: 'Sep', 10: 'Oct'};
+    const blueMonths = ['May', 'September', 'October'];
+    const monthNames = {'May': 'May', 'September': 'Sep', 'October': 'Oct'};
     const hasBlue = blueMonths.map(m =>
       this.hasBlueRibbon(captured, m)
     );
@@ -263,9 +263,9 @@ export class Dekiyaku {
    * Note: This yaku may not be in all versions
    */
   static checkBoarDeerButterfly(captured) {
-    const hasBoar = this.hasCardWithName(captured, 'boar', 7);
-    const hasDeer = this.hasCardWithName(captured, 'deer', 10);
-    const hasButterfly = this.hasCardWithName(captured, 'butterfly', 5);
+    const hasBoar = this.hasCardWithName(captured, 'boar', 'July');
+    const hasDeer = this.hasCardWithName(captured, 'deer', 'October');
+    const hasButterfly = this.hasCardWithName(captured, 'butterfly', 'May');
 
     const status = `Boar (Jul): ${hasBoar ? '✓' : '✗'}, Deer (Oct): ${hasDeer ? '✓' : '✗'}, Butterfly (May): ${hasButterfly ? '✓' : '✗'}`;
     debugLogger.log('hachihachi', `🔍 Checking Boar/Deer/Butterfly: ${status}`);
@@ -277,9 +277,9 @@ export class Dekiyaku {
         value: 7,
         type: 'dekiyaku',
         cardsInvolved: [
-          this.getCardWithName(captured, 'boar', 7),
-          this.getCardWithName(captured, 'deer', 10),
-          this.getCardWithName(captured, 'butterfly', 5)
+          this.getCardWithName(captured, 'boar', 'July'),
+          this.getCardWithName(captured, 'deer', 'October'),
+          this.getCardWithName(captured, 'butterfly', 'May')
         ]
       };
     }

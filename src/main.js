@@ -2134,7 +2134,7 @@ class Game {
           if (winnerIndex === 0) {
             winner = 'You Win!';
           } else {
-            winner = `Opponent ${winnerIndex} Wins!`;
+            winner = `Opponent ${winnerIndex} Win!`;
           }
         } else {
           winner = 'Tie Game!';
@@ -2142,7 +2142,7 @@ class Game {
       } else {
         // 2-player: Use legacy comparison
         winner = data.playerTotalScore > data.opponentTotalScore ? 'You Win!' :
-                 data.opponentTotalScore > data.playerTotalScore ? 'Opponent Wins!' : 'Tie Game!';
+                 data.opponentTotalScore > data.playerTotalScore ? 'Opponent Win!' : 'Tie Game!';
       }
       title.textContent = `Game Over - ${winner}`;
     } else {
@@ -4327,6 +4327,7 @@ class Game {
       teyaku: data.teyaku,
       dekiyaku: data.dekiyaku,
       cardBreakdown: data.cardBreakdown,
+      scoreBreakdown: data.scoreBreakdown,
       allScores: data.allScores,
       stats: data.stats
     });

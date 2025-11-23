@@ -162,9 +162,11 @@ export class Sakura {
 
     // Gaji tracking
     this.gajiState = {
-      location: null, // 'deck', 'player_X_hand', 'field', 'player_X_captured'
-      pairedWithMonth: null, // If captured with Gaji, which month was paired
-      isWildCard: false // Is Gaji currently acting as a wild card?
+      location: null, // 'deck', 'player_hand', 'opponent_hand', 'field', 'player_X_captured'
+      usedByPlayerIndex: null, // Which player used Gaji as wild card (receives bonus at end)
+      usedWithMonth: null, // Month of the card captured when Gaji was used
+      isWildCard: false, // Is Gaji currently acting as a wild card?
+      inSelection: false // Is Gaji currently in selection phase (showing lightning)?
     };
 
     // Turn state
@@ -185,6 +187,21 @@ export class Sakura {
   }
 
   /**
+   * Check if field has 4 cards of the same month (invalid deal)
+   * @returns {boolean} true if field is invalid
+   */
+  isInvalidField() {
+    const monthCounts = {};
+    for (const card of this.field) {
+      monthCounts[card.month] = (monthCounts[card.month] || 0) + 1;
+      if (monthCounts[card.month] === 4) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Deal cards based on player count
    * 2 players: 10 cards each, 8 field cards
    * 3 players: 7 cards each, 6 field cards
@@ -199,24 +216,50 @@ export class Sakura {
 
     const rules = dealingRules[this.playerCount];
 
-    // Deal half of field cards first
-    const halfFieldSize = Math.floor(rules.fieldSize / 2);
-    this.field = this.deck.drawMultiple(halfFieldSize);
+    // Keep dealing until we get a valid field
+    let validDeal = false;
+    let dealAttempts = 0;
+    const maxAttempts = 100;
 
-    // Deal hand cards to each player in turn order (starting with dealer)
-    for (let i = 0; i < rules.handSize; i++) {
-      for (let p = 0; p < this.playerCount; p++) {
-        const playerIndex = (this.dealerIndex + p) % this.playerCount;
-        const card = this.deck.draw();
-        if (card) {
-          this.players[playerIndex].hand.push(card);
+    while (!validDeal && dealAttempts < maxAttempts) {
+      dealAttempts++;
+
+      // Reset deck and hands for re-deal
+      if (dealAttempts > 1) {
+        this.deck = new Deck();
+        for (let i = 0; i < this.playerCount; i++) {
+          this.players[i].hand = [];
         }
       }
-    }
 
-    // Deal remaining field cards
-    const remainingFieldCards = rules.fieldSize - halfFieldSize;
-    this.field.push(...this.deck.drawMultiple(remainingFieldCards));
+      // Deal half of field cards first
+      const halfFieldSize = Math.floor(rules.fieldSize / 2);
+      this.field = this.deck.drawMultiple(halfFieldSize);
+
+      // Deal hand cards to each player in turn order (starting with dealer)
+      for (let i = 0; i < rules.handSize; i++) {
+        for (let p = 0; p < this.playerCount; p++) {
+          const playerIndex = (this.dealerIndex + p) % this.playerCount;
+          const card = this.deck.draw();
+          if (card) {
+            this.players[playerIndex].hand.push(card);
+          }
+        }
+      }
+
+      // Deal remaining field cards
+      const remainingFieldCards = rules.fieldSize - halfFieldSize;
+      this.field.push(...this.deck.drawMultiple(remainingFieldCards));
+
+      // Check if field is valid
+      if (this.isInvalidField()) {
+        debugLogger.log('sakura', `⚠️ Invalid field detected (4 cards of same month) - re-dealing...`, {
+          attempt: dealAttempts
+        });
+      } else {
+        validDeal = true;
+      }
+    }
 
     // Check for initial field Hiki (dealer advantage)
     this.checkInitialFieldHiki();
@@ -321,7 +364,8 @@ export class Sakura {
     // Check where Gaji is located (check hands first)
     for (let i = 0; i < this.playerCount; i++) {
       if (this.players[i].hand.find(c => c.id === this.GAJI_CARD_ID)) {
-        this.gajiState.location = `player_${i}_hand`;
+        // Use legacy names for rendering compatibility (player_hand, opponent_hand)
+        this.gajiState.location = i === 0 ? 'player_hand' : 'opponent_hand';
         this.gajiState.isWildCard = true;
         return;
       }
@@ -631,6 +675,9 @@ export class Sakura {
 
         // Return Gaji to hand
         this.playerHand.push(card);
+        // Clear the selection flag and restore location
+        this.gajiState.inSelection = false;
+        this.gajiState.location = 'player_hand';
 
         // Reset to select_hand phase
         this.selectedCards = [];
@@ -803,16 +850,29 @@ export class Sakura {
       const wasDrawn = this.drawnCard && this.drawnCard.id === handCard.id;
       if (wasDrawn) {
         this.drawnCard = null; // Clear before capture for Card3D sync
-        this.captureWithGaji(handCard, fieldCard);
+        this.captureWithGaji(handCard, fieldCard, this.currentPlayerIndex);
         this.endTurn(); // Drawn Gaji ends the turn
       } else {
-        this.captureWithGaji(handCard, fieldCard);
+        this.captureWithGaji(handCard, fieldCard, this.currentPlayerIndex);
         this.proceedToDrawPhase(); // Hand Gaji proceeds to draw phase
       }
       return true;
     }
 
     // Regular field card selection (2 matches or 1 match confirmation)
+    // CRITICAL: Verify the field card matches the selected hand card
+    if (fieldCard.month !== handCard.month) {
+      debugLogger.log('sakura', `❌ Invalid match attempt`, {
+        handCard: handCard.name,
+        handCardMonth: handCard.month,
+        fieldCard: fieldCard.name,
+        fieldCardMonth: fieldCard.month,
+        validMatches: this.drawnCardMatches.map(m => m.name)
+      });
+      this.message = `Cards don't match! ${handCard.month} ≠ ${fieldCard.month}`;
+      return false;
+    }
+
     debugLogger.log('sakura', `✅ Player chose ${fieldCard.name} to capture with ${handCard.name}`);
 
     // Remove hand card from hand
@@ -1214,10 +1274,13 @@ export class Sakura {
 
     // Remove Gaji from hand
     this.playerHand = this.playerHand.filter(c => c.id !== gajiCard.id);
+    // Mark Gaji as in selection mode (keeps lightning effect showing)
+    this.gajiState.inSelection = true;
+    this.gajiState.isWildCard = true; // Still wild while being used
 
     // Get valid targets (cards that Gaji can capture)
     const validTargets = this.field.filter(card =>
-      this.canGajiCapture(card, 'player')
+      this.canGajiCapture(card, 0)
     );
 
     debugLogger.log('sakura', `⚡ Gaji valid targets:`, {
@@ -1231,6 +1294,7 @@ export class Sakura {
       this.field.push(gajiCard);
       this.gajiState.location = 'field';
       this.gajiState.isWildCard = false;
+      this.gajiState.inSelection = false;
       this.message = 'Gaji played but no valid targets. Card added to field.';
       this.proceedToDrawPhase();
       return;
@@ -1299,24 +1363,63 @@ export class Sakura {
 
   /**
    * Capture a card with Gaji
+   * @param {Object} gajiCard - The Gaji card
+   * @param {Object} targetCard - The field card to capture with Gaji
+   * @param {number} playerIndex - Index of the player capturing (default 0 for backward compat)
    */
-  captureWithGaji(gajiCard, targetCard) {
+  captureWithGaji(gajiCard, targetCard, playerIndex = 0) {
     debugLogger.log('sakura', `⚡ captureWithGaji called`, {
       gajiId: gajiCard.id,
       targetId: targetCard.id,
       targetName: targetCard.name,
-      targetMonth: targetCard.month
+      targetMonth: targetCard.month,
+      playerIndex: playerIndex
     });
 
-    this.playerCaptured.push(gajiCard, targetCard);
+    // Capture with current player's cards
+    const player = this.players[playerIndex];
+    player.captured.push(gajiCard, targetCard);
     this.field = this.field.filter(c => c.id !== targetCard.id);
 
-    // Mark the pairing for end-of-round bonus
-    this.gajiState.location = 'player_captured';
-    this.gajiState.pairedWithMonth = targetCard.month;
-    this.gajiState.isWildCard = false;
+    debugLogger.log('sakura', `✅ Gaji capture successful`, {
+      playerIndex: playerIndex,
+      playerName: playerIndex === 0 ? 'Player' : `Player ${playerIndex + 1}`,
+      gajiCard: gajiCard.name,
+      capturedCard: targetCard.name,
+      capturedMonth: targetCard.month,
+      totalCaptured: player.captured.length,
+      remainingField: this.field.length
+    });
 
-    debugLogger.log('sakura', `⚡ Gaji paired with ${targetCard.month} for end-of-round bonus`);
+    // Record which player used Gaji and what month they captured
+    // CRITICAL: Only pair if target is NOT November (Gaji's own month)
+    // If Gaji captures November: Gaji IS the capture, no bonus at end
+    // If Gaji captures other month: Get all remaining cards of that month
+    const targetIsNovember = targetCard.month === 'November';
+
+    this.gajiState.location = `player_${playerIndex}_captured`;
+    this.gajiState.usedByPlayerIndex = playerIndex;
+    this.gajiState.usedWithMonth = targetIsNovember ? null : targetCard.month; // null = no bonus
+    this.gajiState.isWildCard = false;
+    this.gajiState.inSelection = false;
+
+    if (targetIsNovember) {
+      debugLogger.log('sakura', `⚠️ Gaji paired with November - NO end-of-round bonus`, {
+        playerIndex: playerIndex,
+        playerName: playerIndex === 0 ? 'Player' : `Player ${playerIndex + 1}`,
+        capturedCard: targetCard.name,
+        reason: 'Capturing November with Gaji: Gaji IS the capture, no bonus cards at end'
+      });
+    } else {
+      debugLogger.log('sakura', `✅ Gaji used by Player ${playerIndex} to capture ${targetCard.month}`, {
+        playerIndex: playerIndex,
+        playerName: playerIndex === 0 ? 'Player' : `Player ${playerIndex + 1}`,
+        capturedMonth: targetCard.month,
+        capturedCard: targetCard.name,
+        willReceiveBonusAtRoundEnd: true,
+        bonusDescription: `All remaining ${targetCard.month} cards from field at round end`
+      });
+    }
 
     this.message = `Gaji captured ${targetCard.month}!`;
     this.selectedCards = [];
@@ -1358,21 +1461,41 @@ export class Sakura {
 
   /**
    * Apply Gaji end-of-round bonus
-   * Award remaining field cards of the paired month
+   * Player who used Gaji gets all remaining cards of the month they captured
    */
   applyGajiEndOfRoundBonus() {
-    // Check player's Gaji
-    if (this.gajiState.location === 'player_captured' &&
-        this.gajiState.pairedWithMonth) {
-      const bonusCards = this.field.filter(c =>
-        c.month === this.gajiState.pairedWithMonth
-      );
-      this.playerCaptured.push(...bonusCards);
-      this.field = this.field.filter(c => c.month !== this.gajiState.pairedWithMonth);
+    debugLogger.log('sakura', `⚡ Checking Gaji bonus`, {
+      usedByPlayerIndex: this.gajiState.usedByPlayerIndex,
+      usedWithMonth: this.gajiState.usedWithMonth,
+      fieldCards: this.field.map(c => c.name),
+      fieldCardCount: this.field.length
+    });
+
+    // Only award if Gaji was used
+    if (this.gajiState.usedByPlayerIndex === null || this.gajiState.usedWithMonth === null) {
+      debugLogger.log('sakura', `⚡ No Gaji bonus - Gaji was not used this round`);
+      return;
     }
 
-    // Check opponent's Gaji (if we track opponent Gaji separately)
-    // For simplicity, we assume only one Gaji per game
+    const playerIndex = this.gajiState.usedByPlayerIndex;
+    const bonusMonth = this.gajiState.usedWithMonth;
+    const bonusCards = this.field.filter(c => c.month === bonusMonth);
+
+    if (bonusCards.length > 0) {
+      const bonusPoints = bonusCards.reduce((sum, c) => sum + this.getCardValue(c), 0);
+      debugLogger.log('sakura', `✅ Gaji bonus awarded: Player ${playerIndex} snatches ${bonusCards.length} remaining ${bonusMonth} cards`, {
+        playerIndex: playerIndex,
+        playerName: playerIndex === 0 ? 'Player' : `Player ${playerIndex + 1}`,
+        bonusMonth: bonusMonth,
+        bonusCards: bonusCards.map(c => c.name),
+        totalBonusPoints: bonusPoints
+      });
+
+      this.players[playerIndex].captured.push(...bonusCards);
+      this.field = this.field.filter(c => c.month !== bonusMonth);
+    } else {
+      debugLogger.log('sakura', `⚡ Gaji bonus: No remaining ${bonusMonth} cards on field`);
+    }
   }
 
   // ============================================================
@@ -1428,11 +1551,29 @@ export class Sakura {
           } else {
             // Valid targets exist - capture with Gaji
             const bestTarget = this.selectBestGajiTarget(validTargets, this.currentPlayerIndex);
+            const targetIsNovember = bestTarget.month === 'November';
+
             currentPlayer.captured.push(chosenCard, bestTarget);
             this.field = this.field.filter(c => c.id !== bestTarget.id);
+
+            // Record Gaji usage (same logic as player hand Gaji and drawn Gaji)
             this.gajiState.location = `player_${this.currentPlayerIndex}_captured`;
-            this.gajiState.pairedWithMonth = bestTarget.month;
+            this.gajiState.usedByPlayerIndex = this.currentPlayerIndex;
+            this.gajiState.usedWithMonth = targetIsNovember ? null : bestTarget.month; // null = no bonus
             this.gajiState.isWildCard = false;
+
+            if (targetIsNovember) {
+              debugLogger.log('sakura', `⚠️ Player ${this.currentPlayerIndex + 1} hand Gaji paired with November - NO bonus`, {
+                playerIndex: this.currentPlayerIndex,
+                reason: 'Capturing November with Gaji: no bonus cards at end'
+              });
+            } else {
+              debugLogger.log('sakura', `✅ Player ${this.currentPlayerIndex + 1} hand Gaji used to capture ${bestTarget.month}`, {
+                playerIndex: this.currentPlayerIndex,
+                capturedMonth: bestTarget.month,
+                willReceiveBonus: true
+              });
+            }
             this.message = `Player ${this.currentPlayerIndex + 1} used Gaji to capture ${bestTarget.month}!`;
 
             // Keep card displayed while capture animation plays
@@ -1818,14 +1959,31 @@ export class Sakura {
     }
 
     const bestTarget = this.selectBestGajiTarget(validTargets, this.currentPlayerIndex);
+    const targetIsNovember = bestTarget.month === 'November';
+
     currentPlayer.captured.push(gajiCard, bestTarget);
     this.field = this.field.filter(c => c.id !== bestTarget.id);
 
+    // Record Gaji usage (same logic as human player)
     this.gajiState.location = `player_${this.currentPlayerIndex}_captured`;
-    this.gajiState.pairedWithMonth = bestTarget.month;
+    this.gajiState.usedByPlayerIndex = this.currentPlayerIndex;
+    this.gajiState.usedWithMonth = targetIsNovember ? null : bestTarget.month; // null = no bonus
     this.gajiState.isWildCard = false;
 
-    this.message = `Player ${this.currentPlayerIndex + 1} used Gaji to capture ${bestTarget.month}!`;
+    if (targetIsNovember) {
+      debugLogger.log('sakura', `⚠️ Player ${this.currentPlayerIndex + 1} Gaji paired with November - NO bonus`, {
+        playerIndex: this.currentPlayerIndex,
+        reason: 'Capturing November with Gaji: no bonus cards at end'
+      });
+      this.message = `Player ${this.currentPlayerIndex + 1} used Gaji to capture ${bestTarget.month}!`;
+    } else {
+      debugLogger.log('sakura', `✅ Player ${this.currentPlayerIndex + 1} Gaji used to capture ${bestTarget.month}`, {
+        playerIndex: this.currentPlayerIndex,
+        capturedMonth: bestTarget.month,
+        willReceiveBonus: true
+      });
+      this.message = `Player ${this.currentPlayerIndex + 1} used Gaji to capture ${bestTarget.month}!`;
+    }
 
     // Wait for animations to complete before draw phase
     if (this.card3DManager) {
@@ -1853,14 +2011,31 @@ export class Sakura {
     }
 
     const bestTarget = this.selectBestGajiTarget(validTargets, this.currentPlayerIndex);
+    const targetIsNovember = bestTarget.month === 'November';
+
     currentPlayer.captured.push(gajiCard, bestTarget);
     this.field = this.field.filter(c => c.id !== bestTarget.id);
 
+    // Record Gaji usage (same logic as human player)
     this.gajiState.location = `player_${this.currentPlayerIndex}_captured`;
-    this.gajiState.pairedWithMonth = bestTarget.month;
+    this.gajiState.usedByPlayerIndex = this.currentPlayerIndex;
+    this.gajiState.usedWithMonth = targetIsNovember ? null : bestTarget.month; // null = no bonus
     this.gajiState.isWildCard = false;
 
-    this.message = `Player ${this.currentPlayerIndex + 1} drew Gaji and captured ${bestTarget.month}!`;
+    if (targetIsNovember) {
+      debugLogger.log('sakura', `⚠️ Player ${this.currentPlayerIndex + 1} drew Gaji, captured November - NO bonus`, {
+        playerIndex: this.currentPlayerIndex,
+        reason: 'Capturing November with Gaji: no bonus cards at end'
+      });
+      this.message = `Player ${this.currentPlayerIndex + 1} drew Gaji and captured ${bestTarget.month}!`;
+    } else {
+      debugLogger.log('sakura', `✅ Player ${this.currentPlayerIndex + 1} drew Gaji, capturing ${bestTarget.month}`, {
+        playerIndex: this.currentPlayerIndex,
+        capturedMonth: bestTarget.month,
+        willReceiveBonus: true
+      });
+      this.message = `Player ${this.currentPlayerIndex + 1} drew Gaji and captured ${bestTarget.month}!`;
+    }
   }
 
   // ============================================================

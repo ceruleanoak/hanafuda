@@ -381,27 +381,28 @@ export class Card3DManager {
   }
 
   /**
-   * Get next available grid slot for field (prioritizes top-left)
-   * Slot 0 is reserved for deck (and position 0 of each row)
-   * Field cards use slots 1-8 (row 1), then 10-17 (row 2), then 19-26 (row 3), etc.
+   * Get next available slot for field (8-slot array with deck reserved at 0)
+   * Slot 0 is reserved for deck
+   * Field cards use slots 1-8 (8 fixed positions on first row)
+   * Returns the first empty slot, or extends beyond 9 if needed (fallback)
    */
   getNextAvailableFieldSlot() {
     const fieldCards = Array.from(this.zoneCards.field);
     const occupiedSlots = new Set(fieldCards.map(card => card.gridSlot).filter(slot => slot !== undefined));
-    const maxPerRow = 9; // Grid has 9 columns (0-8), with 0 reserved
 
-    // Find first unoccupied slot, skipping position 0 of each row
-    let slot = 1; // Start from slot 1 (position 0 is reserved)
-    while (true) {
-      // Skip position 0 of each row (slots 0, 9, 18, 27, etc.)
-      if (slot % maxPerRow === 0) {
-        slot++; // Skip to position 1 of next row
-      }
+    // Try slots 1-8 first (standard field size, slot 0 reserved for deck)
+    for (let slot = 1; slot <= 8; slot++) {
       if (!occupiedSlots.has(slot)) {
         return slot;
       }
+    }
+
+    // Fallback: if all 8 slots are occupied, find next available beyond 8
+    let slot = 9;
+    while (occupiedSlots.has(slot)) {
       slot++;
     }
+    return slot;
   }
 
   /**
@@ -514,9 +515,15 @@ export class Card3DManager {
       card3D.homePosition = { x: pos.x, y: pos.y, z: pos.z };
       card3D.homeIndex = pos.index;
 
-      // Update render layer
+      // Update render layer (but preserve animation layer 10 if card is display animating)
       if (config.renderLayer !== undefined) {
-        card3D.renderLayer = config.renderLayer;
+        if (card3D.isDisplayAnimating) {
+          // Card is display animating - keep it at layer 10, but save zone's layer for later
+          card3D.homeRenderLayer = config.renderLayer;
+        } else {
+          // Normal zone layer assignment
+          card3D.renderLayer = config.renderLayer;
+        }
       }
 
       // Update face state
@@ -537,10 +544,18 @@ export class Card3DManager {
         if (card3D.animationMode === 'idle') {
           // Use tween for smooth, deterministic animation
           const duration = this.getAnimationDuration(card3D, pos);
+          // Apply display animation (with Z lift) only when card moves FROM hand zones
+          // Hand cards should never be elevated - only cards being drawn/displayed get lift
+          const isFromHandZone = card3D.previousZone && card3D.previousZone.includes('Hand');
+          const isDisplayAnimation = card3D.previousZone !== null && !isFromHandZone;
           card3D.tweenTo(
             { x: pos.x, y: pos.y, z: pos.z },
             duration,
-            'easeInOutCubic'
+            'easeInOutCubic',
+            null, // controlPoint
+            0.5, // flipTiming
+            null, // peakScale
+            isDisplayAnimation
           );
         }
         // If card is already animating (tween or spring), let it continue

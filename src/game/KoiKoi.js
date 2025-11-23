@@ -164,18 +164,57 @@ export class KoiKoi {
   }
 
   /**
+   * Check if field has 4 cards of the same month (invalid deal)
+   * @returns {boolean} true if field is invalid
+   */
+  isInvalidField() {
+    const monthCounts = {};
+    for (const card of this.field) {
+      monthCounts[card.month] = (monthCounts[card.month] || 0) + 1;
+      if (monthCounts[card.month] === 4) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Initial deal - 8 cards to field, 8 to each player (10 each if bomb variation)
    */
   deal() {
     // Determine hand size based on bomb variation
     const handSize = (this.gameOptions && this.gameOptions.get('bombVariationEnabled')) ? 10 : 8;
 
-    // Deal cards to each player first (8 or 10 depending on variation)
-    this.playerHand = this.deck.drawMultiple(handSize);
-    this.opponentHand = this.deck.drawMultiple(handSize);
+    // Keep dealing until we get a valid field
+    let validDeal = false;
+    let dealAttempts = 0;
+    const maxAttempts = 100;
 
-    // Deal 8 cards to field LAST (traditional Hanafuda order)
-    this.field = this.deck.drawMultiple(8);
+    while (!validDeal && dealAttempts < maxAttempts) {
+      dealAttempts++;
+
+      // Reset deck and hands for re-deal
+      if (dealAttempts > 1) {
+        this.deck = new Deck();
+        this.playerHand = [];
+        this.opponentHand = [];
+      }
+
+      // Deal cards to each player first (8 or 10 depending on variation)
+      this.playerHand = this.deck.drawMultiple(handSize);
+      this.opponentHand = this.deck.drawMultiple(handSize);
+
+      // Deal 8 cards to field LAST (traditional Hanafuda order)
+      this.field = this.deck.drawMultiple(8);
+
+      // Check if field is valid
+      if (this.isInvalidField()) {
+        // Invalid field, loop will retry
+        continue;
+      } else {
+        validDeal = true;
+      }
+    }
 
     // Check for Four of a Kind lucky hand (instant win with 6 points)
     const fourOfAKind = this.checkFourOfAKindInStartingHand();
