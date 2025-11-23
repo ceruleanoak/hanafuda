@@ -9,6 +9,8 @@ export class DebugLogger {
       animation: true,
       message: true,
       gameState: true,
+      hachihachi: true,
+      '3dCards': true,
       render: false, // Disabled by default as it's very verbose
       error: true
     };
@@ -47,6 +49,8 @@ export class DebugLogger {
       animation: '#ffeb3b',
       message: '#4ecdc4',
       gameState: '#9b59b6',
+      hachihachi: '#ff9800',
+      '3dCards': '#00bcd4',
       render: '#95a5a6',
       error: '#ff6b6b'
     };
