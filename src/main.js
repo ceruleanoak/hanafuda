@@ -1031,7 +1031,7 @@ class Game {
 
       // Only allow interactions during playing phases
       if (gameState.phase !== 'select_hand' && gameState.phase !== 'select_field' &&
-          gameState.phase !== 'choose_match' && gameState.phase !== 'choose_drawn_match') {
+          gameState.phase !== 'select_drawn_match') {
         return;
       }
 
