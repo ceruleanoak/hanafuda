@@ -193,7 +193,6 @@ export class HachiHachiModals {
       explainDiv.innerHTML = `
         <div><strong>Sage:</strong> Continue playing - try to get more dekiyaku (risky!)</div>
         <div><strong>Shoubu:</strong> End round - collect these points and win!</div>
-        <div><strong>Cancel:</strong> Reduce points to par value (88) - safer option</div>
       `;
       modal.appendChild(explainDiv);
 
@@ -201,7 +200,7 @@ export class HachiHachiModals {
       const buttonDiv = document.createElement('div');
       buttonDiv.style.cssText = `
         display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
+        grid-template-columns: 1fr 1fr;
         gap: 12px;
         grid-column: 1;
       `;
@@ -242,7 +241,6 @@ export class HachiHachiModals {
       };
 
       buttonDiv.appendChild(createButton('SAGE', '#ff6b6b', params.onSage));     // Red - risky
-      buttonDiv.appendChild(createButton('CANCEL', '#ffd93d', params.onCancel));  // Yellow - safe
       buttonDiv.appendChild(createButton('SHOUBU', '#6bcf7f', params.onShoubu));  // Green - end
 
       modal.appendChild(buttonDiv);
@@ -494,20 +492,20 @@ export class HachiHachiModals {
 
           // Base card points calculation
           html += `<div style="margin-left: 5px; color: #ccc; font-size: 9px; margin-top: 3px;">`;
-          html += `${rawPoints}pts → (${rawPoints}-${parValue})×${fieldMultiplier} = ${cardScore}k`;
+          html += `${rawPoints}pts → (${rawPoints}-${parValue})×${fieldMultiplier} = ${cardScore} kan`;
           html += `</div>`;
 
           // Show dekiyaku as zero-sum component (separate line)
           if (dekiyakuTotal !== 0) {
             const dekiyakuColor = dekiyakuTotal > 0 ? '#87ceeb' : '#ff6b6b';
             html += `<div style="margin-left: 5px; color: ${dekiyakuColor}; font-size: 9px; margin-top: 2px;">`;
-            html += `Dekiyaku (zero-sum): ${dekiyakuTotal >= 0 ? '+' : ''}${dekiyakuTotal}k`;
+            html += `Dekiyaku: ${dekiyakuTotal} kan from 2 opponents = ${dekiyakuTotal} kan × 2 = ${dekiyakuTotal * 2} kan`;
             html += `</div>`;
           }
 
           // Final round total (NOTE: Teyaku already paid at round start)
           html += `<div style="margin-left: 5px; color: #90ee90; font-weight: bold; font-size: 10px; margin-top: 3px;">`;
-          html += `Round Total: ${roundTotal}k`;
+          html += `Round Total: ${roundTotal} kan`;
           html += `</div>`;
 
           playerCardDiv.innerHTML = html;

@@ -200,6 +200,15 @@ export class LayoutManager {
       playerCount = 2;
     }
 
+    // Convert legacy zone names to indexed names
+    const legacyMap = {
+      'playerHand': 'player0Hand',
+      'opponentHand': 'player1Hand',
+      'playerTrick': 'player0Trick',
+      'opponentTrick': 'player1Trick'
+    };
+    zoneName = legacyMap[zoneName] || zoneName;
+
     const centerX = viewportWidth / 2;
     const centerY = viewportHeight / 2;
     const margin = 30;
@@ -280,6 +289,7 @@ export class LayoutManager {
           player0Teyaku: {
             type: 'row',
             anchorPoint: { x: 50, y: viewportHeight - 240 + HEADER_OFFSET },
+            centerX: centerX,
             spacing: 60,
             maxCards: 4,
             faceUp: 1,
@@ -288,6 +298,7 @@ export class LayoutManager {
           player1Teyaku: {
             type: 'row',
             anchorPoint: { x: 50, y: 110 + HEADER_OFFSET },
+            centerX: centerX,
             spacing: 60,
             maxCards: 4,
             faceUp: 1,

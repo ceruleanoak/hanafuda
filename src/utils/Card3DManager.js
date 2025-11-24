@@ -161,16 +161,10 @@ export class Card3DManager {
       field: this.zoneCards.field?.size || 0
     };
 
-    if (this.playerCount === 2) {
-      debugInfo.playerHand = this.zoneCards.playerHand?.size || 0;
-      debugInfo.opponentHand = this.zoneCards.opponentHand?.size || 0;
-      debugInfo.playerTrick = this.zoneCards.playerTrick?.size || 0;
-      debugInfo.opponentTrick = this.zoneCards.opponentTrick?.size || 0;
-    } else {
-      for (let i = 0; i < this.playerCount; i++) {
-        debugInfo[`player${i}Hand`] = this.zoneCards[`player${i}Hand`]?.size || 0;
-        debugInfo[`player${i}Trick`] = this.zoneCards[`player${i}Trick`]?.size || 0;
-      }
+    // Use indexed naming for all player counts
+    for (let i = 0; i < this.playerCount; i++) {
+      debugInfo[`player${i}Hand`] = this.zoneCards[`player${i}Hand`]?.size || 0;
+      debugInfo[`player${i}Trick`] = this.zoneCards[`player${i}Trick`]?.size || 0;
     }
 
     debugLogger.log('3dCards', `✅ Initialized ${totalCards} Card3D objects`, debugInfo);
@@ -345,6 +339,15 @@ export class Card3DManager {
   moveCardToZone(card3D, newZone) {
     const oldZone = card3D.homeZone;
 
+    // Convert legacy zone names to indexed names
+    const legacyMap = {
+      'playerHand': 'player0Hand',
+      'opponentHand': 'player1Hand',
+      'playerTrick': 'player0Trick',
+      'opponentTrick': 'player1Trick'
+    };
+    newZone = legacyMap[newZone] || newZone;
+
     // Validate new zone exists
     if (!this.zoneCards[newZone]) {
       console.error(`Invalid zone: ${newZone}. Available zones: ${Object.keys(this.zoneCards).join(', ')}`);
@@ -409,6 +412,15 @@ export class Card3DManager {
    * Assign card to zone without animation (for initialization)
    */
   assignToZone(card3D, zone, animate = true) {
+    // Convert legacy zone names to indexed names
+    const legacyMap = {
+      'playerHand': 'player0Hand',
+      'opponentHand': 'player1Hand',
+      'playerTrick': 'player0Trick',
+      'opponentTrick': 'player1Trick'
+    };
+    zone = legacyMap[zone] || zone;
+
     card3D.homeZone = zone;
     this.zoneCards[zone].add(card3D);
     this.dirtyZones.add(zone);

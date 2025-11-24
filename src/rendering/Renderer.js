@@ -15,6 +15,8 @@ export class Renderer {
     this.backgroundImage = null;
     this.backgroundColor = '#000';
     this.onResizeCallback = null;
+    this.overlayCtx = null; // For drawing hover previews above modals
+    this.cancelSageButtonBounds = null; // Bounds of Cancel Sage button for click detection
 
     this.setupCanvas();
   }
@@ -25,6 +27,14 @@ export class Renderer {
    */
   setOnResizeCallback(callback) {
     this.onResizeCallback = callback;
+  }
+
+  /**
+   * Set overlay canvas context for drawing hover previews above modals
+   * @param {CanvasRenderingContext2D} ctx - 2D context of overlay canvas
+   */
+  setOverlayContext(ctx) {
+    this.overlayCtx = ctx;
   }
 
   setupCanvas() {
@@ -138,9 +148,15 @@ export class Renderer {
    * @param {Object} options - Render options
    */
   render3D(gameState, card3DManager, options = {}) {
-    const { helpMode = false, hoverX = -1, hoverY = -1, isModalVisible = false, isGameOver = false } = options;
+    const { helpMode = false, hoverX = -1, hoverY = -1, isModalVisible = false, isGameOver = false, isRoundSummaryVisible = false } = options;
 
     this.clear();
+
+    // Clear overlay canvas for hover previews
+    if (this.overlayCtx) {
+      this.overlayCtx.clearRect(0, 0, this.displayWidth, this.displayHeight);
+    }
+
     this.drawBackground();
 
     // Get all visible cards sorted by render order
@@ -310,8 +326,8 @@ export class Renderer {
       });
     }
 
-    // Hover interactions (only if no modal is visible and game is not over)
-    if (hoverX >= 0 && hoverY >= 0 && !isModalVisible && !isGameOver) {
+    // Hover interactions (show when no modal visible, or when overlay canvas available for decision modals)
+    if (hoverX >= 0 && hoverY >= 0 && (!isModalVisible || this.overlayCtx) && !isGameOver) {
       const hoveredCard = card3DManager.getCardAtPosition(hoverX, hoverY);
       const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
 
@@ -331,32 +347,52 @@ export class Renderer {
 
       // Trick pile hover - use zone-based detection instead of card-based (N-player support)
       // This allows hover to work even when no cards are visible or between cards
+
+      /**
+       * Calculate the rendered position of the topmost card in a fan layout
+       * The topmost card is the last visible card, offset by fanOffset for each visible card
+       */
+      const getTopCardPosition = (config, cardCount) => {
+        const { position, fanOffset = { x: 8, y: 8 }, maxVisible = 5 } = config;
+        const visibleCount = Math.min(cardCount, maxVisible);
+        const topVisibleIndex = visibleCount - 1; // Index of topmost visible card (0-based)
+
+        return {
+          x: position.x + (topVisibleIndex * fanOffset.x),
+          y: position.y + (topVisibleIndex * fanOffset.y)
+        };
+      };
+
       if (playerCount === 2) {
         // 2-player trick pile hover
-        // Check if mouse is in player trick pile zone
-        const playerTrickZone = {
-          x: playerTrickConfig.position.x,
-          y: playerTrickConfig.position.y,
-          width: cardWidth + (4 * playerTrickConfig.fanOffset.x), // Account for fan spread
-          height: cardHeight + (4 * playerTrickConfig.fanOffset.y)
-        };
-        if (hoverX >= playerTrickZone.x && hoverX <= playerTrickZone.x + playerTrickZone.width &&
-            hoverY >= playerTrickZone.y && hoverY <= playerTrickZone.y + playerTrickZone.height &&
-            gameState.playerCaptured.length > 0) {
-          this.drawTricksList(gameState.playerCaptured, 'You', pointValueOptions);
+        // Check if mouse is in player trick pile zone (match topmost card dimensions exactly)
+        if (gameState.playerCaptured.length > 0) {
+          const playerTopCardPos = getTopCardPosition(playerTrickConfig, gameState.playerCaptured.length);
+          const playerTrickZone = {
+            x: playerTopCardPos.x,
+            y: playerTopCardPos.y,
+            width: cardWidth,
+            height: cardHeight
+          };
+          if (hoverX >= playerTrickZone.x && hoverX <= playerTrickZone.x + playerTrickZone.width &&
+              hoverY >= playerTrickZone.y && hoverY <= playerTrickZone.y + playerTrickZone.height) {
+            this.drawTricksList(gameState.playerCaptured, 'You', pointValueOptions);
+          }
         }
 
-        // Check if mouse is in opponent trick pile zone
-        const opponentTrickZone = {
-          x: opponentTrickConfig.position.x,
-          y: opponentTrickConfig.position.y,
-          width: cardWidth + (4 * opponentTrickConfig.fanOffset.x),
-          height: cardHeight + (4 * opponentTrickConfig.fanOffset.y)
-        };
-        if (hoverX >= opponentTrickZone.x && hoverX <= opponentTrickZone.x + opponentTrickZone.width &&
-            hoverY >= opponentTrickZone.y && hoverY <= opponentTrickZone.y + opponentTrickZone.height &&
-            gameState.opponentCaptured.length > 0) {
-          this.drawTricksList(gameState.opponentCaptured, 'Opponent', pointValueOptions);
+        // Check if mouse is in opponent trick pile zone (match topmost card dimensions exactly)
+        if (gameState.opponentCaptured.length > 0) {
+          const opponentTopCardPos = getTopCardPosition(opponentTrickConfig, gameState.opponentCaptured.length);
+          const opponentTrickZone = {
+            x: opponentTopCardPos.x,
+            y: opponentTopCardPos.y,
+            width: cardWidth,
+            height: cardHeight
+          };
+          if (hoverX >= opponentTrickZone.x && hoverX <= opponentTrickZone.x + opponentTrickZone.width &&
+              hoverY >= opponentTrickZone.y && hoverY <= opponentTrickZone.y + opponentTrickZone.height) {
+            this.drawTricksList(gameState.opponentCaptured, 'Opponent', pointValueOptions);
+          }
         }
       } else if (gameState.players) {
         // N-player trick pile hover (3-4 players)
@@ -365,12 +401,14 @@ export class Renderer {
           const trickConfig = LayoutManager.getZoneConfig(trickZone, this.displayWidth, this.displayHeight, playerCount);
           const trickCards = card3DManager.getCardsInZone(trickZone);
 
-          if (trickCards.length > 0) {
+          if (trickCards.length > 0 && gameState.players[i].captured && gameState.players[i].captured.length > 0) {
+            // Match topmost card position and dimensions exactly
+            const topCardPos = getTopCardPosition(trickConfig, gameState.players[i].captured.length);
             const trickZoneRect = {
-              x: trickConfig.position.x,
-              y: trickConfig.position.y,
-              width: cardWidth + (4 * trickConfig.fanOffset.x),
-              height: cardHeight + (4 * trickConfig.fanOffset.y)
+              x: topCardPos.x,
+              y: topCardPos.y,
+              width: cardWidth,
+              height: cardHeight
             };
 
             if (hoverX >= trickZoneRect.x && hoverX <= trickZoneRect.x + trickZoneRect.width &&
@@ -382,6 +420,14 @@ export class Renderer {
         }
       }
     }
+
+    // Draw trick pile hover indicators on overlay canvas (but not when round summary is visible)
+    if (!isRoundSummaryVisible) {
+      this.drawTrickPileIndicators(gameState, card3DManager, playerCount);
+    }
+
+    // Draw Cancel Sage button for Hachi-Hachi mode (store bounds for click detection)
+    this.cancelSageButtonBounds = this.drawCancelSageButton(gameState);
   }
 
   /**
@@ -1003,6 +1049,9 @@ export class Renderer {
    * @param {Object} pointValueOptions - Optional { enabled: boolean, getValue: (card) => number }
    */
   drawTricksList(capturedCards, title, pointValueOptions = null) {
+    // Use overlay context if available (when modal is active), otherwise use main context
+    const ctx = this.overlayCtx || this.ctx;
+
     const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
     const padding = 20;
     const cardSpacing = 10;
@@ -1015,22 +1064,22 @@ export class Renderer {
     const x = (this.displayWidth - overlayWidth) / 2;
     const y = (this.displayHeight - overlayHeight) / 2;
 
-    this.ctx.save();
+    ctx.save();
 
     // Draw semi-transparent background
-    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.95)';
-    this.ctx.fillRect(x, y, overlayWidth, overlayHeight);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.95)';
+    ctx.fillRect(x, y, overlayWidth, overlayHeight);
 
     // Draw border
-    this.ctx.strokeStyle = '#4ecdc4';
-    this.ctx.lineWidth = 3;
-    this.ctx.strokeRect(x, y, overlayWidth, overlayHeight);
+    ctx.strokeStyle = '#4ecdc4';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x, y, overlayWidth, overlayHeight);
 
     // Draw title
-    this.ctx.fillStyle = '#4ecdc4';
-    this.ctx.font = 'bold 18px monospace';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText(title, x + overlayWidth / 2, y + 30);
+    ctx.fillStyle = '#4ecdc4';
+    ctx.font = 'bold 18px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(title, x + overlayWidth / 2, y + 30);
 
     // Draw cards in grid
     capturedCards.forEach((card, index) => {
@@ -1039,10 +1088,10 @@ export class Renderer {
       const cardX = x + padding + col * (cardWidth + cardSpacing);
       const cardY = y + padding + 40 + row * (cardHeight + cardSpacing);
 
-      this.cardRenderer.drawCard(this.ctx, card, cardX, cardY, false, false, 1.0, pointValueOptions);
+      this.cardRenderer.drawCard(ctx, card, cardX, cardY, false, false, 1.0, pointValueOptions);
     });
 
-    this.ctx.restore();
+    ctx.restore();
   }
 
   /**
@@ -1113,6 +1162,9 @@ export class Renderer {
    * Draw all cards grid overlay when hovering over deck
    */
   drawAllCardsGrid(gameState) {
+    // Use overlay context if available (when modal is active), otherwise use main context
+    const ctx = this.overlayCtx || this.ctx;
+
     const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
     const padding = 20;
     const cardSpacing = 8;
@@ -1125,22 +1177,22 @@ export class Renderer {
     const x = (this.displayWidth - overlayWidth) / 2;
     const y = (this.displayHeight - overlayHeight) / 2;
 
-    this.ctx.save();
+    ctx.save();
 
     // Draw semi-transparent background
-    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.95)';
-    this.ctx.fillRect(x, y, overlayWidth, overlayHeight);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.95)';
+    ctx.fillRect(x, y, overlayWidth, overlayHeight);
 
     // Draw border
-    this.ctx.strokeStyle = '#ffeb3b';
-    this.ctx.lineWidth = 3;
-    this.ctx.strokeRect(x, y, overlayWidth, overlayHeight);
+    ctx.strokeStyle = '#ffeb3b';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x, y, overlayWidth, overlayHeight);
 
     // Draw title
-    this.ctx.fillStyle = '#ffeb3b';
-    this.ctx.font = 'bold 18px monospace';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText('All Cards (grayed = captured)', x + overlayWidth / 2, y + 30);
+    ctx.fillStyle = '#ffeb3b';
+    ctx.font = 'bold 18px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('All Cards (grayed = captured)', x + overlayWidth / 2, y + 30);
 
     // Create sets for different card states
     const capturedCardIds = new Set();
@@ -1185,17 +1237,105 @@ export class Renderer {
         highlight = true; // Highlight these
       }
 
-      this.cardRenderer.drawCard(this.ctx, card, cardX, cardY, false, false, opacity);
+      this.cardRenderer.drawCard(ctx, card, cardX, cardY, false, false, opacity);
 
       // Draw highlight border for player's hand and field cards
       if (highlight) {
-        this.ctx.strokeStyle = isInPlayerHand ? '#4ecdc4' : '#ffeb3b';
-        this.ctx.lineWidth = 2;
-        this.ctx.strokeRect(cardX, cardY, cardWidth, cardHeight);
+        ctx.strokeStyle = isInPlayerHand ? '#4ecdc4' : '#ffeb3b';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(cardX, cardY, cardWidth, cardHeight);
       }
     });
 
-    this.ctx.restore();
+    ctx.restore();
+  }
+
+  /**
+   * Draw trick pile hover indicators on overlay canvas
+   * Shows the top card of each trick pile as a visual cue for where to hover
+   */
+  drawTrickPileIndicators(gameState, card3DManager, playerCount) {
+    if (!this.overlayCtx) return; // Only draw on overlay canvas - only render when modal transparency layer is active
+
+    const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
+
+    /**
+     * Calculate the rendered position of the topmost card in a fan layout
+     * The topmost card is the last visible card, offset by fanOffset for each visible card
+     */
+    const getTopCardPosition = (config, cardCount) => {
+      const { position, fanOffset = { x: 8, y: 8 }, maxVisible = 5 } = config;
+      const visibleCount = Math.min(cardCount, maxVisible);
+      const topVisibleIndex = visibleCount - 1; // Index of topmost visible card (0-based)
+
+      return {
+        x: position.x + (topVisibleIndex * fanOffset.x),
+        y: position.y + (topVisibleIndex * fanOffset.y)
+      };
+    };
+
+    if (playerCount === 2) {
+      // 2-player mode
+      const playerTrickConfig = LayoutManager.getZoneConfig('playerTrick', this.displayWidth, this.displayHeight, playerCount);
+      const opponentTrickConfig = LayoutManager.getZoneConfig('opponentTrick', this.displayWidth, this.displayHeight, playerCount);
+
+      // Draw player trick pile indicator (face-down card at exact top card position)
+      if (gameState.playerCaptured && gameState.playerCaptured.length > 0) {
+        const topCard = gameState.playerCaptured[gameState.playerCaptured.length - 1];
+        const topCardPos = getTopCardPosition(playerTrickConfig, gameState.playerCaptured.length);
+        this.overlayCtx.save();
+        this.cardRenderer.drawCard(
+          this.overlayCtx,
+          topCard,
+          topCardPos.x,
+          topCardPos.y,
+          true,  // isFaceDown - show card back
+          false,
+          1.0
+        );
+        this.overlayCtx.restore();
+      }
+
+      // Draw opponent trick pile indicator (face-down card at exact top card position)
+      if (gameState.opponentCaptured && gameState.opponentCaptured.length > 0) {
+        const topCard = gameState.opponentCaptured[gameState.opponentCaptured.length - 1];
+        const topCardPos = getTopCardPosition(opponentTrickConfig, gameState.opponentCaptured.length);
+        this.overlayCtx.save();
+        this.cardRenderer.drawCard(
+          this.overlayCtx,
+          topCard,
+          topCardPos.x,
+          topCardPos.y,
+          true,  // isFaceDown - show card back
+          false,
+          1.0
+        );
+        this.overlayCtx.restore();
+      }
+    } else if (gameState.players) {
+      // N-player mode (3-4 players)
+      for (let i = 0; i < playerCount; i++) {
+        const trickZone = `player${i}Trick`;
+        const trickConfig = LayoutManager.getZoneConfig(trickZone, this.displayWidth, this.displayHeight, playerCount);
+        const trickCards = card3DManager.getCardsInZone(trickZone);
+
+        if (trickCards.length > 0 && gameState.players[i].captured && gameState.players[i].captured.length > 0) {
+          const topCard = gameState.players[i].captured[gameState.players[i].captured.length - 1];
+          const topCardPos = getTopCardPosition(trickConfig, gameState.players[i].captured.length);
+          this.overlayCtx.save();
+          this.cardRenderer.drawCard(
+            this.overlayCtx,
+            topCard,
+            topCardPos.x,
+            topCardPos.y,
+            true,  // isFaceDown - show card back
+            false,
+            1.0
+          );
+          this.overlayCtx.restore();
+        }
+      }
+    }
   }
 
   /**
@@ -1284,5 +1424,53 @@ export class Renderer {
     sortedCards.forEach(card3D => {
       this.cardRenderer.drawCard3D(this.ctx, card3D, false, 1.0);
     });
+  }
+
+  /**
+   * Draw the Cancel Sage button on the game field
+   * @param {Object} gameState - Current game state
+   * @returns {Object|null} Button bounds for click detection, or null if not visible
+   */
+  drawCancelSageButton(gameState) {
+    // Only draw for Hachi-Hachi mode when player has sage active
+    if (gameState.gameType !== 'hachihachi' || !gameState.playerHasSageActive) {
+      return null;
+    }
+
+    const buttonWidth = 120;
+    const buttonHeight = 50;
+    const padding = 20;
+
+    // Position button in bottom-right area of game field
+    const buttonX = this.displayWidth - buttonWidth - padding;
+    const buttonY = this.displayHeight - buttonHeight - padding;
+
+    this.ctx.save();
+
+    // Draw button background
+    this.ctx.fillStyle = 'rgba(220, 80, 80, 0.8)';
+    this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+    // Draw button border
+    this.ctx.strokeStyle = 'rgba(255, 255, 255, 1)';
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+    // Draw button text
+    this.ctx.fillStyle = '#fff';
+    this.ctx.font = 'bold 14px sans-serif';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText('Cancel Sage', buttonX + buttonWidth / 2, buttonY + buttonHeight / 2);
+
+    this.ctx.restore();
+
+    // Return button bounds for click detection
+    return {
+      x: buttonX,
+      y: buttonY,
+      width: buttonWidth,
+      height: buttonHeight
+    };
   }
 }

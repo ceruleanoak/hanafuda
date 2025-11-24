@@ -24,6 +24,21 @@ import { GameStateValidator } from './utils/GameStateValidator.js';
 class Game {
   constructor() {
     this.canvas = document.getElementById('game-canvas');
+
+    // Create overlay canvas for hover previews that sits above modals
+    this.overlayCanvas = document.createElement('canvas');
+    this.overlayCanvas.id = 'hover-overlay-canvas';
+    this.overlayCanvas.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 1001;
+      display: block;
+      pointer-events: none;
+    `;
+    document.body.appendChild(this.overlayCanvas);
+    this.overlayCtx = this.overlayCanvas.getContext('2d');
+
     this.statusElement = document.getElementById('game-status');
     this.instructionsElement = document.getElementById('instructions');
     this.scoreDisplayElement = document.getElementById('score-display');
@@ -44,6 +59,9 @@ class Game {
     this.shopModal = document.getElementById('shop-modal');
     this.tutorialBubble = document.getElementById('tutorial-bubble');
     this.animationTesterPanel = document.getElementById('animation-tester-panel');
+
+    // Track if any decision modal is visible (for hover previews)
+    this.isDecisionModalVisible = false;
 
     // Initialize game options
     this.gameOptions = new GameOptions();
@@ -86,6 +104,8 @@ class Game {
     // Set the card back to the selected one
     const selectedCardBackId = getSelectedCardBack();
     this.renderer.cardRenderer.setCardBack(selectedCardBackId);
+    // Set overlay context for hover previews above modals
+    this.renderer.setOverlayContext(this.overlayCtx);
 
     // Initialize Card3D system
     this.card3DManager = new Card3DManager(
@@ -96,6 +116,17 @@ class Game {
     // Set up resize callback to update Card3D viewport dimensions
     this.renderer.setOnResizeCallback((width, height) => {
       this.card3DManager.setViewportDimensions(width, height);
+
+      // Resize the overlay canvas to fill the entire window viewport (not just game container)
+      // This ensures card previews can render even if they extend beyond the game area
+      const dpr = window.devicePixelRatio || 1;
+      const windowWidth = window.innerWidth;
+      const windowHeight = window.innerHeight;
+      this.overlayCanvas.width = windowWidth * dpr;
+      this.overlayCanvas.height = windowHeight * dpr;
+      this.overlayCanvas.style.width = windowWidth + 'px';
+      this.overlayCanvas.style.height = windowHeight + 'px';
+      this.overlayCtx.scale(dpr, dpr);
 
       // Also update animation tester if it's active
       if (this.animationTesterActive) {
@@ -502,8 +533,11 @@ class Game {
     // Hide bonus chance display from previous game when opening shop
     this.hideActiveWinCondition();
 
+    const shopContent = this.shopModal.querySelector('.shop-modal-content');
     this.shopUI.initialize();
-    this.shopUI.renderToModal(this.shopModal.querySelector('.shop-modal-content'));
+    this.shopUI.renderToModal(shopContent);
+    // Restore display when showing
+    shopContent.style.display = '';
     this.shopModal.classList.add('show');
   }
 
@@ -521,6 +555,12 @@ class Game {
   hideAllModals() {
     this.roundModal.classList.remove('show');
     this.shopModal.classList.remove('show');
+    // Clear shop modal content and explicitly hide to prevent artifact
+    const shopContent = this.shopModal.querySelector('.shop-modal-content');
+    if (shopContent) {
+      shopContent.innerHTML = '';
+      shopContent.style.display = 'none';
+    }
     this.optionsModal.classList.remove('show');
     this.matchOptionsModal.classList.remove('show');
     this.koikoiModal.classList.remove('show');
@@ -1029,6 +1069,17 @@ class Game {
     if (this.currentGameMode === 'hachihachi') {
       const gameState = this.game.getState();
       debugLogger.log('gameState', `🎲 Hachi-Hachi click in phase: ${gameState.phase}`, null);
+
+      // Check if Cancel Sage button was clicked
+      if (this.renderer.cancelSageButtonBounds) {
+        const bounds = this.renderer.cancelSageButtonBounds;
+        if (x >= bounds.x && x <= bounds.x + bounds.width &&
+            y >= bounds.y && y <= bounds.y + bounds.height) {
+          debugLogger.log('gameState', '⚠️ Cancel Sage button clicked', null);
+          this.game.cancelSage();
+          return;
+        }
+      }
 
       // Only allow interactions during playing phases
       if (gameState.phase !== 'select_hand' && gameState.phase !== 'select_field' &&
@@ -3440,8 +3491,9 @@ class Game {
             helpMode: this.helpButton.classList.contains('active'),
             hoverX: this.hoverX,
             hoverY: this.hoverY,
-            isModalVisible: this.koikoiModal.classList.contains('show'),
+            isModalVisible: this.koikoiModal.classList.contains('show') && !this.isDecisionModalVisible,
             isGameOver: state.gameOver || false,
+            isRoundSummaryVisible: this.roundSummaryModal.classList.contains('show'),
             card3DManager: this.card3DManager
           };
 
@@ -4356,16 +4408,21 @@ class Game {
   async showHachihachiDecision(decision, params) {
     if (decision === 'sage') {
       // Player needs to make Sage/Shoubu/Cancel decision
-      await HachiHachiModals.showSageDecision({
-        dekiyakuList: params.dekiyakuList,
-        playerScore: params.playerScore,
-        opponent1Score: params.opponent1Score,
-        opponent2Score: params.opponent2Score,
-        roundNumber: params.roundNumber,
-        onSage: () => this.game.callSage(params.playerKey),
-        onShoubu: () => this.game.callShoubu(params.playerKey),
-        onCancel: () => this.game.callCancel(params.playerKey)
-      });
+      this.isDecisionModalVisible = true;
+      try {
+        await HachiHachiModals.showSageDecision({
+          dekiyakuList: params.dekiyakuList,
+          playerScore: params.playerScore,
+          opponent1Score: params.opponent1Score,
+          opponent2Score: params.opponent2Score,
+          roundNumber: params.roundNumber,
+          onSage: () => this.game.callSage(params.playerKey),
+          onShoubu: () => this.game.callShoubu(params.playerKey),
+          onCancel: () => this.game.callCancel(params.playerKey)
+        });
+      } finally {
+        this.isDecisionModalVisible = false;
+      }
     }
   }
 

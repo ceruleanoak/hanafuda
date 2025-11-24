@@ -99,6 +99,45 @@ export class HachiHachi {
   }
 
   /**
+   * Make AI decision for opponent sage/shoubu choice
+   * Aggressive strategy: prefer sage to accumulate more dekiyaku
+   */
+  _makeOpponentDekiyakuDecision(playerIndex) {
+    const player = this.players[playerIndex];
+    const currentDekiyakuValue = player.dekiyaku.reduce((sum, d) => sum + d.value, 0);
+    const handRemaining = player.hand.length;
+    const deckRemaining = this.deck.count;
+
+    // If hand is empty, must choose Shoubu (can't continue playing)
+    if (handRemaining === 0) {
+      debugLogger.log('hachihachi', `⚔️ Opponent ${playerIndex} AI: SHOUBU (hand empty, cannot continue)`, {
+        dekiyakuValue: currentDekiyakuValue,
+        reason: 'No cards left in hand'
+      });
+      return 'shoubu';
+    }
+
+    // If deck is low (3 or fewer cards), play conservatively and go for Shoubu
+    if (deckRemaining <= 3) {
+      debugLogger.log('hachihachi', `⚔️ Opponent ${playerIndex} AI: SHOUBU (deck running low)`, {
+        dekiyakuValue: currentDekiyakuValue,
+        deckRemaining: deckRemaining,
+        reason: 'Low cards in deck, play safe'
+      });
+      return 'shoubu';
+    }
+
+    // Default: Sage (aggressive strategy - try to get more dekiyaku)
+    debugLogger.log('hachihachi', `⚔️ Opponent ${playerIndex} AI: SAGE (aggressive play)`, {
+      dekiyakuValue: currentDekiyakuValue,
+      handRemaining: handRemaining,
+      deckRemaining: deckRemaining,
+      reason: 'Sufficient cards remaining to continue'
+    });
+    return 'sage';
+  }
+
+  /**
    * Set callbacks for UI
    */
   setRoundSummaryCallback(callback) {
@@ -683,14 +722,23 @@ export class HachiHachi {
           this._triggerShoubuSageDecision();
           return true;
         } else if (this.currentPlayerIndex > 0) {
-          // Opponent - auto decide (for now, auto-sage to be aggressive)
-          debugLogger.log('hachihachi', `⚠️ Opponent ${this.currentPlayerIndex} captured dekiyaku from drawn match - auto-choosing SAGE`, {
+          // Opponent - make AI decision
+          debugLogger.log('hachihachi', `🎯 SHOUBU/SAGE DECISION for Opponent ${this.currentPlayerIndex}!`, {
             newDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`),
             totalDekiyakuValue: newDekiyaku.reduce((sum, d) => sum + d.value, 0),
             handRemaining: this.players[this.currentPlayerIndex].hand.length,
             deckRemaining: this.deck.count
           });
-          setTimeout(() => this.nextPlayer(), 300);
+
+          // Opponent makes decision via AI
+          const opponentDecision = this._makeOpponentDekiyakuDecision(this.currentPlayerIndex);
+
+          if (opponentDecision === 'sage') {
+            this.callSage(this.currentPlayerIndex);
+          } else {
+            this.callShoubu(this.currentPlayerIndex);
+          }
+          return true;
         }
       } else {
         // No new dekiyaku - proceed to next player
@@ -819,14 +867,23 @@ export class HachiHachi {
         this._triggerShoubuSageDecision();
         return true;
       } else if (this.currentPlayerIndex > 0) {
-        // Opponent - auto decide (for now, auto-sage to be aggressive)
-        debugLogger.log('hachihachi', `⚠️ Opponent ${this.currentPlayerIndex} captured dekiyaku - auto-choosing SAGE`, {
+        // Opponent - make AI decision
+        debugLogger.log('hachihachi', `🎯 SHOUBU/SAGE DECISION for Opponent ${this.currentPlayerIndex}!`, {
           newDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`),
           totalDekiyakuValue: newDekiyaku.reduce((sum, d) => sum + d.value, 0),
           handRemaining: this.players[this.currentPlayerIndex].hand.length,
           deckRemaining: this.deck.count
         });
-        this.proceedToDrawPhase();
+
+        // Opponent makes decision via AI
+        const opponentDecision = this._makeOpponentDekiyakuDecision(this.currentPlayerIndex);
+
+        if (opponentDecision === 'sage') {
+          this.callSage(this.currentPlayerIndex);
+        } else {
+          this.callShoubu(this.currentPlayerIndex);
+        }
+        return true;
       }
     } else {
       // No new dekiyaku - continue normally
@@ -1256,6 +1313,14 @@ export class HachiHachi {
   }
 
   /**
+   * Cancel sage decision - player can call this to go back to par value
+   * Only applicable when player has called sage (playerHasSageActive === true)
+   */
+  cancelSage() {
+    this.callCancel(0); // Player is always index 0
+  }
+
+  /**
    * End round and calculate scores
    *
    * Scoring for Hachi-Hachi:
@@ -1335,95 +1400,81 @@ export class HachiHachi {
       });
     }
 
-    // Apply SAGE PENALTY: if player called sage but didn't improve, lose all points
+    // Check if anyone has dekiyaku
+    const playersWithDekiyaku = [];
     for (let i = 0; i < 3; i++) {
-      const player = this.players[i];
-
-      // Check if player called sage
-      if (this.sagePlayers.has(i)) {
-        const baselineValue = this.sageBaselineKakuyaku[i] || 0;
-        const finalDekiyakuValue = (player.dekiyaku || []).reduce((sum, d) => sum + d.value, 0);
-
-        debugLogger.log('hachihachi', `🎲 Sage Decision Outcome for Player ${i}:`, {
-          baselineValue: baselineValue,
-          finalValue: finalDekiyakuValue,
-          improved: finalDekiyakuValue > baselineValue,
-          penalty: finalDekiyakuValue <= baselineValue ? 'LOSE ALL POINTS' : 'none'
-        });
-
-        // If no improvement, lose all points (including card points)
-        if (finalDekiyakuValue <= baselineValue) {
-          debugLogger.log('hachihachi', `💥 Player ${i} called SAGE but didn't improve! Losing all points this round.`, {
-            baselineDecision: baselineValue,
-            finalValue: finalDekiyakuValue,
-            scoreBefore: player.roundScore,
-            scoreAfter: 0
-          });
-          player.roundScore = 0; // Lose everything - no card points, no dekiyaku
-          player.dekiyaku = []; // Clear dekiyaku
-        }
+      const dekiyakuValue = (this.players[i].dekiyaku || []).reduce((sum, d) => sum + d.value, 0);
+      if (dekiyakuValue > 0) {
+        playersWithDekiyaku.push(i);
       }
     }
 
-    // Apply dekiyaku settlement (true zero-sum: only players with dekiyaku gain points)
-    // Each player with dekiyaku collects that amount from each other player who doesn't have it
-    for (let i = 0; i < 3; i++) {
-      const player = this.players[i];
-      // Use finalized dekiyaku if available (set when Shoubu was chosen)
-      const dekiyakuToCount = (player.finalizedDekiyaku && player.finalizedDekiyaku.length > 0) ? player.finalizedDekiyaku : (player.dekiyaku && player.dekiyaku.length > 0 ? player.dekiyaku : []);
+    // Apply dekiyaku settlement based on how round ended
+    const dekiyakuSettlements = [0, 0, 0]; // Track settlement amounts for each player for display
 
-      // Calculate total dekiyaku value for this player
-      let dekiyakuValue = 0;
-      dekiyakuToCount.forEach(d => {
-        dekiyakuValue += d.value * this.fieldMultiplier;
-      });
+    // Determine how the round ended
+    let roundEndReason = '';
+    if (this.roundEndReason === 'shoubu') {
+      roundEndReason = 'Player called Shoubu';
+    } else if (this.roundEndReason === 'cancel') {
+      roundEndReason = 'Player called Cancel';
+    } else if (this.deck.count === 0) {
+      roundEndReason = 'Hands exhausted (all Sage)';
+    }
 
-      // If this player has dekiyaku, they collect from the other 2 players
-      if (dekiyakuValue > 0) {
-        // Collect from each other player (even if those players also have dekiyaku)
-        const dekiyakuSettlement = dekiyakuValue * 2; // Collect from 2 other players
-        player.roundScore += dekiyakuSettlement;
+    debugLogger.log('hachihachi', `📋 Dekiyaku Settlement - Round Ended By: ${roundEndReason}`, {
+      playersWithDekiyaku: playersWithDekiyaku,
+      dekiyakuValues: this.players.map((p, i) => `P${i}: ${(p.dekiyaku || []).reduce((sum, d) => sum + d.value, 0)}`).join(', ')
+    });
 
-        debugLogger.log('hachihachi', `💰 Player ${i} dekiyaku settlement:`, {
-          dekiyaku: dekiyakuToCount.map(d => `${d.name}(${d.value}kan)`).join(', '),
-          baseValue: dekiyakuToCount.reduce((sum, d) => sum + d.value, 0),
-          fieldMultiplier: `${this.fieldMultiplier}×`,
-          valuePerPlayer: dekiyakuValue,
-          totalCollected: dekiyakuSettlement,
-          newRoundScore: player.roundScore
+    // Only settle dekiyaku if someone has them
+    if (playersWithDekiyaku.length > 0) {
+      for (let i = 0; i < 3; i++) {
+        const player = this.players[i];
+        const dekiyakuToCount = player.dekiyaku || [];
+
+        let dekiyakuValue = 0;
+        dekiyakuToCount.forEach(d => {
+          dekiyakuValue += d.value * this.fieldMultiplier;
         });
-      }
 
-      // Pay for other players' dekiyaku
-      let totalToPay = 0;
-      const paymentDetails = [];
-      for (let j = 0; j < 3; j++) {
-        if (i !== j) {
-          const otherDekiyakuToCount = (this.players[j].finalizedDekiyaku && this.players[j].finalizedDekiyaku.length > 0) ? this.players[j].finalizedDekiyaku : (this.players[j].dekiyaku && this.players[j].dekiyaku.length > 0 ? this.players[j].dekiyaku : []);
-          let otherDekiyakuValue = 0;
-          otherDekiyakuToCount.forEach(d => {
-            otherDekiyakuValue += d.value * this.fieldMultiplier;
+        if (dekiyakuValue > 0) {
+          // Player has dekiyaku - they collect points
+          let totalToCollect = dekiyakuValue * 2; // Always collect from 2 opponents in 3-player game
+          player.roundScore += totalToCollect;
+          dekiyakuSettlements[i] = totalToCollect;
+
+          debugLogger.log('hachihachi', `💰 Player ${i} dekiyaku scoring:`, {
+            dekiyaku: dekiyakuToCount.map(d => `${d.name}(${d.value}kan)`).join(', '),
+            baseValue: dekiyakuToCount.reduce((sum, d) => sum + d.value, 0),
+            fieldMultiplier: `${this.fieldMultiplier}×`,
+            totalCollected: totalToCollect
           });
-          if (otherDekiyakuValue > 0) {
-            player.roundScore -= otherDekiyakuValue; // Pay to other player
-            totalToPay += otherDekiyakuValue;
-            paymentDetails.push({
-              toPlayer: j,
-              dekiyaku: otherDekiyakuToCount.map(d => `${d.name}(${d.value}kan)`).join(', '),
-              baseValue: otherDekiyakuToCount.reduce((sum, d) => sum + d.value, 0),
-              fieldMultiplier: `${this.fieldMultiplier}×`,
-              amount: otherDekiyakuValue
+        } else if (playersWithDekiyaku.length > 0) {
+          // Player doesn't have dekiyaku, but others do - they pay
+          let totalToPay = 0;
+          for (let j of playersWithDekiyaku) {
+            if (i !== j) {
+              const otherDekiyakuToCount = this.players[j].dekiyaku || [];
+              let otherDekiyakuValue = 0;
+              otherDekiyakuToCount.forEach(d => {
+                otherDekiyakuValue += d.value * this.fieldMultiplier;
+              });
+              totalToPay += otherDekiyakuValue;
+            }
+          }
+
+          if (totalToPay > 0) {
+            player.roundScore -= totalToPay;
+            dekiyakuSettlements[i] = -totalToPay;
+
+            debugLogger.log('hachihachi', `💸 Player ${i} dekiyaku payments:`, {
+              totalOwed: totalToPay,
+              reason: 'Other players have dekiyaku',
+              newRoundScore: player.roundScore
             });
           }
         }
-      }
-
-      if (totalToPay > 0) {
-        debugLogger.log('hachihachi', `💸 Player ${i} dekiyaku payments:`, {
-          totalOwed: totalToPay,
-          payments: paymentDetails,
-          newRoundScore: player.roundScore
-        });
       }
     }
 
@@ -1515,9 +1566,8 @@ export class HachiHachi {
         }, 0);
         const cardScore = (cardPoints - this.PAR_VALUE) * this.fieldMultiplier;
 
-        // Calculate dekiyaku component: roundTotal - teyaku - card score
-        // roundScore = teyaku + card score + dekiyaku
-        const dekiyakuScore = roundScores[i] - teyakuScore - cardScore;
+        // Use actual dekiyaku settlement calculated above
+        const dekiyakuScore = dekiyakuSettlements[i];
 
         return {
           teyakuScore: teyakuScore,
@@ -1589,6 +1639,8 @@ export class HachiHachi {
       deckCount: this.deck.count,
       selectedCards: this.selectedCards,
       teyakuDisplay: this.teyakuDisplay,
+      sagePlayers: Array.from(this.sagePlayers),
+      playerHasSageActive: this.sagePlayers.has(0), // True if player (index 0) called sage
 
       // Game mode identifier
       isHachihachiMode: true

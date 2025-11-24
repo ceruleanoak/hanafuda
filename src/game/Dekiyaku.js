@@ -18,9 +18,6 @@ export class Dekiyaku {
    */
   static detectDekiyaku(captured) {
     const dekiyaku = [];
-    debugLogger.log('hachihachi', `🎯 Detecting dekiyaku from ${captured.length} captured cards`, {
-      capturedCards: captured.map(c => `${c.name} (${c.type})`)
-    });
 
     // Check each type
     const fiveB = this.checkFiveBrights(captured);
@@ -33,46 +30,29 @@ export class Dekiyaku {
     // Five and Four Brights are mutually exclusive
     if (fiveB) {
       dekiyaku.push(fiveB);
-      debugLogger.log('hachihachi', `✅ Found Five Brights (12 kan)`, {
-        cardsInvolved: fiveB.cardsInvolved.map(c => c.name)
-      });
+      debugLogger.log('hachihachi', `✅ Found Five Brights (12 kan)`);
     } else if (fourB) {
       dekiyaku.push(fourB);
-      debugLogger.log('hachihachi', `✅ Found Four Brights (10 kan)`, {
-        cardsInvolved: fourB.cardsInvolved.map(c => c.name)
-      });
+      debugLogger.log('hachihachi', `✅ Found Four Brights (10 kan)`);
     }
 
     // All others are cumulative
     if (sevenR) {
       dekiyaku.push(sevenR);
-      debugLogger.log('hachihachi', `✅ Found Seven Ribbons (10 kan)`, {
-        cardsInvolved: sevenR.cardsInvolved.map(c => c.name)
-      });
+      debugLogger.log('hachihachi', `✅ Found Seven Ribbons (10 kan)`);
     }
     if (poetryR) {
       dekiyaku.push(poetryR);
-      debugLogger.log('hachihachi', `✅ Found Poetry Ribbons (7 kan)`, {
-        cardsInvolved: poetryR.cardsInvolved.map(c => c.name)
-      });
+      debugLogger.log('hachihachi', `✅ Found Poetry Ribbons (7 kan)`);
     }
     if (blueR) {
       dekiyaku.push(blueR);
-      debugLogger.log('hachihachi', `✅ Found Blue Ribbons (7 kan)`, {
-        cardsInvolved: blueR.cardsInvolved.map(c => c.name)
-      });
+      debugLogger.log('hachihachi', `✅ Found Blue Ribbons (7 kan)`);
     }
     if (bdb) {
       dekiyaku.push(bdb);
-      debugLogger.log('hachihachi', `✅ Found Boar, Deer, Butterfly (7 kan)`, {
-        cardsInvolved: bdb.cardsInvolved.map(c => c.name)
-      });
+      debugLogger.log('hachihachi', `✅ Found Boar, Deer, Butterfly (7 kan)`);
     }
-
-    const totalValue = dekiyaku.reduce((sum, d) => sum + d.value, 0);
-    debugLogger.log('hachihachi', `📊 Dekiyaku detection complete: ${dekiyaku.length} found, total value ${totalValue} kan`, {
-      dekiyakuList: dekiyaku.map(d => `${d.name} (${d.value}kan)`)
-    });
 
     return dekiyaku;
   }
@@ -104,10 +84,6 @@ export class Dekiyaku {
     const hasBrights = brightMonths.map(m =>
       this.hasCardOfMonthAndType(captured, m, 'bright')
     );
-
-    const monthNames = {'January': 'Pine/Jan', 'March': 'Cherry/Mar', 'August': 'Moon/Aug', 'November': 'Willow/Nov', 'December': 'Phoenix/Dec'};
-    const status = brightMonths.map((m, i) => `${monthNames[m]}: ${hasBrights[i] ? '✓' : '✗'}`).join(', ');
-    debugLogger.log('hachihachi', `🔍 Checking Five Brights: ${status}`);
 
     if (hasBrights.every(has => has)) {
       const cards = brightMonths.map(m =>
@@ -141,9 +117,6 @@ export class Dekiyaku {
       }
     }
 
-    const status = brightMonths.map(m => `${monthNames[m]}: ${foundBrights.includes(m) ? '✓' : '✗'}`).join(', ');
-    debugLogger.log('hachihachi', `🔍 Checking Four Brights: ${status} (found ${foundBrights.length}/5)`);
-
     if (foundBrights.length === 4) {
       const cards = foundBrights.map(m =>
         this.getCardOfMonthAndType(captured, m, 'bright')
@@ -171,8 +144,6 @@ export class Dekiyaku {
       c.type === 'ribbon' && c.month !== 'November'
     );
 
-    debugLogger.log('hachihachi', `🔍 Checking Seven Ribbons: found ${ribbons.length} ribbon cards (need 7)`);
-
     if (ribbons.length >= 7) {
       // Base 10 kan, plus 1 per additional ribbon if desired
       const value = 10; // For MVP, no bonus for extras
@@ -197,13 +168,9 @@ export class Dekiyaku {
    */
   static checkPoetryRibbons(captured) {
     const poetryMonths = ['January', 'February', 'March'];
-    const monthNames = {'January': 'Jan', 'February': 'Feb', 'March': 'Mar'};
     const hasPoetry = poetryMonths.map(m =>
       this.hasPoetryRibbon(captured, m)
     );
-
-    const status = poetryMonths.map((m, i) => `${monthNames[m]}: ${hasPoetry[i] ? '✓' : '✗'}`).join(', ');
-    debugLogger.log('hachihachi', `🔍 Checking Poetry Ribbons: ${status}`);
 
     if (hasPoetry.every(has => has)) {
       const cards = poetryMonths.map(m =>
@@ -224,19 +191,15 @@ export class Dekiyaku {
   /**
    * Blue Ribbons (7 kan)
    * Must have all three blue ribbons:
-   * - Peony with Blue Ribbon (May)
+   * - Peony with Blue Ribbon (Jun)
    * - Chrysanthemum with Blue Ribbon (Sep)
    * - Maple with Blue Ribbon (Oct)
    */
   static checkBlueRibbons(captured) {
-    const blueMonths = ['May', 'September', 'October'];
-    const monthNames = {'May': 'May', 'September': 'Sep', 'October': 'Oct'};
+    const blueMonths = ['June', 'September', 'October'];
     const hasBlue = blueMonths.map(m =>
       this.hasBlueRibbon(captured, m)
     );
-
-    const status = blueMonths.map((m, i) => `${monthNames[m]}: ${hasBlue[i] ? '✓' : '✗'}`).join(', ');
-    debugLogger.log('hachihachi', `🔍 Checking Blue Ribbons: ${status}`);
 
     if (hasBlue.every(has => has)) {
       const cards = blueMonths.map(m =>
@@ -259,16 +222,13 @@ export class Dekiyaku {
    * Must have:
    * - Bush Clover with Boar (Jul)
    * - Maple with Deer (Oct)
-   * - Peony with Butterflies (May)
+   * - Peony with Butterflies (Jun)
    * Note: This yaku may not be in all versions
    */
   static checkBoarDeerButterfly(captured) {
     const hasBoar = this.hasCardWithName(captured, 'boar', 'July');
     const hasDeer = this.hasCardWithName(captured, 'deer', 'October');
-    const hasButterfly = this.hasCardWithName(captured, 'butterfly', 'May');
-
-    const status = `Boar (Jul): ${hasBoar ? '✓' : '✗'}, Deer (Oct): ${hasDeer ? '✓' : '✗'}, Butterfly (May): ${hasButterfly ? '✓' : '✗'}`;
-    debugLogger.log('hachihachi', `🔍 Checking Boar/Deer/Butterfly: ${status}`);
+    const hasButterfly = this.hasCardWithName(captured, 'butterflies', 'June');
 
     if (hasBoar && hasDeer && hasButterfly) {
       return {
@@ -279,7 +239,7 @@ export class Dekiyaku {
         cardsInvolved: [
           this.getCardWithName(captured, 'boar', 'July'),
           this.getCardWithName(captured, 'deer', 'October'),
-          this.getCardWithName(captured, 'butterfly', 'May')
+          this.getCardWithName(captured, 'butterflies', 'June')
         ]
       };
     }
