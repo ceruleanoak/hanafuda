@@ -132,6 +132,8 @@ export class HachiHachi {
         teyakuScore: 0,
         dekiyaku: [],
         dekiyakuScore: 0,
+        finalizedDekiyaku: undefined, // Clear from previous round
+        cancelledSage: false, // Clear from previous round
         roundScore: 0,
         gameScore: previousGameScores[i], // Preserve cumulative score
         isHuman: (i === 0)
@@ -1368,7 +1370,7 @@ export class HachiHachi {
     for (let i = 0; i < 3; i++) {
       const player = this.players[i];
       // Use finalized dekiyaku if available (set when Shoubu was chosen)
-      const dekiyakuToCount = player.finalizedDekiyaku || (player.dekiyaku && player.dekiyaku.length > 0 ? player.dekiyaku : []);
+      const dekiyakuToCount = (player.finalizedDekiyaku && player.finalizedDekiyaku.length > 0) ? player.finalizedDekiyaku : (player.dekiyaku && player.dekiyaku.length > 0 ? player.dekiyaku : []);
 
       // Calculate total dekiyaku value for this player
       let dekiyakuValue = 0;
@@ -1397,7 +1399,7 @@ export class HachiHachi {
       const paymentDetails = [];
       for (let j = 0; j < 3; j++) {
         if (i !== j) {
-          const otherDekiyakuToCount = this.players[j].finalizedDekiyaku || (this.players[j].dekiyaku && this.players[j].dekiyaku.length > 0 ? this.players[j].dekiyaku : []);
+          const otherDekiyakuToCount = (this.players[j].finalizedDekiyaku && this.players[j].finalizedDekiyaku.length > 0) ? this.players[j].finalizedDekiyaku : (this.players[j].dekiyaku && this.players[j].dekiyaku.length > 0 ? this.players[j].dekiyaku : []);
           let otherDekiyakuValue = 0;
           otherDekiyakuToCount.forEach(d => {
             otherDekiyakuValue += d.value * this.fieldMultiplier;
