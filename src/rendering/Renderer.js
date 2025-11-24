@@ -345,52 +345,60 @@ export class Renderer {
         }
       }
 
-      // Trick pile hover - use zone-based detection instead of card-based (N-player support)
-      // This allows hover to work even when no cards are visible or between cards
+      // Trick pile hover - calculate bounding box of entire visible pile
+      // This encompasses all visible cards in the fan layout
 
       /**
-       * Calculate the rendered position of the topmost card in a fan layout
-       * The topmost card is the last visible card, offset by fanOffset for each visible card
+       * Calculate the bounding box that encompasses all visible cards in a fan layout
+       * Returns the leftmost, topmost, rightmost, and bottommost positions
        */
-      const getTopCardPosition = (config, cardCount) => {
+      const getTrickPileBounds = (config, cardCount) => {
         const { position, fanOffset = { x: 8, y: 8 }, maxVisible = 5 } = config;
         const visibleCount = Math.min(cardCount, maxVisible);
-        const topVisibleIndex = visibleCount - 1; // Index of topmost visible card (0-based)
+
+        if (visibleCount === 0) return null;
+
+        // Calculate positions of all visible cards
+        let minX = position.x;
+        let minY = position.y;
+        let maxX = position.x + cardWidth;
+        let maxY = position.y + cardHeight;
+
+        // For each visible card, expand bounding box
+        for (let i = 0; i < visibleCount; i++) {
+          const cardX = position.x + (i * fanOffset.x);
+          const cardY = position.y + (i * fanOffset.y);
+
+          minX = Math.min(minX, cardX);
+          minY = Math.min(minY, cardY);
+          maxX = Math.max(maxX, cardX + cardWidth);
+          maxY = Math.max(maxY, cardY + cardHeight);
+        }
 
         return {
-          x: position.x + (topVisibleIndex * fanOffset.x),
-          y: position.y + (topVisibleIndex * fanOffset.y)
+          x: minX,
+          y: minY,
+          width: maxX - minX,
+          height: maxY - minY
         };
       };
 
       if (playerCount === 2) {
         // 2-player trick pile hover
-        // Check if mouse is in player trick pile zone (match topmost card dimensions exactly)
         if (gameState.playerCaptured.length > 0) {
-          const playerTopCardPos = getTopCardPosition(playerTrickConfig, gameState.playerCaptured.length);
-          const playerTrickZone = {
-            x: playerTopCardPos.x,
-            y: playerTopCardPos.y,
-            width: cardWidth,
-            height: cardHeight
-          };
-          if (hoverX >= playerTrickZone.x && hoverX <= playerTrickZone.x + playerTrickZone.width &&
-              hoverY >= playerTrickZone.y && hoverY <= playerTrickZone.y + playerTrickZone.height) {
+          const playerBounds = getTrickPileBounds(playerTrickConfig, gameState.playerCaptured.length);
+          if (playerBounds &&
+              hoverX >= playerBounds.x && hoverX <= playerBounds.x + playerBounds.width &&
+              hoverY >= playerBounds.y && hoverY <= playerBounds.y + playerBounds.height) {
             this.drawTricksList(gameState.playerCaptured, 'You', pointValueOptions);
           }
         }
 
-        // Check if mouse is in opponent trick pile zone (match topmost card dimensions exactly)
         if (gameState.opponentCaptured.length > 0) {
-          const opponentTopCardPos = getTopCardPosition(opponentTrickConfig, gameState.opponentCaptured.length);
-          const opponentTrickZone = {
-            x: opponentTopCardPos.x,
-            y: opponentTopCardPos.y,
-            width: cardWidth,
-            height: cardHeight
-          };
-          if (hoverX >= opponentTrickZone.x && hoverX <= opponentTrickZone.x + opponentTrickZone.width &&
-              hoverY >= opponentTrickZone.y && hoverY <= opponentTrickZone.y + opponentTrickZone.height) {
+          const opponentBounds = getTrickPileBounds(opponentTrickConfig, gameState.opponentCaptured.length);
+          if (opponentBounds &&
+              hoverX >= opponentBounds.x && hoverX <= opponentBounds.x + opponentBounds.width &&
+              hoverY >= opponentBounds.y && hoverY <= opponentBounds.y + opponentBounds.height) {
             this.drawTricksList(gameState.opponentCaptured, 'Opponent', pointValueOptions);
           }
         }
@@ -402,17 +410,10 @@ export class Renderer {
           const trickCards = card3DManager.getCardsInZone(trickZone);
 
           if (trickCards.length > 0 && gameState.players[i].captured && gameState.players[i].captured.length > 0) {
-            // Match topmost card position and dimensions exactly
-            const topCardPos = getTopCardPosition(trickConfig, gameState.players[i].captured.length);
-            const trickZoneRect = {
-              x: topCardPos.x,
-              y: topCardPos.y,
-              width: cardWidth,
-              height: cardHeight
-            };
-
-            if (hoverX >= trickZoneRect.x && hoverX <= trickZoneRect.x + trickZoneRect.width &&
-                hoverY >= trickZoneRect.y && hoverY <= trickZoneRect.y + trickZoneRect.height) {
+            const bounds = getTrickPileBounds(trickConfig, gameState.players[i].captured.length);
+            if (bounds &&
+                hoverX >= bounds.x && hoverX <= bounds.x + bounds.width &&
+                hoverY >= bounds.y && hoverY <= bounds.y + bounds.height) {
               const playerLabel = getPlayerLabel(i);
               this.drawTricksList(gameState.players[i].captured || [], playerLabel, pointValueOptions);
             }
@@ -421,8 +422,9 @@ export class Renderer {
       }
     }
 
-    // Draw trick pile hover indicators on overlay canvas (but not when round summary is visible)
-    if (!isRoundSummaryVisible) {
+    // Draw trick pile hover indicators on overlay canvas only when decision modals are visible
+    // These help players see their captured cards when making crucial decisions
+    if (this.overlayCtx && (isSageDecisionModalVisible || isKoikoiModalVisible)) {
       this.drawTrickPileIndicators(gameState, card3DManager, playerCount);
     }
 
@@ -1251,27 +1253,41 @@ export class Renderer {
   }
 
   /**
-   * Draw trick pile hover indicators on overlay canvas
-   * Shows the top card of each trick pile as a visual cue for where to hover
+   * Draw trick pile indicators on overlay canvas
+   * Shows all visible cards in each trick pile with face-down rendering
+   * Only called when decision modals are visible (Shoubu/Sage, Koi-koi)
    */
   drawTrickPileIndicators(gameState, card3DManager, playerCount) {
-    if (!this.overlayCtx) return; // Only draw on overlay canvas - only render when modal transparency layer is active
+    if (!this.overlayCtx) return; // Only draw on overlay canvas
 
     const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
 
     /**
-     * Calculate the rendered position of the topmost card in a fan layout
-     * The topmost card is the last visible card, offset by fanOffset for each visible card
+     * Draw all visible cards in a trick pile with face-down rendering
+     * This shows the entire pile structure when hovering
      */
-    const getTopCardPosition = (config, cardCount) => {
+    const drawTrickPile = (cards, config) => {
       const { position, fanOffset = { x: 8, y: 8 }, maxVisible = 5 } = config;
-      const visibleCount = Math.min(cardCount, maxVisible);
-      const topVisibleIndex = visibleCount - 1; // Index of topmost visible card (0-based)
+      const visibleCount = Math.min(cards.length, maxVisible);
 
-      return {
-        x: position.x + (topVisibleIndex * fanOffset.x),
-        y: position.y + (topVisibleIndex * fanOffset.y)
-      };
+      // Draw all visible cards
+      for (let i = 0; i < visibleCount; i++) {
+        const card = cards[cards.length - visibleCount + i]; // Get from end of array
+        const cardX = position.x + (i * fanOffset.x);
+        const cardY = position.y + (i * fanOffset.y);
+
+        this.overlayCtx.save();
+        this.cardRenderer.drawCard(
+          this.overlayCtx,
+          card,
+          cardX,
+          cardY,
+          true,  // isFaceDown - show card backs
+          false,
+          1.0
+        );
+        this.overlayCtx.restore();
+      }
     };
 
     if (playerCount === 2) {
@@ -1279,60 +1295,21 @@ export class Renderer {
       const playerTrickConfig = LayoutManager.getZoneConfig('playerTrick', this.displayWidth, this.displayHeight, playerCount);
       const opponentTrickConfig = LayoutManager.getZoneConfig('opponentTrick', this.displayWidth, this.displayHeight, playerCount);
 
-      // Draw player trick pile indicator (face-down card at exact top card position)
       if (gameState.playerCaptured && gameState.playerCaptured.length > 0) {
-        const topCard = gameState.playerCaptured[gameState.playerCaptured.length - 1];
-        const topCardPos = getTopCardPosition(playerTrickConfig, gameState.playerCaptured.length);
-        this.overlayCtx.save();
-        this.cardRenderer.drawCard(
-          this.overlayCtx,
-          topCard,
-          topCardPos.x,
-          topCardPos.y,
-          true,  // isFaceDown - show card back
-          false,
-          1.0
-        );
-        this.overlayCtx.restore();
+        drawTrickPile(gameState.playerCaptured, playerTrickConfig);
       }
 
-      // Draw opponent trick pile indicator (face-down card at exact top card position)
       if (gameState.opponentCaptured && gameState.opponentCaptured.length > 0) {
-        const topCard = gameState.opponentCaptured[gameState.opponentCaptured.length - 1];
-        const topCardPos = getTopCardPosition(opponentTrickConfig, gameState.opponentCaptured.length);
-        this.overlayCtx.save();
-        this.cardRenderer.drawCard(
-          this.overlayCtx,
-          topCard,
-          topCardPos.x,
-          topCardPos.y,
-          true,  // isFaceDown - show card back
-          false,
-          1.0
-        );
-        this.overlayCtx.restore();
+        drawTrickPile(gameState.opponentCaptured, opponentTrickConfig);
       }
     } else if (gameState.players) {
       // N-player mode (3-4 players)
       for (let i = 0; i < playerCount; i++) {
         const trickZone = `player${i}Trick`;
         const trickConfig = LayoutManager.getZoneConfig(trickZone, this.displayWidth, this.displayHeight, playerCount);
-        const trickCards = card3DManager.getCardsInZone(trickZone);
 
-        if (trickCards.length > 0 && gameState.players[i].captured && gameState.players[i].captured.length > 0) {
-          const topCard = gameState.players[i].captured[gameState.players[i].captured.length - 1];
-          const topCardPos = getTopCardPosition(trickConfig, gameState.players[i].captured.length);
-          this.overlayCtx.save();
-          this.cardRenderer.drawCard(
-            this.overlayCtx,
-            topCard,
-            topCardPos.x,
-            topCardPos.y,
-            true,  // isFaceDown - show card back
-            false,
-            1.0
-          );
-          this.overlayCtx.restore();
+        if (gameState.players[i].captured && gameState.players[i].captured.length > 0) {
+          drawTrickPile(gameState.players[i].captured, trickConfig);
         }
       }
     }
