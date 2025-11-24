@@ -148,7 +148,7 @@ export class Renderer {
    * @param {Object} options - Render options
    */
   render3D(gameState, card3DManager, options = {}) {
-    const { helpMode = false, hoverX = -1, hoverY = -1, isModalVisible = false, isGameOver = false, isRoundSummaryVisible = false } = options;
+    const { helpMode = false, hoverX = -1, hoverY = -1, isModalVisible = false, isGameOver = false, isRoundSummaryVisible = false, isSageDecisionModalVisible = false, isKoikoiModalVisible = false } = options;
 
     this.clear();
 
@@ -358,13 +358,14 @@ export class Renderer {
 
         if (visibleCount === 0) return null;
 
-        // Calculate positions of all visible cards
-        let minX = position.x;
-        let minY = position.y;
-        let maxX = position.x + cardWidth;
-        let maxY = position.y + cardHeight;
+        // Start with first visible card position
+        const startIndex = Math.max(0, cardCount - maxVisible);
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
 
-        // For each visible card, expand bounding box
+        // For each visible card, track min/max bounds
         for (let i = 0; i < visibleCount; i++) {
           const cardX = position.x + (i * fanOffset.x);
           const cardY = position.y + (i * fanOffset.y);
@@ -375,22 +376,30 @@ export class Renderer {
           maxY = Math.max(maxY, cardY + cardHeight);
         }
 
-        return {
+        const bounds = {
           x: minX,
           y: minY,
           width: maxX - minX,
           height: maxY - minY
         };
+
+        console.log('getTrickPileBounds debug:', { cardCount, visibleCount, position, fanOffset, cardWidth, cardHeight, bounds });
+
+        return bounds;
       };
 
       if (playerCount === 2) {
         // 2-player trick pile hover
         if (gameState.playerCaptured.length > 0) {
           const playerBounds = getTrickPileBounds(playerTrickConfig, gameState.playerCaptured.length);
-          if (playerBounds &&
+          if (playerBounds) {
+            console.log('Player bounds:', playerBounds, 'Hover:', { hoverX, hoverY }, 'Match:',
               hoverX >= playerBounds.x && hoverX <= playerBounds.x + playerBounds.width &&
-              hoverY >= playerBounds.y && hoverY <= playerBounds.y + playerBounds.height) {
-            this.drawTricksList(gameState.playerCaptured, 'You', pointValueOptions);
+              hoverY >= playerBounds.y && hoverY <= playerBounds.y + playerBounds.height);
+            if (hoverX >= playerBounds.x && hoverX <= playerBounds.x + playerBounds.width &&
+                hoverY >= playerBounds.y && hoverY <= playerBounds.y + playerBounds.height) {
+              this.drawTricksList(gameState.playerCaptured, 'You', pointValueOptions);
+            }
           }
         }
 

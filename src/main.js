@@ -3494,6 +3494,8 @@ class Game {
             isModalVisible: this.koikoiModal.classList.contains('show') && !this.isDecisionModalVisible,
             isGameOver: state.gameOver || false,
             isRoundSummaryVisible: this.roundSummaryModal.classList.contains('show'),
+            isSageDecisionModalVisible: this.sageDecisionModal?.classList.contains('show') || false,
+            isKoikoiModalVisible: this.koikoiModal.classList.contains('show'),
             card3DManager: this.card3DManager
           };
 
