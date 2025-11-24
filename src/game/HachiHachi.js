@@ -34,8 +34,8 @@ export class HachiHachi {
     // Card point values (single source of truth)
     this.CARD_VALUES = { 'bright': 20, 'ribbon': 5, 'animal': 10, 'chaff': 1 };
 
-    // Initialization
-    this.reset();
+    // Initialization - only set up state variables, don't deal yet
+    this.initializeGameState();
   }
 
   /**
@@ -153,7 +153,55 @@ export class HachiHachi {
   }
 
   /**
-   * Reset game state for new round
+   * Initialize empty game state (called once at startup)
+   * Does NOT deal cards - just sets up data structures
+   */
+  initializeGameState() {
+    this.deck = new Deck();
+
+    // Initialize 3 players with empty state
+    this.players = [];
+    for (let i = 0; i < 3; i++) {
+      this.players[i] = {
+        hand: [],
+        captured: [],
+        teyaku: [],
+        teyakuScore: 0,
+        dekiyaku: [],
+        dekiyakuScore: 0,
+        finalizedDekiyaku: undefined,
+        cancelledSage: false,
+        roundScore: 0,
+        gameScore: 0,
+        isHuman: (i === 0)
+      };
+    }
+
+    // Initialize empty game state
+    this.field = [];
+    this.drawnCard = null;
+    this.drawnCardMatches = [];
+    this.selectedCards = [];
+    this.fieldMultiplier = 1;
+    this.phase = 'not_started';
+    this.currentPlayerIndex = 0;
+    this.message = '';
+    this.teyakuDisplay = {};
+
+    // Sage decision state tracking
+    this.sagePlayers = new Set();
+    this.sageBaselineKakuyaku = {};
+    for (let i = 0; i < 3; i++) {
+      this.sageBaselineKakuyaku[i] = 0;
+    }
+
+    // Track opponent decisions
+    this.opponentDecisions = {};
+  }
+
+  /**
+   * Reset game state for new round and deal cards
+   * Preserves cumulative game scores from previous rounds
    */
   reset() {
     this.deck = new Deck();
