@@ -4719,6 +4719,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const trickListBtn = document.getElementById('trick-list-btn');
     if (!trickListBtn || !this.card3DManager) return;
 
+    // Hide trick list button for Match game
+    if (this.currentGameMode === 'match') {
+      trickListBtn.style.display = 'none';
+      return;
+    }
+    trickListBtn.style.display = 'block';
+
     const fieldConfig = LayoutManager.getZoneConfig('field', this.renderer.displayWidth, this.renderer.displayHeight, this.card3DManager.playerCount);
     const layoutManager = new LayoutManager();
     const dummyCard = { gridSlot: 0 };

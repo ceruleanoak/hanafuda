@@ -139,7 +139,10 @@ export class TrickListUI {
 
     yakuList.forEach(yaku => {
       html += `<div class="trick-entry">`;
+      html += `<div class="trick-header">`;
       html += `<div class="trick-name">${yaku.name}</div>`;
+      html += `<span class="trick-pts">${yaku.points}</span>`;
+      html += `</div>`;
       html += `<div class="trick-cards-row">`;
 
       // Show required cards - very small
@@ -152,7 +155,6 @@ export class TrickListUI {
       }
 
       html += `</div>`;
-      html += `<span class="trick-pts">${yaku.points}</span>`;
       html += `</div>`;
     });
 
