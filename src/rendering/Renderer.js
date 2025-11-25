@@ -1448,8 +1448,8 @@ export class Renderer {
       }))
     });
 
-    // Get all 8 field slot positions (slots 1-8, slot 0 is reserved for deck)
-    const allSlots = Array.from({ length: 8 }, (_, i) => ({ gridSlot: i + 1 }));
+    // Get all 8 field slot positions (including empty ones)
+    const allSlots = Array.from({ length: 8 }, (_, i) => ({ gridSlot: i }));
     const positions = layoutManager.layout(allSlots, fieldConfig);
 
     debugLogger.log('slots', `📍 All 8 Slot Positions:`,
@@ -1471,7 +1471,7 @@ export class Renderer {
     });
 
     const occupiedSlots = new Set(occupiedSlotsArray);
-    // Note: Slot 0 is reserved for deck, we only track field card slots 1-8
+    occupiedSlots.add(0); // Slot 0 is always occupied (deck)
 
     debugLogger.log('slots', `✓ Occupied Slot Indices: [${Array.from(occupiedSlots).sort((a,b) => a-b).join(', ')}]`, {
       occupiedCount: occupiedSlots.size,
@@ -1481,9 +1481,9 @@ export class Renderer {
       }))
     });
 
-    // Calculate empty slots (check slots 1-8)
+    // Calculate empty slots
     const emptySlotIndices = [];
-    for (let i = 1; i <= 8; i++) {
+    for (let i = 0; i < 8; i++) {
       if (!occupiedSlots.has(i)) {
         emptySlotIndices.push(i);
       }
@@ -1500,13 +1500,12 @@ export class Renderer {
     // Draw highlights for empty slots
     let highlightCount = 0;
     positions.forEach((pos, index) => {
-      const slotNumber = index + 1; // Map positions array index (0-7) to slot numbers (1-8)
-      if (!occupiedSlots.has(slotNumber)) {
+      if (!occupiedSlots.has(index)) {
         highlightCount++;
         const x = pos.x - cardWidth / 2;
         const y = pos.y - cardHeight / 2;
 
-        debugLogger.log('slots', `🎨 Drawing highlight for empty slot ${slotNumber} at (${x.toFixed(0)}, ${y.toFixed(0)})`, null);
+        debugLogger.log('slots', `🎨 Drawing highlight for empty slot ${index} at (${x.toFixed(0)}, ${y.toFixed(0)})`, null);
 
         // Draw semi-transparent white fill over empty slots
         this.ctx.fillStyle = 'rgba(255, 255, 255, 0.25)'; // Increased opacity to 0.25 for visibility

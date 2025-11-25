@@ -274,8 +274,7 @@ export class LayoutManager {
     const baseConfigs = {
       drawnCard: {
         type: 'stack',
-        // Align with field slot 0 (leftmost position of the field grid)
-        position: { x: centerX - (9 * fieldSpacing) / 2, y: 90 + HEADER_OFFSET },
+        position: { x: centerX, y: 90 + HEADER_OFFSET }, // Center-top of screen
         offset: { x: 0, y: 0, z: 0 },
         faceUp: 1,
         renderLayer: 6 // Above everything else to show prominently
