@@ -669,15 +669,32 @@ export class Sakura {
 
     // Handle hand card clicks in gaji_selection phase - allow deselecting the Gaji
     if (this.phase === 'gaji_selection' && owner === 'player') {
+      debugLogger.log('sakura', `📍 gaji_selection phase: hand card clicked`, {
+        clickedCard: card.name,
+        clickedCardId: card.id,
+        selectedCardId: this.selectedCards.length > 0 ? this.selectedCards[0].id : 'none',
+        selectedCardName: this.selectedCards.length > 0 ? this.selectedCards[0].name : 'none',
+        isSameCard: this.selectedCards.length > 0 && this.selectedCards[0].id === card.id
+      });
+
       // Check if clicking the same Gaji card - deselect it and go back
       if (this.selectedCards.length > 0 && this.selectedCards[0].id === card.id) {
-        debugLogger.log('sakura', `⚡ Gaji deselected, returning to select_hand phase`);
+        debugLogger.log('sakura', `⚡ Gaji deselected - same card clicked twice, returning to select_hand phase`, {
+          gajiCardId: card.id,
+          gajiCardName: card.name
+        });
 
         // Return Gaji to hand
         this.playerHand.push(card);
         // Clear the selection flag and restore location
         this.gajiState.inSelection = false;
         this.gajiState.location = 'player_hand';
+
+        debugLogger.log('sakura', `✅ Gaji state cleared`, {
+          inSelection: this.gajiState.inSelection,
+          location: this.gajiState.location,
+          playerHandLength: this.playerHand.length
+        });
 
         // Reset to select_hand phase
         this.selectedCards = [];
@@ -689,7 +706,10 @@ export class Sakura {
       }
 
       // Clicking a different hand card - ignore it (player must choose field card or deselect current Gaji)
-      debugLogger.log('sakura', `⚠️ Cannot switch cards in gaji_selection phase - must choose field card or click Gaji again to deselect`);
+      debugLogger.log('sakura', `⚠️ Different hand card clicked during gaji_selection - ignoring`, {
+        clickedCard: card.name,
+        selectedCard: this.selectedCards.length > 0 ? this.selectedCards[0].name : 'none'
+      });
       this.message = 'Choose a field card to capture with Gaji, or click Gaji again to deselect it.';
       return false;
     }
@@ -2043,6 +2063,27 @@ export class Sakura {
   // ============================================================
 
   /**
+   * Get opponent player indices for a given player
+   * In 4-player team mode: players 0 & 2 are teammates, players 1 & 3 are opponents
+   * In 2-player mode: there is only 1 opponent
+   * In 3-player mode: both other players are opponents (no team mode)
+   * @param {number} playerIndex - The player index to get opponents for
+   * @returns {number[]} Array of opponent indices
+   */
+  getOpponentIndices(playerIndex) {
+    if (this.playerCount === 2) {
+      // 2-player: opponent is always the other player
+      return [playerIndex === 0 ? 1 : 0];
+    } else if (this.playerCount === 4) {
+      // 4-player team mode: 0&2 vs 1&3
+      return playerIndex % 2 === 0 ? [1, 3] : [0, 2];
+    } else {
+      // 3-player: all other players are opponents (no team mode)
+      return Array.from({length: this.playerCount}, (_, i) => i).filter(i => i !== playerIndex);
+    }
+  }
+
+  /**
    * Update yaku for all players
    */
   updateYaku() {
@@ -2068,29 +2109,31 @@ export class Sakura {
     const playerScores = [];
     for (let i = 0; i < this.playerCount; i++) {
       const basePoints = this.calculateBasePoints(this.players[i].captured);
-      const yakuPenalty = this.yakuChecker.calculatePenalty(this.players[i].yaku);
+      const ownYakuPenalty = this.yakuChecker.calculatePenalty(this.players[i].yaku);
 
       let roundScore;
+      let opponentPenalty = 0;
       if (this.variants.bothPlayersScore) {
         // Both Players Score variant: Yaku awards bonus (50 per yaku)
         const yakuBonus = this.players[i].yaku.length * 50;
         roundScore = basePoints + yakuBonus;
       } else {
-        // Standard Sakura: Only subtract opponent penalties
-        // Calculate all other players' combined penalties
-        let totalOtherPenalties = 0;
-        for (let j = 0; j < this.playerCount; j++) {
-          if (j !== i) {
-            totalOtherPenalties += this.yakuChecker.calculatePenalty(this.players[j].yaku);
-          }
+        // Standard Sakura: Only subtract opponent penalties (not teammates)
+        // Get opponent indices (handles 2-player, 3-player, and 4-player team mode)
+        const opponentIndices = this.getOpponentIndices(i);
+        let totalOpponentPenalties = 0;
+        for (const opponentIdx of opponentIndices) {
+          totalOpponentPenalties += this.yakuChecker.calculatePenalty(this.players[opponentIdx].yaku);
         }
-        roundScore = basePoints - totalOtherPenalties;
+        opponentPenalty = totalOpponentPenalties;
+        roundScore = basePoints - totalOpponentPenalties;
       }
 
       playerScores.push({
         playerIndex: i,
         basePoints,
-        yakuPenalty,
+        yakuPenalty: opponentPenalty, // Penalty received from opponents (for UI display)
+        ownYakuValue: ownYakuPenalty,  // Store own yaku penalty separately
         yaku: this.players[i].yaku,
         roundScore,
         isHuman: this.players[i].isHuman,

@@ -6,12 +6,13 @@ export class DebugLogger {
   constructor() {
     this.enabled = true;
     this.categories = {
-      animation: true,
+      animation: false,
       message: true,
-      gameState: true,
+      gameState: false,
       hachihachi: true,
-      '3dCards': true,
-      render: false, // Disabled by default as it's very verbose
+      '3dCards': false, // Disabled - very verbose logging
+      slots: false,     // Disabled - slot highlighting debug logs
+      render: false,    // Disabled by default as it's very verbose
       error: true
     };
 

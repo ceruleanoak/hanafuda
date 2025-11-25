@@ -112,6 +112,8 @@ export class Card3D {
    * @param {number} deltaTime - Time elapsed in seconds
    */
   update(deltaTime) {
+    const zBefore = this.z;
+
     switch (this.animationMode) {
       case 'physics':
         this.updatePhysics(deltaTime);
@@ -200,8 +202,12 @@ export class Card3D {
       if (this.tweenTarget.scale !== undefined) this.scale = this.tweenTarget.scale;
       if (this.tweenTarget.faceUp !== undefined) this.targetFaceUp = this.tweenTarget.faceUp;
 
-      // Reset Z to 0 after animation completes (not homePosition.z which is for layering only)
-      this.z = 0;
+      // After animation completes, restore Z to the home position value for render layering
+      // This preserves render layering from fan/arc layouts in trick piles
+      if (this.homePosition) {
+        this.z = this.homePosition.z || 0;
+      }
+
       // Only restore render layer if not in a display zone (drawnCard, opponentPlayedCard)
       // These zones keep the card in animation layer between tweens
       if (this.homeZone !== 'drawnCard' && this.homeZone !== 'opponentPlayedCard') {
@@ -441,8 +447,9 @@ export class Card3D {
   tweenTo(target, duration = 500, easing = 'easeInOutQuad', controlPoint = null, flipTiming = 0.5, peakScale = null, isDisplayAnimation = false) {
     this.animationMode = 'tween';
     this.tweenTarget = { ...target };
-    // Don't include Z in interpolation - keep it elevated during animation (if display animation)
-    if (isDisplayAnimation) {
+    // Only exclude Z if this is a display animation (deck draw, etc.)
+    // If a control point is provided (trick pile arc), always include Z in interpolation
+    if (isDisplayAnimation && !controlPoint) {
       this.tweenTarget.z = undefined;
     }
     this.tweenStart = {
@@ -454,6 +461,15 @@ export class Card3D {
       faceUp: this.faceUp
     };
     this.tweenControlPoint = controlPoint ? { ...controlPoint } : null;
+
+    // Debug logging for trick pile captures with control point
+    if (controlPoint && controlPoint.z) {
+      debugLogger.log('animation', `Tween with control point Z=${controlPoint.z}`, {
+        start: { z: this.tweenStart.z },
+        control: { z: controlPoint.z },
+        target: { z: this.tweenTarget.z }
+      });
+    }
     this.tweenFlipTiming = flipTiming;
     this.tweenPeakScale = peakScale;
     this.tweenDuration = duration;
@@ -541,8 +557,9 @@ export class Card3D {
   getScale() {
     // Only apply lift scale when card is in animation layer (renderLayer = 10)
     // This ensures the lift effect is only visible during actual display animations
+    // Field cards stay at renderLayer 0-2, so they never get scaled by z
     if (this.renderLayer === 10) {
-      const liftScale = 1.0 + (this.z / 100) * 0.05;
+      const liftScale = 1.0 + (this.z / 100) * 0.3;
       return this.scale * liftScale;
     }
     return this.scale;

@@ -133,11 +133,11 @@ export class Renderer {
    * @param {Object} options - Render options (helpMode, hoverX, hoverY, isModalVisible, card3DManager)
    */
   render(gameState, _ = [], options = {}) {
-    const { helpMode = false, hoverX = -1, hoverY = -1, isModalVisible = false, card3DManager = null } = options;
+    const { helpMode = false, hoverX = -1, hoverY = -1, isModalVisible = false, card3DManager = null, isDragging = false, isGameOver = false, isRoundSummaryVisible = false, isSageDecisionModalVisible = false, isKoikoiModalVisible = false } = options;
 
     // Always use 3D rendering path
     if (card3DManager) {
-      this.render3D(gameState, card3DManager, { helpMode, hoverX, hoverY, isModalVisible });
+      this.render3D(gameState, card3DManager, { helpMode, hoverX, hoverY, isModalVisible, isDragging, isGameOver, isRoundSummaryVisible, isSageDecisionModalVisible, isKoikoiModalVisible, card3DManager });
     }
   }
 
@@ -148,7 +148,7 @@ export class Renderer {
    * @param {Object} options - Render options
    */
   render3D(gameState, card3DManager, options = {}) {
-    const { helpMode = false, hoverX = -1, hoverY = -1, isModalVisible = false, isGameOver = false, isRoundSummaryVisible = false, isSageDecisionModalVisible = false, isKoikoiModalVisible = false } = options;
+    const { helpMode = false, hoverX = -1, hoverY = -1, isModalVisible = false, isGameOver = false, isRoundSummaryVisible = false, isSageDecisionModalVisible = false, isKoikoiModalVisible = false, isDragging = false } = options;
 
     this.clear();
 
@@ -326,6 +326,20 @@ export class Renderer {
       });
     }
 
+    // Draw field slot highlights when dragging a hand card (shows where to drop)
+    // Show during select_hand phase and any phase where we might drag from player hand
+    if (isDragging && gameState.field && gameState.field.length >= 0) {
+      debugLogger.log('render', `🟡 isDragging=${isDragging}, phase=${gameState.phase}, field=${gameState.field.length} cards`, null);
+
+      if (gameState.phase === 'select_hand' || gameState.phase === 'select_field') {
+        const layoutManager = new LayoutManager();
+        // Get player count from card3DManager if available, otherwise default to 2
+        const playerCount = card3DManager.playerCount || 2;
+        debugLogger.log('render', `✅ Drawing field slot highlights`, null);
+        this.drawFieldSlotHighlights(gameState, layoutManager, playerCount);
+      }
+    }
+
     // Hover interactions (show when no modal visible, or when overlay canvas available for decision modals)
     if (hoverX >= 0 && hoverY >= 0 && (!isModalVisible || this.overlayCtx) && !isGameOver) {
       const hoveredCard = card3DManager.getCardAtPosition(hoverX, hoverY);
@@ -349,32 +363,31 @@ export class Renderer {
       // This encompasses all visible cards in the fan layout
 
       /**
-       * Calculate the bounding box that encompasses all visible cards in a fan layout
+       * Calculate the bounding box that encompasses all visible cards in a trick pile
+       * Uses actual Card3D rendered positions, not LayoutManager positions
        * Returns the leftmost, topmost, rightmost, and bottommost positions
        */
-      const getTrickPileBounds = (config, cardCount) => {
-        const { position, fanOffset = { x: 8, y: 8 }, maxVisible = 5 } = config;
-        const visibleCount = Math.min(cardCount, maxVisible);
+      const getTrickPileBounds = (zone, card3DManager) => {
+        const cards = card3DManager.getCardsInZone(zone);
+        // Only include cards that have finished animating to the trick pile
+        const settledCards = cards.filter(card => !card.isAnimating());
+        if (settledCards.length === 0) return null;
 
-        if (visibleCount === 0) return null;
-
-        // Start with first visible card position
-        const startIndex = Math.max(0, cardCount - maxVisible);
         let minX = Infinity;
         let minY = Infinity;
         let maxX = -Infinity;
         let maxY = -Infinity;
 
-        // For each visible card, track min/max bounds
-        for (let i = 0; i < visibleCount; i++) {
-          const cardX = position.x + (i * fanOffset.x);
-          const cardY = position.y + (i * fanOffset.y);
+        // Use actual rendered positions from Card3D objects
+        settledCards.forEach(card3D => {
+          const cardX = card3D.x - cardWidth / 2;  // Card3D.x is center, we need top-left
+          const cardY = card3D.y - cardHeight / 2;
 
           minX = Math.min(minX, cardX);
           minY = Math.min(minY, cardY);
           maxX = Math.max(maxX, cardX + cardWidth);
           maxY = Math.max(maxY, cardY + cardHeight);
-        }
+        });
 
         const bounds = {
           x: minX,
@@ -383,19 +396,14 @@ export class Renderer {
           height: maxY - minY
         };
 
-        console.log('getTrickPileBounds debug:', { cardCount, visibleCount, position, fanOffset, cardWidth, cardHeight, bounds });
-
         return bounds;
       };
 
       if (playerCount === 2) {
         // 2-player trick pile hover
         if (gameState.playerCaptured.length > 0) {
-          const playerBounds = getTrickPileBounds(playerTrickConfig, gameState.playerCaptured.length);
+          const playerBounds = getTrickPileBounds('player0Trick', card3DManager);
           if (playerBounds) {
-            console.log('Player bounds:', playerBounds, 'Hover:', { hoverX, hoverY }, 'Match:',
-              hoverX >= playerBounds.x && hoverX <= playerBounds.x + playerBounds.width &&
-              hoverY >= playerBounds.y && hoverY <= playerBounds.y + playerBounds.height);
             if (hoverX >= playerBounds.x && hoverX <= playerBounds.x + playerBounds.width &&
                 hoverY >= playerBounds.y && hoverY <= playerBounds.y + playerBounds.height) {
               this.drawTricksList(gameState.playerCaptured, 'You', pointValueOptions);
@@ -404,7 +412,7 @@ export class Renderer {
         }
 
         if (gameState.opponentCaptured.length > 0) {
-          const opponentBounds = getTrickPileBounds(opponentTrickConfig, gameState.opponentCaptured.length);
+          const opponentBounds = getTrickPileBounds('player1Trick', card3DManager);
           if (opponentBounds &&
               hoverX >= opponentBounds.x && hoverX <= opponentBounds.x + opponentBounds.width &&
               hoverY >= opponentBounds.y && hoverY <= opponentBounds.y + opponentBounds.height) {
@@ -415,11 +423,10 @@ export class Renderer {
         // N-player trick pile hover (3-4 players)
         for (let i = 0; i < playerCount; i++) {
           const trickZone = `player${i}Trick`;
-          const trickConfig = LayoutManager.getZoneConfig(trickZone, this.displayWidth, this.displayHeight, playerCount);
           const trickCards = card3DManager.getCardsInZone(trickZone);
 
           if (trickCards.length > 0 && gameState.players[i].captured && gameState.players[i].captured.length > 0) {
-            const bounds = getTrickPileBounds(trickConfig, gameState.players[i].captured.length);
+            const bounds = getTrickPileBounds(trickZone, card3DManager);
             if (bounds &&
                 hoverX >= bounds.x && hoverX <= bounds.x + bounds.width &&
                 hoverY >= bounds.y && hoverY <= bounds.y + bounds.height) {
@@ -1413,7 +1420,110 @@ export class Renderer {
   }
 
   /**
-   * Draw the Cancel Sage button on the game field
+   * Draw empty field slot highlights for hand card drag zones
+   * Shows transparent white fill on unoccupied field slots
+   * @param {Object} gameState - Current game state
+   * @param {LayoutManager} layoutManager - Layout manager for zone positions
+   * @param {number} playerCount - Number of players (for layout configuration)
+   */
+  drawFieldSlotHighlights(gameState, layoutManager, playerCount = 2) {
+    if (!gameState.field) {
+      debugLogger.log('slots', `❌ No field in gameState`, null);
+      return;
+    }
+
+    const fieldConfig = LayoutManager.getZoneConfig('field', this.displayWidth, this.displayHeight, playerCount);
+    const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
+
+    debugLogger.log('slots', `📋 Field State:`, {
+      fieldLength: gameState.field.length,
+      fieldCards: gameState.field.map(c => ({
+        id: c.id,
+        name: c.name,
+        gridSlot: c.gridSlot,
+        month: c.month
+      }))
+    });
+
+    // Get all 8 field slot positions (including empty ones)
+    const allSlots = Array.from({ length: 8 }, (_, i) => ({ gridSlot: i }));
+    const positions = layoutManager.layout(allSlots, fieldConfig);
+
+    debugLogger.log('slots', `📍 All 8 Slot Positions:`,
+      positions.map((pos, idx) => ({
+        slotIndex: idx,
+        x: pos.x.toFixed(0),
+        y: pos.y.toFixed(0),
+        z: pos.z
+      }))
+    );
+
+    // Create set of occupied grid slots
+    // Log the mapping process in detail
+    debugLogger.log('slots', `🔍 Building occupied slots set:`, null);
+    const occupiedSlotsArray = gameState.field.map((card, fieldIndex) => {
+      const slotIndex = card.gridSlot !== undefined ? card.gridSlot : fieldIndex;
+      debugLogger.log('slots', `  Card[${fieldIndex}]: "${card.name}" → slot ${slotIndex} (gridSlot=${card.gridSlot}, indexOf=${fieldIndex})`, null);
+      return slotIndex;
+    });
+
+    const occupiedSlots = new Set(occupiedSlotsArray);
+    occupiedSlots.add(0); // Slot 0 is always occupied (deck)
+
+    debugLogger.log('slots', `✓ Occupied Slot Indices: [${Array.from(occupiedSlots).sort((a,b) => a-b).join(', ')}]`, {
+      occupiedCount: occupiedSlots.size,
+      details: Array.from(occupiedSlots).map(slot => ({
+        slotIndex: slot,
+        occupiedBy: gameState.field.find(c => (c.gridSlot !== undefined ? c.gridSlot : gameState.field.indexOf(c)) === slot)?.name || 'UNKNOWN'
+      }))
+    });
+
+    // Calculate empty slots
+    const emptySlotIndices = [];
+    for (let i = 0; i < 8; i++) {
+      if (!occupiedSlots.has(i)) {
+        emptySlotIndices.push(i);
+      }
+    }
+
+    debugLogger.log('slots', `⭕ Empty Slot Indices: [${emptySlotIndices.join(', ')}]`, {
+      emptyCount: emptySlotIndices.length,
+      totalSlots: 8,
+      occupancyRate: `${((occupiedSlots.size / 8) * 100).toFixed(1)}%`
+    });
+
+    this.ctx.save();
+
+    // Draw highlights for empty slots
+    let highlightCount = 0;
+    positions.forEach((pos, index) => {
+      if (!occupiedSlots.has(index)) {
+        highlightCount++;
+        const x = pos.x - cardWidth / 2;
+        const y = pos.y - cardHeight / 2;
+
+        debugLogger.log('slots', `🎨 Drawing highlight for empty slot ${index} at (${x.toFixed(0)}, ${y.toFixed(0)})`, null);
+
+        // Draw semi-transparent white fill over empty slots
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.25)'; // Increased opacity to 0.25 for visibility
+        this.ctx.fillRect(x, y, cardWidth, cardHeight);
+
+        // Add a visible border for clarity
+        this.ctx.strokeStyle = 'rgba(200, 200, 255, 0.4)'; // Light blue border for better visibility
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(x, y, cardWidth, cardHeight);
+      }
+    });
+
+    debugLogger.log('slots', `✅ COMPLETE: Drew ${highlightCount} highlights (${emptySlotIndices.length} expected)`, {
+      match: highlightCount === emptySlotIndices.length ? '✓ CORRECT' : '✗ MISMATCH'
+    });
+
+    this.ctx.restore();
+  }
+
+  /**
+   * The Cancel Sage button on the game field
    * @param {Object} gameState - Current game state
    * @returns {Object|null} Button bounds for click detection, or null if not visible
    */

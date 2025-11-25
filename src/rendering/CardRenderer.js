@@ -629,45 +629,67 @@ export class CardRenderer {
    * @param {number} scale - Card scale
    * @param {number} faceUp - Face up value (0-1)
    */
-  drawCardThickness(ctx, x, y, width, height, scale, faceUp) {
-    // Thickness in pixels (scales with card size)
-    const baseThickness = 3;
-    const thickness = baseThickness * scale;
+  drawDropShadow(ctx, centerX, centerY, width, height, z) {
+    // centerX, centerY are the card's center point (same as Card3D.x, Card3D.y)
+    // This ensures the shadow is positioned relative to the same origin as the card
 
-    // During flip, show edge thickness more prominently
-    // When card is edge-on (faceUp near 0.5), show maximum thickness
-    const flipFactor = 1 - Math.abs(faceUp - 0.5) * 2; // 0 at face-up/down, 1 at edge-on
-    const edgeThickness = thickness + (flipFactor * thickness * 2);
+    // Shadow scale inverse to card z - as card rises, shadow shrinks
+    // At z=0: shadowScale = 1.0 (same size as card)
+    // At z=100: shadowScale = 0.7
+    // At z=150: shadowScale = 0.55
+    const shadowScale = Math.max(0.2, 1.0 - (z / 300) * 0.8);
+    const shadowWidth = width * shadowScale;
+    const shadowHeight = height * shadowScale; // Full height shadow at z=0
 
-    // Draw thickness shadow on bottom and right edges
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    // Shadow position: same position as card, offset by 2px down
+    // Shadow uses the same center point as the card, just shifted down slightly
+    const shadowOffsetY = 2; // 2px downward offset
+    // Calculate shadow top-left corner (same centering as card)
+    const shadowX = centerX - shadowWidth / 2;
+    const shadowY = centerY - shadowHeight / 2 + shadowOffsetY; // Same Y as card + 2px
 
-    // Bottom edge
-    ctx.beginPath();
-    ctx.moveTo(x, y + height);
-    ctx.lineTo(x + thickness, y + height + thickness);
-    ctx.lineTo(x + width + thickness, y + height + thickness);
-    ctx.lineTo(x + width, y + height);
-    ctx.closePath();
-    ctx.fill();
+    // Draw shadow as a square with dithered edges
+    // Higher z = more transparent (card further from surface)
+    const shadowOpacity = Math.max(0.05, 0.3 - (z / 300) * 0.25);
 
-    // Right edge
-    ctx.beginPath();
-    ctx.moveTo(x + width, y);
-    ctx.lineTo(x + width + thickness, y + thickness);
-    ctx.lineTo(x + width + thickness, y + height + thickness);
-    ctx.lineTo(x + width, y + height);
-    ctx.closePath();
-    ctx.fill();
+    ctx.save();
 
-    // Draw side edge when card is flipping (more visible at edge-on view)
-    if (flipFactor > 0.3) {
-      ctx.fillStyle = 'rgba(50, 30, 20, 0.8)'; // Darker brown for card edge
-      const edgeWidth = edgeThickness * flipFactor;
+    // Draw base square shadow
+    ctx.fillStyle = `rgba(0, 0, 0, ${shadowOpacity * 0.8})`;
+    ctx.fillRect(shadowX, shadowY, shadowWidth, shadowHeight);
 
-      // Draw visible card edge (vertical stripe in middle)
-      ctx.fillRect(x + width / 2 - edgeWidth / 2, y, edgeWidth, height);
-    }
+    // Create dithered edge effect by drawing semi-transparent border gradient
+    const ditherWidth = 3; // Width of dithered edge
+
+    // Top edge dither
+    const topGradient = ctx.createLinearGradient(shadowX, shadowY - ditherWidth, shadowX, shadowY);
+    topGradient.addColorStop(0, `rgba(0, 0, 0, 0)`);
+    topGradient.addColorStop(1, `rgba(0, 0, 0, ${shadowOpacity * 0.8})`);
+    ctx.fillStyle = topGradient;
+    ctx.fillRect(shadowX, shadowY - ditherWidth, shadowWidth, ditherWidth);
+
+    // Left edge dither
+    const leftGradient = ctx.createLinearGradient(shadowX - ditherWidth, shadowY, shadowX, shadowY);
+    leftGradient.addColorStop(0, `rgba(0, 0, 0, 0)`);
+    leftGradient.addColorStop(1, `rgba(0, 0, 0, ${shadowOpacity * 0.8})`);
+    ctx.fillStyle = leftGradient;
+    ctx.fillRect(shadowX - ditherWidth, shadowY, ditherWidth, shadowHeight);
+
+    // Right edge dither
+    const rightGradient = ctx.createLinearGradient(shadowX + shadowWidth, shadowY, shadowX + shadowWidth + ditherWidth, shadowY);
+    rightGradient.addColorStop(0, `rgba(0, 0, 0, ${shadowOpacity * 0.8})`);
+    rightGradient.addColorStop(1, `rgba(0, 0, 0, 0)`);
+    ctx.fillStyle = rightGradient;
+    ctx.fillRect(shadowX + shadowWidth, shadowY, ditherWidth, shadowHeight);
+
+    // Bottom edge dither
+    const bottomGradient = ctx.createLinearGradient(shadowX, shadowY + shadowHeight, shadowX, shadowY + shadowHeight + ditherWidth);
+    bottomGradient.addColorStop(0, `rgba(0, 0, 0, ${shadowOpacity * 0.8})`);
+    bottomGradient.addColorStop(1, `rgba(0, 0, 0, 0)`);
+    ctx.fillStyle = bottomGradient;
+    ctx.fillRect(shadowX, shadowY + shadowHeight, shadowWidth, ditherWidth);
+
+    ctx.restore();
   }
 
   /**
@@ -703,9 +725,14 @@ export class CardRenderer {
     // Apply opacity
     ctx.globalAlpha = opacity;
 
-    // Draw card thickness effect (before flip transform)
+    // Draw drop shadow effect for all cards (both static and animating)
     const faceUp = card3D.faceUp;
-    this.drawCardThickness(ctx, x, y, scaledWidth, scaledHeight, scale, faceUp);
+    // Show shadow for animating cards (renderLayer 10, z > 0) OR static cards (always show shadow)
+    const shouldShowShadow = (card3D.renderLayer === 10 && card3D.z > 0) || (card3D.renderLayer < 10);
+    if (shouldShowShadow) {
+      // Shadow uses the same center point as the card (card3D.x, card3D.y)
+      this.drawDropShadow(ctx, card3D.x, card3D.y, scaledWidth, scaledHeight, card3D.z);
+    }
 
     // Check if this is a wild card (Gaji in Sakura mode)
     const card = card3D.cardData;

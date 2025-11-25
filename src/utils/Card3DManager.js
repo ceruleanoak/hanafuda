@@ -38,6 +38,7 @@ export class Card3DManager {
     const zones = {
       deck: new Set(),
       drawnCard: new Set(),
+      opponentPlayedCard: new Set(), // Single card played by opponent during their turn
       field: new Set()
     };
 
@@ -556,19 +557,93 @@ export class Card3DManager {
         if (card3D.animationMode === 'idle') {
           // Use tween for smooth, deterministic animation
           const duration = this.getAnimationDuration(card3D, pos);
-          // Apply display animation (with Z lift) only when card moves FROM hand zones
-          // Hand cards should never be elevated - only cards being drawn/displayed get lift
-          const isFromHandZone = card3D.previousZone && card3D.previousZone.includes('Hand');
-          const isDisplayAnimation = card3D.previousZone !== null && !isFromHandZone;
-          card3D.tweenTo(
-            { x: pos.x, y: pos.y, z: pos.z },
-            duration,
-            'easeInOutCubic',
-            null, // controlPoint
-            0.5, // flipTiming
-            null, // peakScale
-            isDisplayAnimation
-          );
+
+          // Determine if this is a trick zone capture (has priority for control point Z animation)
+          const isTrickZone = zone.includes('Trick');
+          // Capture the previous zone before any changes
+          const cardPreviousZone = card3D.previousZone;
+          // Check if card is currently in the trick zone (already captured, not being captured now)
+          const cardCurrentlyInTrickZone = card3D.homeZone === zone;
+
+          debugLogger.log('3dCards', `relayoutZone: zone=${zone}, isTrickZone=${isTrickZone}, cardPreviousZone=${cardPreviousZone}, currentZone=${card3D.homeZone}, animate=${animate}`, { cardId: card3D.id });
+
+          // For trick pile cards that are already in the trick pile, snap immediately (static repositioning)
+          // Only animate if card is being CAPTURED from another zone (hand or field)
+          // A card is being captured if: previousZone is explicitly set (not null/undefined) AND it's different from the current zone
+          const isBeingCaptured = cardPreviousZone !== undefined && cardPreviousZone !== null && cardPreviousZone !== zone;
+
+          if (isTrickZone && cardCurrentlyInTrickZone && !isBeingCaptured) {
+            // Card is in trick pile AND not being captured = just repositioning, snap immediately
+            card3D.snapToHome();
+          } else {
+            // Animate the card
+            // Apply display animation (with Z lift) only when card moves FROM hand zones
+            // BUT NOT for trick captures (they use control point Z instead)
+            // Hand cards should never be elevated - only cards being drawn/displayed get lift
+            const isFromHandZone = cardPreviousZone && cardPreviousZone.includes('Hand');
+            const isDisplayAnimation = !isTrickZone && cardPreviousZone !== null && !isFromHandZone;
+
+            // Build tween target
+            const tweenTarget = { x: pos.x, y: pos.y };
+
+            // Captured cards moving to trick piles get an arc via control point Z and X/Y curve
+            let controlPoint = null;
+            if (isTrickZone) {
+              // Use a control point with elevated Z to create a curved arc during animation
+              // Bezier: start at current Z, peak at 150 (control point), end at 0
+              // Also curve X and Y towards the trick pile using control point offset
+
+              // Determine direction to trick pile based on zone name
+              // Left piles: player1Trick, player0Trick (bottom-right in 2-player, but left in others)
+              // Right piles: player0Trick (bottom-right), player3Trick (top-right in 4-player)
+              const isLeftPile = zone.includes('Trick') && (zone === 'player1Trick' || (this.playerCount === 3 && zone === 'player2Trick'));
+              const isRightPile = zone.includes('Trick') && (zone === 'player0Trick' || (this.playerCount === 4 && zone === 'player3Trick'));
+
+              // Control point curves towards the pile
+              // X offset: negative for left piles (-30), positive for right piles (+30)
+              const xCurve = isLeftPile ? -30 : (isRightPile ? 30 : 0);
+              // Y offset: lower control point (positive Y = down, which is lower on screen)
+              const yCurve = 40;
+
+              controlPoint = {
+                x: (card3D.x + pos.x) / 2 + xCurve,
+                y: (card3D.y + pos.y) / 2 + yCurve,
+                z: 150
+              };
+              // IMPORTANT: Must explicitly set target.z even if it's 0
+              // This ensures the bezier curve is properly applied in updateTween
+              tweenTarget.z = 0; // Return to z=0 at end of arc
+
+              // Elevate render layer so the scale effect (based on Z) is visible during arc
+              card3D.homeRenderLayer = card3D.renderLayer;
+              card3D.renderLayer = 10;
+              card3D.isDisplayAnimating = true;
+            } else if (zone !== 'field') {
+              // Non-field, non-trick zones animate normally with Z
+              tweenTarget.z = pos.z;
+            }
+
+            debugLogger.log('3dCards', `ANIMATING trick card (capture)`, { cardId: card3D.id, zone, cardPreviousZone, duration, hasControlPoint: !!controlPoint });
+
+            card3D.tweenTo(
+              tweenTarget,
+              duration,
+              'easeInOutCubic',
+              controlPoint,
+              0.5, // flipTiming
+              null, // peakScale
+              isDisplayAnimation
+            );
+
+            // Clear previousZone immediately to prevent re-animation on subsequent layout updates
+            // This is safe because we've already determined animation behavior above
+            card3D.previousZone = null;
+
+            // For field cards, snap the Z value immediately (don't animate it)
+            if (zone === 'field') {
+              card3D.z = pos.z;
+            }
+          }
         }
         // If card is already animating (tween or spring), let it continue
       } else {

@@ -19,7 +19,9 @@ import { APP_VERSION } from './utils/version.js';
 import { CARD_BACKS, getSelectedCardBack, setSelectedCardBack } from './data/cardBacks.js';
 import { HANAFUDA_DECK } from './data/cards.js';
 import { ShopUI } from './ui/ShopUI.js';
+import { TrickListUI } from './ui/TrickListUI.js';
 import { GameStateValidator } from './utils/GameStateValidator.js';
+import { LayoutManager } from './utils/LayoutManager.js';
 
 class Game {
   constructor() {
@@ -133,6 +135,9 @@ class Game {
         this.animationTester.initialize(width, height, this.canvas);
       }
 
+      // Update trick list button position
+      this.updateTrickListButtonPosition();
+
       debugLogger.log('gameState', 'Viewport resized - Card3D updated', {
         width,
         height
@@ -169,6 +174,9 @@ class Game {
     this.shopUI = new ShopUI(this.renderer.cardRenderer);
     this.shopUI.setOnCompleteCallback((cards, condition) => this.startShopGame(cards, condition));
 
+    // Initialize Trick List UI
+    this.trickListUI = new TrickListUI(this.renderer.cardRenderer);
+
     this.lastMessage = '';
     this.lastGameOverMessage = '';
     this.frameCount = 0;
@@ -179,6 +187,8 @@ class Game {
     this.hoverX = -1;             // Mouse hover X position
     this.hoverY = -1;             // Mouse hover Y position
     this.hoveredCard3D = null;    // Currently hovered Card3D object
+    this.gajiPulseCard3D = null;  // Gaji card being pulsed during selection
+    this.gajiPulseInterval = null; // Interval for gaji pulse animation
 
     // Drag and drop state
     this.draggedCard3D = null;    // Card being dragged
@@ -267,6 +277,9 @@ class Game {
 
       // Initialization successful - set up event listeners and start game loop
       this.setupEventListeners();
+
+      // Position trick list button at slot 0
+      this.updateTrickListButtonPosition();
 
       // Initialize help button state
       if (this.helpMode) {
@@ -368,6 +381,28 @@ class Game {
 
     // Animation tester button
     this.animationTesterButton.addEventListener('click', () => this.showAnimationTester());
+
+    // Trick list button
+    const trickListBtn = document.getElementById('trick-list-btn');
+    if (trickListBtn) {
+      trickListBtn.addEventListener('click', () => this.showTrickList());
+    }
+
+    // Trick list close button
+    const trickListClose = document.getElementById('trick-list-close');
+    if (trickListClose) {
+      trickListClose.addEventListener('click', () => this.hideTrickList());
+    }
+
+    // Close trick list when clicking outside modal
+    const trickListModal = document.getElementById('trick-list-modal');
+    if (trickListModal) {
+      trickListModal.addEventListener('click', (e) => {
+        if (e.target === trickListModal) {
+          this.hideTrickList();
+        }
+      });
+    }
 
     // Round selection buttons
     document.querySelectorAll('.round-btn').forEach(btn => {
@@ -1126,11 +1161,56 @@ class Game {
     // Use 3D hit detection
     const card3D = this.card3DManager.getCardAtPosition(x, y);
     if (card3D) {
-      // Allow clicking on both hand cards and field cards
       const isHandCard = card3D.homeZone === 'player0Hand';
       const isFieldCard = card3D.homeZone === 'field';
 
-      if (isHandCard || isFieldCard) {
+      // Determine if card can be selected based on current phase
+      let canSelectCard = false;
+
+      if (gameState.phase === 'select_hand') {
+        // During select_hand, only hand cards can be selected
+        canSelectCard = isHandCard;
+      } else if (gameState.phase === 'select_field') {
+        // During select_field, hand cards (to switch) or field cards (to match) can be selected
+        canSelectCard = isHandCard || isFieldCard;
+      } else if (gameState.phase === 'gaji_selection') {
+        // During gaji_selection, only the gaji card (hand) or field cards (to capture) can be selected
+        // Don't allow other hand cards
+        if (isFieldCard) {
+          canSelectCard = true;
+        } else if (isHandCard && gameState.selectedCards && gameState.selectedCards.length > 0) {
+          // Only allow the currently selected gaji card (same ID)
+          canSelectCard = card3D.cardData.id === gameState.selectedCards[0].id;
+        }
+      } else if (gameState.phase === 'select_drawn_match') {
+        // During select_drawn_match, both hand and field cards can be selected
+        canSelectCard = isHandCard || isFieldCard;
+      }
+
+      debugLogger.log('gameState', `🖱️ handleMouseDown card check`, {
+        cardName: card3D.cardData.name,
+        cardZone: card3D.homeZone,
+        isHandCard: isHandCard,
+        isFieldCard: isFieldCard,
+        gamePhase: gameState.phase,
+        canSelectCard: canSelectCard
+      });
+
+      if (canSelectCard) {
+        // Field cards should never be dragged - only clicked to match/capture
+        if (isFieldCard) {
+          debugLogger.log('gameState', `🎯 Field card clicked (no drag) - attempting match/capture`, {
+            cardName: card3D.cardData.name,
+            gamePhase: gameState.phase
+          });
+          // Handle field card click directly
+          const success = this.game.selectCard(card3D.cardData, 'field');
+          if (success) {
+            this.updateUI();
+          }
+          return;
+        }
+
         // Clear any hover state
         if (this.hoveredCard3D) {
           this.hoveredCard3D.setHovered(false);
@@ -1147,6 +1227,12 @@ class Game {
 
         debugLogger.log('gameState', `🔵 Card grabbed: ${card3D.cardData.name} from zone ${card3D.homeZone}`, {
           x, y, zone: card3D.homeZone
+        });
+      } else {
+        debugLogger.log('gameState', `🚫 Card click blocked - not selectable in current phase`, {
+          cardName: card3D.cardData.name,
+          cardZone: card3D.homeZone,
+          gamePhase: gameState.phase
         });
       }
     }
@@ -1751,15 +1837,21 @@ class Game {
 
     // Get card at current hover position
     const card3D = this.card3DManager.getCardAtPosition(this.hoverX, this.hoverY);
+    const gameState = this.game.getState();
 
     // Check if this card is hoverable
-    // When a hand card is selected, only allow hovering over field cards or the selected card itself
-    // Don't hover over cards that are being used as drop targets
+    // Only hand cards get hover scaling (not field cards)
+    // When a hand card is selected, don't hover other hand cards
+    // During gaji_selection, only hover the gaji card itself (to show it can be clicked to cancel)
     const isHoverable = card3D &&
-      (card3D.homeZone === 'player0Hand' || card3D.homeZone === 'field') &&
+      card3D.homeZone === 'player0Hand' && // Only hand cards get hover animation
       card3D !== this.dropTargetCard3D &&
       // If a hand card is selected, don't hover other hand cards
-      !(this.selectedCard3D && card3D.homeZone === 'player0Hand' && card3D !== this.selectedCard3D);
+      !(this.selectedCard3D && card3D.homeZone === 'player0Hand' && card3D !== this.selectedCard3D) &&
+      // During gaji_selection, only hover the gaji card itself
+      !(gameState.phase === 'gaji_selection' && card3D.homeZone === 'player0Hand' &&
+        gameState.selectedCards && gameState.selectedCards.length > 0 &&
+        card3D.cardData.id !== gameState.selectedCards[0].id);
 
     // Update hover state
     if (isHoverable && card3D !== this.hoveredCard3D) {
@@ -1774,6 +1866,75 @@ class Game {
       // Mouse moved away from hoverable card
       this.hoveredCard3D.setHovered(false);
       this.hoveredCard3D = null;
+    }
+  }
+
+  /**
+   * Start pulsing the gaji card during gaji_selection phase
+   */
+  startGajiPulse(card3D) {
+    debugLogger.log('gameState', `🎯 startGajiPulse called`, {
+      cardId: card3D.cardData.id,
+      cardName: card3D.cardData.name,
+      baseScale: card3D.baseScale,
+      hoverScale: card3D.hoverScale
+    });
+
+    // Stop any existing pulse
+    this.stopGajiPulse();
+
+    this.gajiPulseCard3D = card3D;
+    let isScaledUp = false;
+
+    debugLogger.log('gameState', `⏱️ Gaji pulse interval started`, {
+      pulseInterval: 500,
+      card: card3D.cardData.name
+    });
+
+    // Pulse the card continuously using hover scale
+    this.gajiPulseInterval = setInterval(() => {
+      if (!this.gajiPulseCard3D) {
+        debugLogger.log('gameState', `⚠️ Gaji pulse card was cleared, stopping interval`);
+        this.stopGajiPulse();
+        return;
+      }
+
+      if (isScaledUp) {
+        this.gajiPulseCard3D.targetScale = this.gajiPulseCard3D.baseScale;
+        debugLogger.log('gameState', `📉 Gaji pulse: scaling down`, {
+          newTargetScale: this.gajiPulseCard3D.baseScale,
+          card: this.gajiPulseCard3D.cardData.name
+        });
+        isScaledUp = false;
+      } else {
+        this.gajiPulseCard3D.targetScale = this.gajiPulseCard3D.baseScale * this.gajiPulseCard3D.hoverScale;
+        debugLogger.log('gameState', `📈 Gaji pulse: scaling up`, {
+          newTargetScale: this.gajiPulseCard3D.baseScale * this.gajiPulseCard3D.hoverScale,
+          card: this.gajiPulseCard3D.cardData.name
+        });
+        isScaledUp = true;
+      }
+    }, 500); // Pulse every 500ms
+  }
+
+  /**
+   * Stop pulsing the gaji card
+   */
+  stopGajiPulse() {
+    debugLogger.log('gameState', `🛑 stopGajiPulse called`, {
+      hadActiveInterval: this.gajiPulseInterval !== null,
+      hadPulseCard: this.gajiPulseCard3D !== null,
+      card: this.gajiPulseCard3D ? this.gajiPulseCard3D.cardData.name : 'none'
+    });
+
+    if (this.gajiPulseInterval) {
+      clearInterval(this.gajiPulseInterval);
+      this.gajiPulseInterval = null;
+    }
+
+    if (this.gajiPulseCard3D) {
+      this.gajiPulseCard3D.targetScale = this.gajiPulseCard3D.baseScale;
+      this.gajiPulseCard3D = null;
     }
   }
 
@@ -2920,6 +3081,34 @@ class Game {
       this.selectedCard3D = null;
     }
 
+    // Handle gaji pulse animation for Sakura mode
+    if (this.currentGameMode === 'sakura') {
+      if (state.phase === 'gaji_selection' && state.selectedCards && state.selectedCards.length > 0) {
+        // Find the gaji card in the 3D system (cards is a Map)
+        const gajiCard = state.selectedCards[0];
+        const gajiCard3D = this.card3DManager.cards.get(gajiCard.id);
+
+        debugLogger.log('gameState', `🎴 updateUI: gaji_selection phase handling`, {
+          gajiCardName: gajiCard.name,
+          gajiCardId: gajiCard.id,
+          gajiCard3DFound: gajiCard3D !== undefined,
+          alreadyPulsing: this.gajiPulseCard3D ? this.gajiPulseCard3D.cardData.name : 'none',
+          needsNewPulse: gajiCard3D && gajiCard3D !== this.gajiPulseCard3D
+        });
+
+        if (gajiCard3D && gajiCard3D !== this.gajiPulseCard3D) {
+          debugLogger.log('gameState', `📍 Starting gaji pulse for ${gajiCard.name}`);
+          this.startGajiPulse(gajiCard3D);
+        }
+      } else {
+        // Not in gaji_selection, stop the pulse
+        if (this.gajiPulseCard3D) {
+          debugLogger.log('gameState', `📍 Exiting gaji_selection phase, stopping pulse`);
+          this.stopGajiPulse();
+        }
+      }
+    }
+
     // Update scores - different calculation for Sakura vs Koi-Koi
     // Scores always displayed; trick progress text only shown when Help is active
     this.updateScoreDisplay(state);
@@ -3496,7 +3685,8 @@ class Game {
             isRoundSummaryVisible: this.roundSummaryModal.classList.contains('show'),
             isSageDecisionModalVisible: this.sageDecisionModal?.classList.contains('show') || false,
             isKoikoiModalVisible: this.koikoiModal.classList.contains('show'),
-            card3DManager: this.card3DManager
+            card3DManager: this.card3DManager,
+            isDragging: this.isDragging
           };
 
           this.renderer.render(state, [], renderOptions);
@@ -4511,6 +4701,36 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   const game = new Game();
+
+  // Attach trick list methods to game instance for access from event listeners
+  game.showTrickList = function() {
+    const gameMode = this.currentGameMode;
+    this.trickListUI.show(gameMode);
+    debugLogger.log('gameState', `Trick list shown for ${gameMode} mode`, null);
+  };
+
+  game.hideTrickList = function() {
+    this.trickListUI.hide();
+    debugLogger.log('gameState', 'Trick list hidden', null);
+  };
+
+  // Position trick list button at slot 0 + y offset
+  game.updateTrickListButtonPosition = function() {
+    const trickListBtn = document.getElementById('trick-list-btn');
+    if (!trickListBtn || !this.card3DManager) return;
+
+    const fieldConfig = LayoutManager.getZoneConfig('field', this.renderer.displayWidth, this.renderer.displayHeight, this.card3DManager.playerCount);
+    const layoutManager = new LayoutManager();
+    const dummyCard = { gridSlot: 0 };
+    const positions = layoutManager.layoutGrid([dummyCard], fieldConfig);
+
+    if (positions.length > 0) {
+      const slot0Pos = positions[0];
+      trickListBtn.style.left = slot0Pos.x + 'px';
+      trickListBtn.style.top = (slot0Pos.y + 170) + 'px'; // 170px below slot 0
+      trickListBtn.style.transform = 'translateX(-50%)'; // Center on x position
+    }
+  };
 
   // Run async initialization with loading screen
   await game.initialize();
