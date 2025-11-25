@@ -1404,6 +1404,16 @@ class Game {
 
           const gameState = this.game.getState();
 
+          // Check if there are any available matches for this card
+          const availableMatches = gameState.field.filter(fc => fc.month === this.draggedCardData.month);
+
+          // If there ARE matches available, don't allow placing on field - return to hand
+          if (availableMatches.length > 0) {
+            debugLogger.log('gameState', `Card has ${availableMatches.length} available match(es) - cannot place on field, returning to hand`, null);
+            this.cancelDrag();
+            return;
+          }
+
           // For Hachi-Hachi, only allow placing UNMATCHED cards on field
           if (this.currentGameMode === 'hachihachi') {
             // Check if card has matches BEFORE selecting
