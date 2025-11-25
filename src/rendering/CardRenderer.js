@@ -6,8 +6,13 @@ import { versionedUrl } from '../utils/version.js';
 
 export class CardRenderer {
   constructor() {
+    // Base card dimensions (will be scaled based on viewport)
+    this.baseCardWidth = 100;
+    this.baseCardHeight = 140;
     this.cardWidth = 100;
     this.cardHeight = 140;
+    this.scaleFactor = 1.0;
+
     this.padding = 5;
     this.fontSize = 11;
     this.selectedColor = '#4ecdc4';
@@ -24,6 +29,86 @@ export class CardRenderer {
     // Card back selection
     this.selectedCardBackId = 'default';
     this.cardBackPath = 'assets/card-backs/carback-flower.png';
+  }
+
+  /**
+   * Update card dimensions based on viewport size
+   * Uses constraint-based scaling to ensure cards fit on screen
+   * @param {number} viewportWidth - Viewport width in pixels
+   * @param {number} viewportHeight - Viewport height in pixels
+   */
+  updateCardScale(viewportWidth, viewportHeight) {
+    // Layout constants
+    const CARDS_IN_HAND = 8;
+    const CARDS_IN_FIELD_ROW = 9;
+    const HORIZONTAL_MARGIN = 20; // Total margin on left + right
+    const VERTICAL_ZONES = 4; // opponent hand, 2 field rows, player hand
+    const VERTICAL_MARGIN = 100; // Space for UI elements
+    const MIN_TOUCH_TARGET = 44; // Minimum touch target size (Apple HIG)
+
+    // Calculate scale based on horizontal constraint (cards in hand)
+    // Cards need to fit with some overlap allowed
+    const availableWidth = viewportWidth - HORIZONTAL_MARGIN;
+    const maxCardWidthForHand = availableWidth / CARDS_IN_HAND;
+    const horizontalScale = maxCardWidthForHand / this.baseCardWidth;
+
+    // Calculate scale based on vertical constraint
+    // Need: opponent area + field (2 rows) + player area
+    const availableHeight = viewportHeight - VERTICAL_MARGIN;
+    const maxCardHeightForLayout = availableHeight / VERTICAL_ZONES;
+    const verticalScale = maxCardHeightForLayout / this.baseCardHeight;
+
+    // Use the minimum of both constraints
+    let scale = Math.min(horizontalScale, verticalScale);
+
+    // Apply minimum scale for touch targets
+    const minScale = MIN_TOUCH_TARGET / this.baseCardWidth;
+
+    // Apply maximum scale for desktop (don't make cards too big)
+    const maxScale = 1.2;
+
+    // Clamp scale
+    scale = Math.max(minScale, Math.min(maxScale, scale));
+
+    // Additional adjustments for specific screen sizes (mobile optimization)
+    // These handle edge cases where the calculated scale might still be too large
+    if (viewportWidth <= 375) {
+      // iPhone mini / SE - very tight space
+      scale = Math.min(scale, 0.42);
+    } else if (viewportWidth <= 414) {
+      // iPhone 6/7/8, smaller Android phones
+      scale = Math.min(scale, 0.48);
+    } else if (viewportWidth <= 480) {
+      // Larger phones in portrait
+      scale = Math.min(scale, 0.55);
+    } else if (viewportWidth <= 768) {
+      // Tablets and landscape phones
+      scale = Math.min(scale, 0.75);
+    }
+
+    this.scaleFactor = scale;
+    this.cardWidth = Math.floor(this.baseCardWidth * scale);
+    this.cardHeight = Math.floor(this.baseCardHeight * scale);
+    this.fontSize = Math.max(8, Math.floor(11 * scale));
+    this.padding = Math.max(3, Math.floor(5 * scale));
+
+    return {
+      width: this.cardWidth,
+      height: this.cardHeight,
+      scale: this.scaleFactor
+    };
+  }
+
+  /**
+   * Get current card dimensions
+   * @returns {{width: number, height: number, scale: number}}
+   */
+  getCardDimensions() {
+    return {
+      width: this.cardWidth,
+      height: this.cardHeight,
+      scale: this.scaleFactor
+    };
   }
 
   /**

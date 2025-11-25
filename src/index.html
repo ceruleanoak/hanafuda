@@ -2,8 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Hanafuda Koi-Koi</title>
+
+  <!-- Mobile Web App Meta Tags -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Hanafuda">
+  <meta name="theme-color" content="#8b0000">
+  <meta name="description" content="Play traditional Japanese Hanafuda card game with Koi-Koi and Sakura variations">
 
   <!-- Cache Control: Prevent aggressive browser caching -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -15,6 +23,11 @@
 </head>
 <body>
   <div id="app">
+    <!-- Floating mobile hamburger button (outside header for visibility when header is hidden) -->
+    <button id="mobile-menu-btn" class="mobile-menu-btn" aria-label="Menu" title="Open menu">
+      <span class="hamburger-icon"></span>
+    </button>
+
     <header>
       <div id="game-mode-selector">
         <h1><img src="./assets/graphics/hanafuda_logo.png" alt="Hanafuda" class="header-logo"></h1>
@@ -39,6 +52,37 @@
         <button id="new-game-btn">New Game</button>
       </div>
     </header>
+
+    <!-- Mobile Menu Overlay -->
+    <div id="mobile-menu" class="mobile-menu">
+      <div class="mobile-menu-content">
+        <div class="mobile-menu-header">
+          <h2>Menu</h2>
+          <button id="mobile-menu-close" class="mobile-menu-close" aria-label="Close menu">&times;</button>
+        </div>
+        <div class="mobile-menu-body">
+          <!-- Game Mode Selector for Mobile -->
+          <div class="mobile-game-mode-section">
+            <label for="mobile-game-mode-select">Game Mode</label>
+            <select id="mobile-game-mode-select" class="mobile-game-mode-select">
+              <option value="koikoi">Koi Koi</option>
+              <option value="sakura">Sakura (Hawaiian)</option>
+              <option value="match">Match Game</option>
+              <option value="shop">Koi Koi Shop</option>
+            </select>
+          </div>
+          <div id="mobile-score-display" class="mobile-score-section"></div>
+          <nav class="mobile-menu-nav">
+            <button id="mobile-new-game-btn" class="mobile-menu-item">🎮 New Game</button>
+            <button id="mobile-help-btn" class="mobile-menu-item">❓ Help</button>
+            <button id="mobile-variations-btn" class="mobile-menu-item">💣 Variations</button>
+            <button id="mobile-card-back-btn" class="mobile-menu-item">🃏 Card Back</button>
+            <button id="mobile-options-btn" class="mobile-menu-item">⚙️ Options</button>
+            <button id="mobile-animation-tester-btn" class="mobile-menu-item">🎬 Animator</button>
+          </nav>
+        </div>
+      </div>
+    </div>
 
     <main>
       <canvas id="game-canvas"></canvas>

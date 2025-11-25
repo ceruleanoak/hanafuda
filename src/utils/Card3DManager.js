@@ -69,10 +69,23 @@ export class Card3DManager {
 
   /**
    * Update viewport dimensions (on window resize)
+   * @param {number} width - Viewport width
+   * @param {number} height - Viewport height
+   * @param {Object} cardDimensions - Optional card dimensions {width, height, scale}
    */
-  setViewportDimensions(width, height) {
+  setViewportDimensions(width, height, cardDimensions = null) {
     this.viewportWidth = width;
     this.viewportHeight = height;
+
+    // Update layout manager with new card dimensions if provided
+    if (cardDimensions) {
+      this.layoutManager.updateCardDimensions(
+        cardDimensions.width,
+        cardDimensions.height,
+        cardDimensions.scale
+      );
+    }
+
     // Mark all zones dirty to recalculate layouts
     Object.keys(this.zoneCards).forEach(zone => this.dirtyZones.add(zone));
     // Flag that dirty zones came from viewport change (should snap, not animate)

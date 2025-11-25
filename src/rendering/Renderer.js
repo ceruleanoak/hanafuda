@@ -71,9 +71,12 @@ export class Renderer {
     this.displayWidth = width;
     this.displayHeight = height;
 
-    // Notify listeners of resize
+    // Update card renderer scale based on new viewport dimensions
+    const cardDimensions = this.cardRenderer.updateCardScale(width, height);
+
+    // Notify listeners of resize with card dimensions
     if (this.onResizeCallback) {
-      this.onResizeCallback(width, height);
+      this.onResizeCallback(width, height, cardDimensions);
     }
   }
 
