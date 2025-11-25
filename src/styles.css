@@ -1080,6 +1080,53 @@ footer {
   }
 }
 
+/* Opponent Dekiyaku Decision Notification */
+.opponent-decision-notification {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.8);
+  z-index: 1100;
+  background: linear-gradient(135deg, #4a90e2 0%, #3b7fd9 100%);
+  color: #fff;
+  padding: 2rem 3rem;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(74, 144, 226, 0.6);
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.3s ease;
+  border: 3px solid #2563eb;
+}
+
+.opponent-decision-notification.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  animation: pulseDecision 0.5s ease-in-out;
+}
+
+.opponent-decision-notification h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.8rem;
+  color: #fff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.opponent-decision-notification p {
+  margin: 0;
+  font-size: 1.1rem;
+  line-height: 1.5;
+}
+
+@keyframes pulseDecision {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+}
+
 /* Tutorial Bubble */
 .tutorial-bubble {
   position: fixed;
@@ -1787,7 +1834,7 @@ footer {
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(135deg, #000 0%, #1a0000 50%, #000 100%);
+  background: hsl(7, 89%, 41%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1810,11 +1857,12 @@ footer {
   padding: 2rem;
 }
 
-.loading-title {
-  font-size: 2.5rem;
-  color: #ff6b6b;
+.loading-logo {
+  height: 120px;
+  width: auto;
+  object-fit: contain;
   margin-bottom: 2rem;
-  text-shadow: 0 0 20px rgba(255, 107, 107, 0.5);
+  filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.5));
 }
 
 .loading-spinner {
@@ -1900,6 +1948,14 @@ footer {
   max-height: 90vh;
   overflow-y: auto;
   padding: 2rem;
+  min-height: auto;
+}
+
+#shop-modal:not(.show) .shop-modal-content {
+  visibility: hidden;
+  pointer-events: none;
+  width: 0;
+  height: 0;
 }
 
 .shop-instructions {
@@ -2137,6 +2193,10 @@ footer {
   z-index: 100;
 }
 
+.active-win-condition.hidden {
+  display: none !important;
+}
+
 .active-win-condition h4 {
   margin: 0 0 0.5rem 0;
   font-size: 1rem;
@@ -2160,8 +2220,188 @@ footer {
   font-weight: bold;
 }
 
+/* Trick List Button - Positioned at slot 0 + y offset via JavaScript */
+.trick-list-btn {
+  position: fixed;
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+  border: none;
+  border-radius: 6px;
+  color: #000;
+  font-weight: bold;
+  font-size: 0.8rem;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(255, 215, 0, 0.4);
+  white-space: nowrap;
+}
+
+.trick-list-btn:hover {
+  transform: translateY(-2px) translateX(-50%);
+  box-shadow: 0 6px 20px rgba(255, 215, 0, 0.6);
+  background: linear-gradient(135deg, #ffed4e 0%, #ffd700 100%);
+}
+
+.trick-list-btn:active {
+  transform: translateY(0px) translateX(-50%);
+  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.4);
+}
+
+/* Trick List Modal */
+.trick-list-modal-content {
+  max-width: 500px;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: rgba(0, 0, 0, 0.8);
+  border: 2px solid #ffd700;
+  border-radius: 8px;
+}
+
+.trick-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 2px solid #ffd700;
+  flex-shrink: 0;
+}
+
+.trick-list-header h2 {
+  margin: 0;
+  color: #ffd700;
+  font-size: 1.2rem;
+}
+
+.trick-list-header .close-btn {
+  background: none;
+  border: none;
+  color: #ffd700;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.trick-list-header .close-btn:hover {
+  background: rgba(255, 215, 0, 0.2);
+}
+
+.trick-list-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.8rem;
+}
+
+/* Trick list items container */
+.trick-list-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.trick-entry {
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: 4px;
+  padding: 0.5rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.trick-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.trick-name {
+  color: #ffeb3b;
+  font-size: 0.85rem;
+  font-weight: bold;
+  flex: 1;
+}
+
+.trick-cards-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.trick-card-tiny {
+  display: block;
+  flex-shrink: 0;
+  width: 28px;
+  height: 40px;
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.card-more {
+  color: #888;
+  font-size: 0.7rem;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.trick-pts {
+  background: #8b0000;
+  color: #fff;
+  padding: 0.3rem 0.5rem;
+  border-radius: 3px;
+  font-weight: bold;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Modal visibility */
+#trick-list-modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 1200;
+  align-items: center;
+  justify-content: center;
+}
+
+#trick-list-modal.visible {
+  display: flex;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
+  .trick-list-btn {
+    font-size: 0.75rem;
+    padding: 0.4rem 0.8rem;
+  }
+
+  .trick-list-modal-content {
+    max-width: 95vw;
+    max-height: calc(100vh - 60px);
+  }
+
+  .trick-list-detailed {
+    grid-template-columns: 1fr;
+  }
+
   .win-conditions-list {
     grid-template-columns: 1fr;
   }

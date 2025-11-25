@@ -17,6 +17,7 @@ export class KoiKoi {
     this.animationQueue = [];
     this.isAnimating = false;
     this.gameOptions = gameOptions;
+    this.audioManager = null; // Will be set by main.js
     this.uiCallback = null; // Will be set by main.js to show koi-koi modal
     this.roundSummaryCallback = null; // Will be set by main.js to show round summary modal
     this.opponentKoikoiCallback = null; // Will be set by main.js to show opponent koi-koi notification
@@ -52,6 +53,13 @@ export class KoiKoi {
     };
 
     this.reset();
+  }
+
+  /**
+   * Set audio manager for playing sound effects
+   */
+  setAudioManager(audioManager) {
+    this.audioManager = audioManager;
   }
 
   /**
@@ -156,18 +164,88 @@ export class KoiKoi {
   }
 
   /**
+   * Check if field has 4 cards of the same month (invalid deal)
+   * @returns {boolean} true if field is invalid
+   */
+  isInvalidField() {
+    const monthCounts = {};
+    for (const card of this.field) {
+      monthCounts[card.month] = (monthCounts[card.month] || 0) + 1;
+      if (monthCounts[card.month] === 4) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Assign gridSlot values to field cards based on occupancy
+   * Field has 8 fixed slots total (0-7):
+   * - Slot 0: Reserved for deck
+   * - Slots 1-7: Field cards (max 7 field cards)
+   * Cards are assigned to slots 1, 2, 3, ... N based on their position in field array
+   */
+  assignFieldGridSlots() {
+    // Clear any existing gridSlot values
+    this.field.forEach(card => {
+      delete card.gridSlot;
+    });
+
+    // Assign gridSlot 1, 2, 3, ... N to the cards in order (slot 0 is deck)
+    this.field.forEach((card, index) => {
+      card.gridSlot = index + 1; // Start from slot 1, deck is slot 0
+    });
+
+    debugLogger.log('gameState', `📍 Assigned gridSlots to ${this.field.length} field cards (deck at slot 0)`, {
+      gridSlots: this.field.map((c, i) => ({
+        arrayIndex: i,
+        cardId: c.id,
+        cardName: c.name,
+        gridSlot: c.gridSlot
+      }))
+    });
+  }
+
+  /**
    * Initial deal - 8 cards to field, 8 to each player (10 each if bomb variation)
    */
   deal() {
     // Determine hand size based on bomb variation
     const handSize = (this.gameOptions && this.gameOptions.get('bombVariationEnabled')) ? 10 : 8;
 
-    // Deal cards to each player first (8 or 10 depending on variation)
-    this.playerHand = this.deck.drawMultiple(handSize);
-    this.opponentHand = this.deck.drawMultiple(handSize);
+    // Keep dealing until we get a valid field
+    let validDeal = false;
+    let dealAttempts = 0;
+    const maxAttempts = 100;
 
-    // Deal 8 cards to field LAST (traditional Hanafuda order)
-    this.field = this.deck.drawMultiple(8);
+    while (!validDeal && dealAttempts < maxAttempts) {
+      dealAttempts++;
+
+      // Reset deck and hands for re-deal
+      if (dealAttempts > 1) {
+        this.deck = new Deck();
+        this.playerHand = [];
+        this.opponentHand = [];
+      }
+
+      // Deal cards to each player first (8 or 10 depending on variation)
+      this.playerHand = this.deck.drawMultiple(handSize);
+      this.opponentHand = this.deck.drawMultiple(handSize);
+
+      // Deal 8 cards to field LAST (traditional Hanafuda order)
+      this.field = this.deck.drawMultiple(8);
+
+      // Check if field is valid
+      if (this.isInvalidField()) {
+        // Invalid field, loop will retry
+        continue;
+      } else {
+        validDeal = true;
+      }
+    }
+
+    // Assign gridSlots to all field cards (0-7 for initial 8 cards)
+    this.assignFieldGridSlots();
 
     // Check for Four of a Kind lucky hand (instant win with 6 points)
     const fourOfAKind = this.checkFourOfAKindInStartingHand();
@@ -303,6 +381,7 @@ export class KoiKoi {
         }
 
         this.field.push(playedCard);
+        this.assignFieldGridSlots();
         this.drawPhase();
         return true;
       }
@@ -475,6 +554,7 @@ export class KoiKoi {
 
       // Remove field cards
       this.field = this.field.filter(c => c.month !== month);
+      this.assignFieldGridSlots();
 
       // Add all 4 cards to captured
       this.playerCaptured.push(...handCards, ...fieldCards);
@@ -511,6 +591,7 @@ export class KoiKoi {
 
         // Remove field cards
         this.field = this.field.filter(c => c.month !== month);
+        this.assignFieldGridSlots();
 
         // Add all 4 cards to captured
         this.opponentCaptured.push(...handCards, ...fieldCards);
@@ -578,6 +659,7 @@ export class KoiKoi {
 
       // Remove all matching cards from field
       this.field = this.field.filter(c => c.month !== playedCard.month);
+      this.assignFieldGridSlots();
 
       // Add all 4 cards to captured
       captured.push(playedCard, ...sameMonthOnField);
@@ -653,6 +735,7 @@ export class KoiKoi {
       }
 
       this.field.push(card);
+      this.assignFieldGridSlots();
       this.selectedCards = [];
       this.drawPhase();
     }
@@ -673,9 +756,15 @@ export class KoiKoi {
       this.phase = 'celebrate';
       this.message = `🎉 Celebrate! All 4 ${handCard.month} cards captured!`;
 
+      // Play snap sound for 4-card capture
+      if (this.audioManager) {
+        this.audioManager.playSnapSound();
+      }
+
       setTimeout(() => {
         // Remove all matching cards from field
         this.field = this.field.filter(c => c.month !== handCard.month);
+        this.assignFieldGridSlots();
 
         // Add all 4 cards to captured
         this.playerCaptured.push(handCard, ...sameMonthOnField);
@@ -693,9 +782,15 @@ export class KoiKoi {
 
     if (handIndex >= 0) this.playerHand.splice(handIndex, 1);
     if (fieldIndex >= 0) this.field.splice(fieldIndex, 1);
+    this.assignFieldGridSlots();
 
     // Add to captured
     this.playerCaptured.push(handCard, fieldCard);
+
+    // Play snap sound when cards match
+    if (this.audioManager) {
+      this.audioManager.playSnapSound();
+    }
 
     this.selectedCards = [];
     this.updateYaku('player', true); // Defer decision during hand phase
@@ -714,9 +809,15 @@ export class KoiKoi {
       // Celebrate! Capture all 4 cards
       // Remove all matching cards from field
       this.field = this.field.filter(c => c.month !== this.drawnCard.month);
+      this.assignFieldGridSlots();
 
       // Add all 4 cards to captured
       this.playerCaptured.push(this.drawnCard, ...sameMonthOnField);
+
+      // Play snap sound for 4-card capture
+      if (this.audioManager) {
+        this.audioManager.playSnapSound();
+      }
 
       this.drawnCard = null;
       this.drawnCardMatches = [];
@@ -741,9 +842,15 @@ export class KoiKoi {
     // Normal 2-card capture
     const fieldIndex = this.field.findIndex(c => c.id === fieldCard.id);
     if (fieldIndex >= 0) this.field.splice(fieldIndex, 1);
+    this.assignFieldGridSlots();
 
     // Add to captured
     this.playerCaptured.push(this.drawnCard, fieldCard);
+
+    // Play snap sound when cards match
+    if (this.audioManager) {
+      this.audioManager.playSnapSound();
+    }
 
     this.drawnCard = null;
     this.drawnCardMatches = [];
@@ -796,6 +903,7 @@ export class KoiKoi {
         setTimeout(() => {
           // Update captures after showing both cards
           this.field = this.field.filter(c => c.month !== drawnCard.month);
+          this.assignFieldGridSlots();
           this.playerCaptured.push(drawnCard, ...sameMonthOnField);
           this.checkForKoikoiDecision('player');
 
@@ -833,6 +941,7 @@ export class KoiKoi {
           setTimeout(() => {
             // Update captures after showing both cards
             this.field = this.field.filter(c => c.month !== drawnCard.month);
+            this.assignFieldGridSlots();
             this.playerCaptured.push(drawnCard, ...sameMonthOnField);
             this.checkForKoikoiDecision('player');
 
@@ -864,6 +973,7 @@ export class KoiKoi {
             // Update captures after showing both cards
             const fieldIndex = this.field.findIndex(c => c.id === fieldCard.id);
             this.field.splice(fieldIndex, 1);
+            this.assignFieldGridSlots();
             this.playerCaptured.push(drawnCard, fieldCard);
             this.checkForKoikoiDecision('player');
 
@@ -897,6 +1007,7 @@ export class KoiKoi {
           setTimeout(() => {
             // Update captures after showing all cards
             this.field = this.field.filter(c => c.month !== drawnCard.month);
+            this.assignFieldGridSlots();
             this.playerCaptured.push(drawnCard, ...sameMonthOnField);
             this.checkForKoikoiDecision('player');
 
@@ -923,6 +1034,7 @@ export class KoiKoi {
 
           setTimeout(() => {
             this.field.push(drawnCard);
+            this.assignFieldGridSlots();
             this.checkForKoikoiDecision('player');
 
             // Don't continue if waiting for koi-koi decision or if round has ended
@@ -1451,6 +1563,7 @@ export class KoiKoi {
 
           setTimeout(() => {
             this.field = this.field.filter(c => c.month !== handCard.month);
+            this.assignFieldGridSlots();
             this.opponentCaptured.push(handCard, ...sameMonthOnField);
             this.updateYaku('opponent', true); // Defer decision during hand phase
             this.opponentPlayedCard = null;
@@ -1467,6 +1580,7 @@ export class KoiKoi {
             // Update captures after showing both cards
             const fieldIndex = this.field.findIndex(c => c.id === selectedMatch.id);
             this.field.splice(fieldIndex, 1);
+            this.assignFieldGridSlots();
             this.opponentCaptured.push(handCard, selectedMatch);
             this.updateYaku('opponent', true); // Defer decision during hand phase
             this.opponentPlayedCard = null;
@@ -1487,6 +1601,7 @@ export class KoiKoi {
 
           setTimeout(() => {
             this.field = this.field.filter(c => c.month !== handCard.month);
+            this.assignFieldGridSlots();
             this.opponentCaptured.push(handCard, ...sameMonthOnField);
             this.updateYaku('opponent', true); // Defer decision during hand phase
             this.opponentPlayedCard = null;
@@ -1496,6 +1611,7 @@ export class KoiKoi {
           return;
         } else {
           this.field.push(handCard);
+          this.assignFieldGridSlots();
         }
       }
 
@@ -1537,6 +1653,7 @@ export class KoiKoi {
           setTimeout(() => {
             // Update captures after showing both cards
             this.field = this.field.filter(c => c.month !== drawnCard.month);
+            this.assignFieldGridSlots();
             this.opponentCaptured.push(drawnCard, ...sameMonthOnField);
             this.checkForKoikoiDecision('opponent');
 
@@ -1570,6 +1687,7 @@ export class KoiKoi {
             // Update captures after showing both cards
             const fieldIndex = this.field.findIndex(c => c.id === bestMatch.id);
             this.field.splice(fieldIndex, 1);
+            this.assignFieldGridSlots();
             this.opponentCaptured.push(drawnCard, bestMatch);
             this.checkForKoikoiDecision('opponent');
 
@@ -1603,6 +1721,7 @@ export class KoiKoi {
           setTimeout(() => {
             // Update captures after showing all cards
             this.field = this.field.filter(c => c.month !== drawnCard.month);
+            this.assignFieldGridSlots();
             this.opponentCaptured.push(drawnCard, ...sameMonthOnField);
             this.checkForKoikoiDecision('opponent');
 
@@ -1629,6 +1748,7 @@ export class KoiKoi {
 
           setTimeout(() => {
             this.field.push(drawnCard);
+            this.assignFieldGridSlots();
             this.checkForKoikoiDecision('opponent');
 
             // Don't continue if waiting for koi-koi decision or if round has ended

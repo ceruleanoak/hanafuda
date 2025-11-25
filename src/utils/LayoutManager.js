@@ -228,6 +228,15 @@ export class LayoutManager {
       playerCount = 2;
     }
 
+    // Convert legacy zone names to indexed names
+    const legacyMap = {
+      'playerHand': 'player0Hand',
+      'opponentHand': 'player1Hand',
+      'playerTrick': 'player0Trick',
+      'opponentTrick': 'player1Trick'
+    };
+    zoneName = legacyMap[zoneName] || zoneName;
+
     const centerX = viewportWidth / 2;
     const centerY = viewportHeight / 2;
     const margin = 30;
@@ -337,6 +346,24 @@ export class LayoutManager {
             maxVisible: 5,
             faceUp: 1,
             renderLayer: 2
+          },
+          player0Teyaku: {
+            type: 'row',
+            anchorPoint: { x: 50, y: viewportHeight - 240 + HEADER_OFFSET },
+            centerX: centerX,
+            spacing: 60,
+            maxCards: 4,
+            faceUp: 1,
+            renderLayer: 3
+          },
+          player1Teyaku: {
+            type: 'row',
+            anchorPoint: { x: 50, y: 110 + HEADER_OFFSET },
+            centerX: centerX,
+            spacing: 60,
+            maxCards: 4,
+            faceUp: 1,
+            renderLayer: 3
           }
         };
       } else if (playerCount === 3) {
@@ -393,6 +420,22 @@ export class LayoutManager {
             maxVisible: 4,
             faceUp: 1,
             renderLayer: 2
+          },
+          player1Teyaku: {
+            type: 'row',
+            anchorPoint: { x: 150, y: 220 + HEADER_OFFSET },
+            spacing: 60,
+            maxCards: 4,
+            faceUp: 1,
+            renderLayer: 3
+          },
+          player2Teyaku: {
+            type: 'row',
+            anchorPoint: { x: viewportWidth - 150, y: 220 + HEADER_OFFSET },
+            spacing: 60,
+            maxCards: 4,
+            faceUp: 1,
+            renderLayer: 3
           }
         };
       } else if (playerCount === 4) {
@@ -469,6 +512,38 @@ export class LayoutManager {
             maxVisible: 6,
             faceUp: 1,
             renderLayer: 2
+          },
+          player0Teyaku: {
+            type: 'row',
+            anchorPoint: { x: 50, y: viewportHeight - 240 + HEADER_OFFSET },
+            spacing: 60,
+            maxCards: 4,
+            faceUp: 1,
+            renderLayer: 3
+          },
+          player1Teyaku: {
+            type: 'row',
+            anchorPoint: { x: 80, y: centerY + 100 + HEADER_OFFSET },
+            spacing: 60,
+            maxCards: 4,
+            faceUp: 1,
+            renderLayer: 3
+          },
+          player2Teyaku: {
+            type: 'row',
+            anchorPoint: { x: 50, y: 170 + HEADER_OFFSET },
+            spacing: 60,
+            maxCards: 4,
+            faceUp: 1,
+            renderLayer: 3
+          },
+          player3Teyaku: {
+            type: 'row',
+            anchorPoint: { x: viewportWidth - 80, y: centerY + 100 + HEADER_OFFSET },
+            spacing: 60,
+            maxCards: 4,
+            faceUp: 1,
+            renderLayer: 3
           }
         };
       }

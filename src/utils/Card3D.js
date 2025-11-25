@@ -91,6 +91,7 @@ export class Card3D {
     this.screenAABB = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
     this.isVisible = true;
     this.renderLayer = 3; // Rendering priority (higher = drawn later)
+    this.homeRenderLayer = 3; // Original render layer before animation elevation
 
     // ===== STATE TRACKING =====
     this.isAtHome = true;
@@ -111,6 +112,8 @@ export class Card3D {
    * @param {number} deltaTime - Time elapsed in seconds
    */
   update(deltaTime) {
+    const zBefore = this.z;
+
     switch (this.animationMode) {
       case 'physics':
         this.updatePhysics(deltaTime);
@@ -198,6 +201,19 @@ export class Card3D {
       if (this.tweenTarget.rotation !== undefined) this.rotation = this.tweenTarget.rotation;
       if (this.tweenTarget.scale !== undefined) this.scale = this.tweenTarget.scale;
       if (this.tweenTarget.faceUp !== undefined) this.targetFaceUp = this.tweenTarget.faceUp;
+
+      // After animation completes, restore Z to the home position value for render layering
+      // This preserves render layering from fan/arc layouts in trick piles
+      if (this.homePosition) {
+        this.z = this.homePosition.z || 0;
+      }
+
+      // Only restore render layer if not in a display zone (drawnCard, opponentPlayedCard)
+      // These zones keep the card in animation layer between tweens
+      if (this.homeZone !== 'drawnCard' && this.homeZone !== 'opponentPlayedCard') {
+        this.renderLayer = this.homeRenderLayer;
+        this.isDisplayAnimating = false;
+      }
 
       // Complete
       this.animationMode = 'idle';
@@ -346,6 +362,15 @@ export class Card3D {
       this.animationMode = 'idle';
       this.isAtHome = true;
 
+      // Reset Z to 0 after animation completes
+      this.z = 0;
+      // Only restore render layer if not in a display zone (drawnCard, opponentPlayedCard)
+      // These zones keep the card in animation layer between tweens
+      if (this.homeZone !== 'drawnCard' && this.homeZone !== 'opponentPlayedCard') {
+        this.renderLayer = this.homeRenderLayer;
+        this.isDisplayAnimating = false;
+      }
+
       if (this.onArriveAtHome) {
         this.onArriveAtHome();
         this.onArriveAtHome = null;
@@ -417,10 +442,16 @@ export class Card3D {
    * @param {Object} controlPoint - Optional {x, y, z} for curved path
    * @param {number} flipTiming - Optional 0-1 value controlling flip timing (0=early, 0.5=linear, 1=late)
    * @param {number} peakScale - Optional scale increase amount at animation midpoint (instead of linear scale tween)
+   * @param {boolean} isDisplayAnimation - If true, elevates Z for lift effect (deck draw, etc.). If false, just positions card (default positioning behavior)
    */
-  tweenTo(target, duration = 500, easing = 'easeInOutQuad', controlPoint = null, flipTiming = 0.5, peakScale = null) {
+  tweenTo(target, duration = 500, easing = 'easeInOutQuad', controlPoint = null, flipTiming = 0.5, peakScale = null, isDisplayAnimation = false) {
     this.animationMode = 'tween';
     this.tweenTarget = { ...target };
+    // Only exclude Z if this is a display animation (deck draw, etc.)
+    // If a control point is provided (trick pile arc), always include Z in interpolation
+    if (isDisplayAnimation && !controlPoint) {
+      this.tweenTarget.z = undefined;
+    }
     this.tweenStart = {
       x: this.x,
       y: this.y,
@@ -430,12 +461,32 @@ export class Card3D {
       faceUp: this.faceUp
     };
     this.tweenControlPoint = controlPoint ? { ...controlPoint } : null;
+
+    // Debug logging for trick pile captures with control point
+    if (controlPoint && controlPoint.z) {
+      debugLogger.log('animation', `Tween with control point Z=${controlPoint.z}`, {
+        start: { z: this.tweenStart.z },
+        control: { z: controlPoint.z },
+        target: { z: this.tweenTarget.z }
+      });
+    }
     this.tweenFlipTiming = flipTiming;
     this.tweenPeakScale = peakScale;
     this.tweenDuration = duration;
     this.tweenProgress = 0;
     this.tweenEasing = easing;
     this.isAtHome = false;
+
+    // Only raise Z for display animations (deck draw, match animations)
+    // Never elevate hand zone cards - they should always stay at Z=0
+    if (isDisplayAnimation && this.homeZone && !this.homeZone.includes('Hand')) {
+      this.z = 100;
+      // Save current render layer and elevate to ensure animated card renders on top
+      this.homeRenderLayer = this.renderLayer;
+      this.renderLayer = 10;
+      // Flag that this is a display animation to preserve layer across zone changes
+      this.isDisplayAnimating = true;
+    }
   }
 
   /**
@@ -444,6 +495,9 @@ export class Card3D {
   springToHome() {
     this.animationMode = 'spring';
     this.isAtHome = false;
+
+    // Raise Z position to ensure animating card renders on top
+    this.z = 100;
   }
 
   /**
@@ -494,12 +548,21 @@ export class Card3D {
   }
 
   /**
-   * Get scale factor based on Z position
+   * Get scale factor with subtle Z-based lift effect
+   * Scale is proportional to Z position: grows as card lifts off table
+   * Only applies when card is in animation render layer (10)
+   * At Z=0: scale = 1.0x
+   * At Z=100: scale = 1.05x (5% larger)
    */
   getScale() {
-    // Z affects scale: higher Z = larger scale (closer to camera)
-    const zScaleFactor = 1.0 + (this.z / 200);
-    return this.scale * zScaleFactor;
+    // Only apply lift scale when card is in animation layer (renderLayer = 10)
+    // This ensures the lift effect is only visible during actual display animations
+    // Field cards stay at renderLayer 0-2, so they never get scaled by z
+    if (this.renderLayer === 10) {
+      const liftScale = 1.0 + (this.z / 100) * 0.3;
+      return this.scale * liftScale;
+    }
+    return this.scale;
   }
 
   /**

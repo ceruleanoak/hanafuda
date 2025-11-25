@@ -6,6 +6,8 @@ import { KoiKoi } from './game/KoiKoi.js';
 import { Sakura } from './game/Sakura.js';
 import { MatchGame } from './game/MatchGame.js';
 import { KoiKoiShop } from './game/KoiKoiShop.js';
+import { HachiHachi } from './game/HachiHachi.js';
+import { HachiHachiModals } from './ui/HachiHachiModals.js';
 import { Renderer } from './rendering/Renderer.js';
 import { debugLogger } from './utils/DebugLogger.js';
 import { GameOptions } from './game/GameOptions.js';
@@ -17,12 +19,29 @@ import { APP_VERSION } from './utils/version.js';
 import { CARD_BACKS, getSelectedCardBack, setSelectedCardBack } from './data/cardBacks.js';
 import { HANAFUDA_DECK } from './data/cards.js';
 import { ShopUI } from './ui/ShopUI.js';
+import { TrickListUI } from './ui/TrickListUI.js';
 import { GameStateValidator } from './utils/GameStateValidator.js';
+import { LayoutManager } from './utils/LayoutManager.js';
 import { deviceDetection } from './utils/DeviceDetection.js';
 
 class Game {
   constructor() {
     this.canvas = document.getElementById('game-canvas');
+
+    // Create overlay canvas for hover previews that sits above modals
+    this.overlayCanvas = document.createElement('canvas');
+    this.overlayCanvas.id = 'hover-overlay-canvas';
+    this.overlayCanvas.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 1001;
+      display: block;
+      pointer-events: none;
+    `;
+    document.body.appendChild(this.overlayCanvas);
+    this.overlayCtx = this.overlayCanvas.getContext('2d');
+
     this.statusElement = document.getElementById('game-status');
     this.instructionsElement = document.getElementById('instructions');
     this.scoreDisplayElement = document.getElementById('score-display');
@@ -43,6 +62,9 @@ class Game {
     this.shopModal = document.getElementById('shop-modal');
     this.tutorialBubble = document.getElementById('tutorial-bubble');
     this.animationTesterPanel = document.getElementById('animation-tester-panel');
+
+    // Track if any decision modal is visible (for hover previews)
+    this.isDecisionModalVisible = false;
 
     // Initialize game options
     this.gameOptions = new GameOptions();
@@ -70,6 +92,12 @@ class Game {
     this.shopGame = new KoiKoiShop(this.gameOptions);
     this.shopGame.setRoundSummaryCallback((data) => this.showRoundSummary(data));
 
+    this.hachihachiGame = new HachiHachi(this.gameOptions);
+    this.hachihachiGame.setUICallback((decision, params) => this.showHachihachiDecision(decision, params));
+    this.hachihachiGame.setRoundSummaryCallback((data) => this.showHachihachiRoundSummary(data));
+    this.hachihachiGame.setTeyakuPaymentCallback((params) => this.showTeyakuPaymentGrid(params));
+    this.hachihachiGame.setOpponentDecisionCallback((params) => this.showOpponentDecision(params));
+
     // Set active game based on mode
     this.game = this.koikoiGame;
 
@@ -79,6 +107,8 @@ class Game {
     // Set the card back to the selected one
     const selectedCardBackId = getSelectedCardBack();
     this.renderer.cardRenderer.setCardBack(selectedCardBackId);
+    // Set overlay context for hover previews above modals
+    this.renderer.setOverlayContext(this.overlayCtx);
 
     // Initialize Card3D system
     this.card3DManager = new Card3DManager(
@@ -90,10 +120,24 @@ class Game {
     this.renderer.setOnResizeCallback((width, height, cardDimensions) => {
       this.card3DManager.setViewportDimensions(width, height, cardDimensions);
 
+      // Resize the overlay canvas to fill the entire window viewport (not just game container)
+      // This ensures card previews can render even if they extend beyond the game area
+      const dpr = window.devicePixelRatio || 1;
+      const windowWidth = window.innerWidth;
+      const windowHeight = window.innerHeight;
+      this.overlayCanvas.width = windowWidth * dpr;
+      this.overlayCanvas.height = windowHeight * dpr;
+      this.overlayCanvas.style.width = windowWidth + 'px';
+      this.overlayCanvas.style.height = windowHeight + 'px';
+      this.overlayCtx.scale(dpr, dpr);
+
       // Also update animation tester if it's active
       if (this.animationTesterActive) {
         this.animationTester.initialize(width, height, this.canvas);
       }
+
+      // Update trick list button position
+      this.updateTrickListButtonPosition();
 
       debugLogger.log('gameState', 'Viewport resized - Card3D updated', {
         width,
@@ -109,12 +153,20 @@ class Game {
 
     // Set Card3D manager for game modes that need custom animations
     this.sakuraGame.setCard3DManager(this.card3DManager);
+    this.hachihachiGame.setCard3DManager(this.card3DManager);
 
     // Initialize Audio Manager
     this.audioManager = new AudioManager();
     this.audioManager.setEnabled(this.gameOptions.get('audioEnabled', true));
     this.audioManager.loadAudio();
     debugLogger.log('audio', '🎵 Audio Manager initialized', null);
+
+    // Set audio manager for all games
+    this.koikoiGame.setAudioManager(this.audioManager);
+    this.sakuraGame.setAudioManager(this.audioManager);
+    this.matchGame.setAudioManager(this.audioManager);
+    this.shopGame.setAudioManager(this.audioManager);
+    this.hachihachiGame.setAudioManager(this.audioManager);
 
     // Initialize Animation Tester
     this.animationTester = new AnimationTester(this.renderer.cardRenderer, this.card3DManager);
@@ -123,6 +175,9 @@ class Game {
     // Initialize Shop UI
     this.shopUI = new ShopUI(this.renderer.cardRenderer);
     this.shopUI.setOnCompleteCallback((cards, condition) => this.startShopGame(cards, condition));
+
+    // Initialize Trick List UI
+    this.trickListUI = new TrickListUI(this.renderer.cardRenderer);
 
     this.lastMessage = '';
     this.lastGameOverMessage = '';
@@ -134,6 +189,8 @@ class Game {
     this.hoverX = -1;             // Mouse hover X position
     this.hoverY = -1;             // Mouse hover Y position
     this.hoveredCard3D = null;    // Currently hovered Card3D object
+    this.gajiPulseCard3D = null;  // Gaji card being pulsed during selection
+    this.gajiPulseInterval = null; // Interval for gaji pulse animation
 
     // Drag and drop state
     this.draggedCard3D = null;    // Card being dragged
@@ -223,6 +280,9 @@ class Game {
       // Initialization successful - set up event listeners and start game loop
       this.setupEventListeners();
 
+      // Position trick list button at slot 0
+      this.updateTrickListButtonPosition();
+
       // Initialize help button state
       if (this.helpMode) {
         this.helpButton.classList.add('active');
@@ -255,6 +315,10 @@ class Game {
       } else if (this.currentGameMode === 'sakura') {
         // Switch to Sakura mode
         this.switchGameMode('sakura');
+        this.showRoundModal();
+      } else if (this.currentGameMode === 'hachihachi') {
+        // Switch to Hachi-Hachi mode
+        this.switchGameMode('hachihachi');
         this.showRoundModal();
       } else {
         // Show round modal for Koi Koi
@@ -328,6 +392,28 @@ class Game {
 
     // Animation tester button
     this.animationTesterButton.addEventListener('click', () => this.showAnimationTester());
+
+    // Trick list button
+    const trickListBtn = document.getElementById('trick-list-btn');
+    if (trickListBtn) {
+      trickListBtn.addEventListener('click', () => this.showTrickList());
+    }
+
+    // Trick list close button
+    const trickListClose = document.getElementById('trick-list-close');
+    if (trickListClose) {
+      trickListClose.addEventListener('click', () => this.hideTrickList());
+    }
+
+    // Close trick list when clicking outside modal
+    const trickListModal = document.getElementById('trick-list-modal');
+    if (trickListModal) {
+      trickListModal.addEventListener('click', (e) => {
+        if (e.target === trickListModal) {
+          this.hideTrickList();
+        }
+      });
+    }
 
     // Round selection buttons
     document.querySelectorAll('.round-btn').forEach(btn => {
@@ -493,8 +579,11 @@ class Game {
     // Hide bonus chance display from previous game when opening shop
     this.hideActiveWinCondition();
 
+    const shopContent = this.shopModal.querySelector('.shop-modal-content');
     this.shopUI.initialize();
-    this.shopUI.renderToModal(this.shopModal.querySelector('.shop-modal-content'));
+    this.shopUI.renderToModal(shopContent);
+    // Restore display when showing
+    shopContent.style.display = '';
     this.shopModal.classList.add('show');
   }
 
@@ -512,6 +601,12 @@ class Game {
   hideAllModals() {
     this.roundModal.classList.remove('show');
     this.shopModal.classList.remove('show');
+    // Clear shop modal content and explicitly hide to prevent artifact
+    const shopContent = this.shopModal.querySelector('.shop-modal-content');
+    if (shopContent) {
+      shopContent.innerHTML = '';
+      shopContent.style.display = 'none';
+    }
     this.optionsModal.classList.remove('show');
     this.matchOptionsModal.classList.remove('show');
     this.koikoiModal.classList.remove('show');
@@ -803,6 +898,10 @@ class Game {
     } else if (this.currentGameMode === 'sakura') {
       // Sakura uses rounds and playerCount (default 6 rounds, 2 players)
       this.game.startNewGame(rounds || 6, playerCount || 2);
+    } else if (this.currentGameMode === 'hachihachi') {
+      // Hachi-Hachi uses rounds (always 3 players)
+      this.card3DManager.setPlayerCount(3);
+      this.game.startGame(rounds || 6);
     } else {
       // Koi Koi uses rounds
       this.game.startNewGame(rounds);
@@ -872,6 +971,16 @@ class Game {
 
       // Update instructions
       this.instructionsElement.textContent = 'Sakura (Hawaiian Hanafuda) - Click cards to select them';
+    } else if (mode === 'hachihachi') {
+      this.game = this.hachihachiGame;
+
+      // Show score display for Hachi-Hachi mode
+      document.getElementById('score').style.display = 'flex';
+      document.getElementById('options-btn').style.display = 'inline-block';
+      document.getElementById('variations-btn').style.display = 'none';
+
+      // Update instructions
+      this.instructionsElement.textContent = 'Hachi-Hachi (88) - 3-player game with Sage/Shoubu decisions';
     } else {
       this.game = this.koikoiGame;
 
@@ -934,6 +1043,9 @@ class Game {
     } else if (mode === 'sakura') {
       // For Sakura mode, show round modal
       this.showRoundModal();
+    } else if (mode === 'hachihachi') {
+      // For Hachi-Hachi mode, show round modal (similar to Koi-Koi/Sakura)
+      this.showRoundModal();
     } else {
       // For Koi Koi, show round modal
       this.showRoundModal();
@@ -944,6 +1056,8 @@ class Game {
     const rect = this.canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
+
+    debugLogger.log('gameState', `🖱️ Mouse down at (${x.toFixed(0)}, ${y.toFixed(0)}), mode: ${this.currentGameMode}`, null);
 
     // Handle match game differently - simple click to flip
     if (this.currentGameMode === 'match') {
@@ -997,6 +1111,56 @@ class Game {
       return;
     }
 
+    // Handle Hachi-Hachi game
+    if (this.currentGameMode === 'hachihachi') {
+      const gameState = this.game.getState();
+      debugLogger.log('gameState', `🎲 Hachi-Hachi click in phase: ${gameState.phase}`, null);
+
+      // Check if Cancel Sage button was clicked
+      if (this.renderer.cancelSageButtonBounds) {
+        const bounds = this.renderer.cancelSageButtonBounds;
+        if (x >= bounds.x && x <= bounds.x + bounds.width &&
+            y >= bounds.y && y <= bounds.y + bounds.height) {
+          debugLogger.log('gameState', '⚠️ Cancel Sage button clicked', null);
+          this.game.cancelSage();
+          return;
+        }
+      }
+
+      // Only allow interactions during playing phases
+      if (gameState.phase !== 'select_hand' && gameState.phase !== 'select_field' &&
+          gameState.phase !== 'select_drawn_match') {
+        return;
+      }
+
+      // Get card at click position
+      const card3D = this.card3DManager.getCardAtPosition(x, y);
+      if (!card3D) {
+        debugLogger.log('gameState', `No card at (${x.toFixed(0)}, ${y.toFixed(0)})`, null);
+        return;
+      }
+
+      debugLogger.log('gameState', `🎯 Hit card: ${card3D.cardData.name} from zone ${card3D.homeZone}`, null);
+
+      // Determine if card is from hand or field
+      const isHandCard = card3D.homeZone === 'player0Hand';
+      const isFieldCard = card3D.homeZone === 'field';
+
+      // Set up for potential drag-and-drop
+      this.draggedCard3D = card3D;
+      this.draggedCardData = card3D.cardData;
+      this.dragStartX = x;
+      this.dragStartY = y;
+      this.isDragging = false;
+      card3D.isDragging = true;
+
+      // For Hachi-Hachi, DON'T immediately select on mouseDown
+      // Let the drag-drop handler in handleMouseUp decide what to do
+      // This allows the user to drag to a field card to match or drag to empty space to place
+
+      return;
+    }
+
     // Koi Koi drag and drop logic
     const gameState = this.game.getState();
 
@@ -1008,11 +1172,56 @@ class Game {
     // Use 3D hit detection
     const card3D = this.card3DManager.getCardAtPosition(x, y);
     if (card3D) {
-      // Allow clicking on both hand cards and field cards
       const isHandCard = card3D.homeZone === 'player0Hand';
       const isFieldCard = card3D.homeZone === 'field';
 
-      if (isHandCard || isFieldCard) {
+      // Determine if card can be selected based on current phase
+      let canSelectCard = false;
+
+      if (gameState.phase === 'select_hand') {
+        // During select_hand, only hand cards can be selected
+        canSelectCard = isHandCard;
+      } else if (gameState.phase === 'select_field') {
+        // During select_field, hand cards (to switch) or field cards (to match) can be selected
+        canSelectCard = isHandCard || isFieldCard;
+      } else if (gameState.phase === 'gaji_selection') {
+        // During gaji_selection, only the gaji card (hand) or field cards (to capture) can be selected
+        // Don't allow other hand cards
+        if (isFieldCard) {
+          canSelectCard = true;
+        } else if (isHandCard && gameState.selectedCards && gameState.selectedCards.length > 0) {
+          // Only allow the currently selected gaji card (same ID)
+          canSelectCard = card3D.cardData.id === gameState.selectedCards[0].id;
+        }
+      } else if (gameState.phase === 'select_drawn_match') {
+        // During select_drawn_match, both hand and field cards can be selected
+        canSelectCard = isHandCard || isFieldCard;
+      }
+
+      debugLogger.log('gameState', `🖱️ handleMouseDown card check`, {
+        cardName: card3D.cardData.name,
+        cardZone: card3D.homeZone,
+        isHandCard: isHandCard,
+        isFieldCard: isFieldCard,
+        gamePhase: gameState.phase,
+        canSelectCard: canSelectCard
+      });
+
+      if (canSelectCard) {
+        // Field cards should never be dragged - only clicked to match/capture
+        if (isFieldCard) {
+          debugLogger.log('gameState', `🎯 Field card clicked (no drag) - attempting match/capture`, {
+            cardName: card3D.cardData.name,
+            gamePhase: gameState.phase
+          });
+          // Handle field card click directly
+          const success = this.game.selectCard(card3D.cardData, 'field');
+          if (success) {
+            this.updateUI();
+          }
+          return;
+        }
+
         // Clear any hover state
         if (this.hoveredCard3D) {
           this.hoveredCard3D.setHovered(false);
@@ -1030,6 +1239,12 @@ class Game {
         debugLogger.log('gameState', `🔵 Card grabbed: ${card3D.cardData.name} from zone ${card3D.homeZone}`, {
           x, y, zone: card3D.homeZone
         });
+      } else {
+        debugLogger.log('gameState', `🚫 Card click blocked - not selectable in current phase`, {
+          cardName: card3D.cardData.name,
+          cardZone: card3D.homeZone,
+          gamePhase: gameState.phase
+        });
       }
     }
   }
@@ -1043,9 +1258,59 @@ class Game {
 
     // Use 3D hit detection
     const card3D = this.card3DManager.getCardAtPosition(x, y);
-    if (card3D && card3D.homeZone === 'player0Hand' && gameState.phase === 'select_hand') {
-      const card = card3D.cardData;
+    if (!card3D || card3D.homeZone !== 'player0Hand') {
+      return;
+    }
 
+    const card = card3D.cardData;
+
+    // Handle Hachi-Hachi: double-click to place unmatched card on field (only if no matches)
+    if (this.currentGameMode === 'hachihachi' && gameState.phase === 'select_hand') {
+      // Find matches for this card
+      const matches = gameState.field.filter(fc => fc.month === card.month);
+
+      // Only allow double-click placement if there are NO matches
+      if (matches.length === 0) {
+        debugLogger.log('gameState', `🎴 Hachi-Hachi double-click: ${card.name} (no matches, placing on field)`, {
+          phase: gameState.phase,
+          matches: 0
+        });
+
+        // First select the card (enters select_field phase)
+        let success = this.game.selectCard(card, 'player');
+
+        if (success) {
+          // Verify we're still in select_field phase with no matches
+          const updatedState = this.game.getState();
+          if (updatedState.phase === 'select_field' && updatedState.drawnCardMatches.length === 0) {
+            // Now place it on field
+            success = this.game.placeCardOnField(card);
+
+            if (success) {
+              debugLogger.log('gameState', `✅ Card placed on field (no matches available)`, null);
+              this.updateUI();
+            } else {
+              debugLogger.log('gameState', `❌ Failed to place card on field`, null);
+            }
+          } else {
+            debugLogger.log('gameState', `⚠️ Card selection changed state unexpectedly`, {
+              phase: updatedState.phase,
+              matches: updatedState.drawnCardMatches.length
+            });
+          }
+        } else {
+          debugLogger.log('gameState', `❌ Failed to select card`, null);
+        }
+      } else {
+        debugLogger.log('gameState', `🎴 Hachi-Hachi double-click ignored: ${card.name} has ${matches.length} match(es)`, {
+          matches: matches.map(m => m.name)
+        });
+      }
+      return;
+    }
+
+    // Handle Koi-Koi/Sakura: double-click to auto-match if match exists
+    if (gameState.phase === 'select_hand') {
       debugLogger.log('gameState', `Card double-clicked (auto-match): ${card.name}`, {
         phase: gameState.phase
       });
@@ -1110,25 +1375,20 @@ class Game {
           this.dropTargetCard3D.targetScale = this.dropTargetCard3D.baseScale;
         }
 
-        // Execute the card play
-        // Check if card is already selected (phase is select_field)
-        const gameState = this.game.getState();
-        const isAlreadySelected = gameState.phase === 'select_field' &&
-          gameState.selectedCards.length > 0 &&
-          gameState.selectedCards[0].id === this.draggedCardData.id;
-
-        let success;
-        if (isAlreadySelected) {
-          // Card already selected, skip first selectCard and go straight to matching
-          success = true;
-        } else {
-          // Select the card from hand first
-          success = this.game.selectCard(this.draggedCardData, 'player');
-        }
+        // Execute the card play via drag-drop
+        // For Hachi-Hachi, we need to do a two-step selection:
+        // 1. Select hand card (if not already selected)
+        // 2. Select field card to match
+        // Always do the selection in the proper order
+        let success = this.game.selectCard(this.draggedCardData, 'player');
 
         if (success) {
-          // Then select the field card
-          this.game.selectCard(this.dropTargetCard3D.cardData, 'field');
+          // Get UPDATED game state after first selection
+          const updatedGameState = this.game.getState();
+          if (updatedGameState.phase === 'select_field') {
+            // Card just moved to select_field, now match with field card
+            success = this.game.selectCard(this.dropTargetCard3D.cardData, 'field');
+          }
           this.updateUI();
         }
 
@@ -1154,45 +1414,63 @@ class Game {
           }
 
           const gameState = this.game.getState();
-          const isAlreadySelected = gameState.phase === 'select_field' &&
-            gameState.selectedCards.length > 0 &&
-            gameState.selectedCards[0].id === this.draggedCardData.id;
 
-          // Check if card has matches
-          const handCard = gameState.players[0].hand.find(c => c.id === this.draggedCardData.id);
-          const matches = handCard ? gameState.field.filter(fc =>
-            this.game.cardsMatch(handCard, fc)
-          ) : [];
+          // Check if there are any available matches for this card
+          const availableMatches = gameState.field.filter(fc => fc.month === this.draggedCardData.month);
 
-          if (matches.length > 0) {
-            // Has matches - cannot place on field, must match
-            debugLogger.log('gameState', `Drag to field failed - matches available`, null);
+          // If there ARE matches available, don't allow placing on field - return to hand
+          if (availableMatches.length > 0) {
+            debugLogger.log('gameState', `Card has ${availableMatches.length} available match(es) - cannot place on field, returning to hand`, null);
             this.cancelDrag();
-          } else {
-            // No matches - allow placing on field
-            debugLogger.log('gameState', `Card dragged to field: ${this.draggedCardData.name}`, null);
+            return;
+          }
 
-            let success;
-            if (isAlreadySelected) {
-              // Card already selected, just need to place it (one call)
-              success = this.game.selectCard(this.draggedCardData, 'player');
+          // For Hachi-Hachi, only allow placing UNMATCHED cards on field
+          if (this.currentGameMode === 'hachihachi') {
+            // Check if card has matches BEFORE selecting
+            const matches = gameState.field.filter(fc => fc.month === this.draggedCardData.month);
+
+            if (matches.length > 0) {
+              // Has matches - cannot place on field via drag, must click to match
+              debugLogger.log('gameState', `Hachi-Hachi drag to field failed: ${this.draggedCardData.name} has ${matches.length} match(es)`, {
+                matches: matches.map(m => m.name)
+              });
+              this.cancelDrag();
             } else {
-              // Select the card first
-              success = this.game.selectCard(this.draggedCardData, 'player');
-              // Then place it on the field (second call)
+              // No matches - allow placing unmatched card on field
+              debugLogger.log('gameState', `Hachi-Hachi: Card dragged to field (no matches): ${this.draggedCardData.name}`, null);
+
+              // First select the hand card
+              let success = this.game.selectCard(this.draggedCardData, 'player');
+
               if (success) {
-                success = this.game.selectCard(this.draggedCardData, 'player');
+                // Place the card on field
+                success = this.game.placeCardOnField(this.draggedCardData);
+                debugLogger.log('gameState', success ? `✅ Card placed on field` : `❌ Failed to place card`, null);
+                this.updateUI();
+              } else {
+                this.cancelDrag();
               }
             }
 
+            // Reset drag state
+            this.draggedCard3D.isDragging = false;
+            this.draggedCard3D = null;
+            this.draggedCardData = null;
+            this.isDragging = false;
+            this.dropTargetCard3D = null;
+          } else {
+            // Koi Koi/Sakura logic: allow placing on field directly
+            debugLogger.log('gameState', `Card dragged to field: ${this.draggedCardData.name}`, null);
+
+            // For Koi-Koi/Sakura, drag-to-empty-field attempts placement directly
+            let success = this.game.placeCardOnField(this.draggedCardData);
+
             if (success) {
-              // Clear selection
-              if (this.selectedCard3D) {
-                this.selectedCard3D.z = 0;
-                this.selectedCard3D = null;
-              }
+              debugLogger.log('gameState', `✅ Card placed on field via drag`, null);
               this.updateUI();
             } else {
+              debugLogger.log('gameState', `❌ Failed to place card on field`, null);
               this.cancelDrag();
             }
 
@@ -1202,6 +1480,10 @@ class Game {
             this.draggedCardData = null;
             this.isDragging = false;
             this.dropTargetCard3D = null;
+            if (this.selectedCard3D) {
+              this.selectedCard3D.z = 0;
+              this.selectedCard3D = null;
+            }
           }
         } else {
           // Invalid drop - return card to hand
@@ -1774,17 +2056,19 @@ class Game {
       if (this.cardsMatch(this.draggedCardData, fieldCard)) {
         // Get the Card3D for this field card
         const fieldCard3D = this.card3DManager.cards.get(fieldCard.id);
-        if (fieldCard3D) {
-          // Check if mouse is near this card
-          const dx = this.hoverX - fieldCard3D.x;
-          const dy = this.hoverY - fieldCard3D.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          const threshold = 80; // Distance threshold for "hovering over"
+        if (!fieldCard3D) {
+          continue;
+        }
 
-          if (distance < threshold) {
-            newDropTarget = fieldCard3D;
-            break;
-          }
+        // Check if mouse is near this card
+        const dx = this.hoverX - fieldCard3D.x;
+        const dy = this.hoverY - fieldCard3D.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const threshold = 80; // Distance threshold for "hovering over"
+
+        if (distance < threshold) {
+          newDropTarget = fieldCard3D;
+          break;
         }
       }
     }
@@ -1837,15 +2121,21 @@ class Game {
 
     // Get card at current hover position
     const card3D = this.card3DManager.getCardAtPosition(this.hoverX, this.hoverY);
+    const gameState = this.game.getState();
 
     // Check if this card is hoverable
-    // When a hand card is selected, only allow hovering over field cards or the selected card itself
-    // Don't hover over cards that are being used as drop targets
+    // Only hand cards get hover scaling (not field cards)
+    // When a hand card is selected, don't hover other hand cards
+    // During gaji_selection, only hover the gaji card itself (to show it can be clicked to cancel)
     const isHoverable = card3D &&
-      (card3D.homeZone === 'player0Hand' || card3D.homeZone === 'field') &&
+      card3D.homeZone === 'player0Hand' && // Only hand cards get hover animation
       card3D !== this.dropTargetCard3D &&
       // If a hand card is selected, don't hover other hand cards
-      !(this.selectedCard3D && card3D.homeZone === 'player0Hand' && card3D !== this.selectedCard3D);
+      !(this.selectedCard3D && card3D.homeZone === 'player0Hand' && card3D !== this.selectedCard3D) &&
+      // During gaji_selection, only hover the gaji card itself
+      !(gameState.phase === 'gaji_selection' && card3D.homeZone === 'player0Hand' &&
+        gameState.selectedCards && gameState.selectedCards.length > 0 &&
+        card3D.cardData.id !== gameState.selectedCards[0].id);
 
     // Update hover state
     if (isHoverable && card3D !== this.hoveredCard3D) {
@@ -1860,6 +2150,75 @@ class Game {
       // Mouse moved away from hoverable card
       this.hoveredCard3D.setHovered(false);
       this.hoveredCard3D = null;
+    }
+  }
+
+  /**
+   * Start pulsing the gaji card during gaji_selection phase
+   */
+  startGajiPulse(card3D) {
+    debugLogger.log('gameState', `🎯 startGajiPulse called`, {
+      cardId: card3D.cardData.id,
+      cardName: card3D.cardData.name,
+      baseScale: card3D.baseScale,
+      hoverScale: card3D.hoverScale
+    });
+
+    // Stop any existing pulse
+    this.stopGajiPulse();
+
+    this.gajiPulseCard3D = card3D;
+    let isScaledUp = false;
+
+    debugLogger.log('gameState', `⏱️ Gaji pulse interval started`, {
+      pulseInterval: 500,
+      card: card3D.cardData.name
+    });
+
+    // Pulse the card continuously using hover scale
+    this.gajiPulseInterval = setInterval(() => {
+      if (!this.gajiPulseCard3D) {
+        debugLogger.log('gameState', `⚠️ Gaji pulse card was cleared, stopping interval`);
+        this.stopGajiPulse();
+        return;
+      }
+
+      if (isScaledUp) {
+        this.gajiPulseCard3D.targetScale = this.gajiPulseCard3D.baseScale;
+        debugLogger.log('gameState', `📉 Gaji pulse: scaling down`, {
+          newTargetScale: this.gajiPulseCard3D.baseScale,
+          card: this.gajiPulseCard3D.cardData.name
+        });
+        isScaledUp = false;
+      } else {
+        this.gajiPulseCard3D.targetScale = this.gajiPulseCard3D.baseScale * this.gajiPulseCard3D.hoverScale;
+        debugLogger.log('gameState', `📈 Gaji pulse: scaling up`, {
+          newTargetScale: this.gajiPulseCard3D.baseScale * this.gajiPulseCard3D.hoverScale,
+          card: this.gajiPulseCard3D.cardData.name
+        });
+        isScaledUp = true;
+      }
+    }, 500); // Pulse every 500ms
+  }
+
+  /**
+   * Stop pulsing the gaji card
+   */
+  stopGajiPulse() {
+    debugLogger.log('gameState', `🛑 stopGajiPulse called`, {
+      hadActiveInterval: this.gajiPulseInterval !== null,
+      hadPulseCard: this.gajiPulseCard3D !== null,
+      card: this.gajiPulseCard3D ? this.gajiPulseCard3D.cardData.name : 'none'
+    });
+
+    if (this.gajiPulseInterval) {
+      clearInterval(this.gajiPulseInterval);
+      this.gajiPulseInterval = null;
+    }
+
+    if (this.gajiPulseCard3D) {
+      this.gajiPulseCard3D.targetScale = this.gajiPulseCard3D.baseScale;
+      this.gajiPulseCard3D = null;
     }
   }
 
@@ -2272,7 +2631,7 @@ class Game {
           if (winnerIndex === 0) {
             winner = 'You Win!';
           } else {
-            winner = `Opponent ${winnerIndex} Wins!`;
+            winner = `Opponent ${winnerIndex} Win!`;
           }
         } else {
           winner = 'Tie Game!';
@@ -2280,7 +2639,7 @@ class Game {
       } else {
         // 2-player: Use legacy comparison
         winner = data.playerTotalScore > data.opponentTotalScore ? 'You Win!' :
-                 data.opponentTotalScore > data.playerTotalScore ? 'Opponent Wins!' : 'Tie Game!';
+                 data.opponentTotalScore > data.playerTotalScore ? 'Opponent Win!' : 'Tie Game!';
       }
       title.textContent = `Game Over - ${winner}`;
     } else {
@@ -2687,6 +3046,58 @@ class Game {
   }
 
   /**
+   * Show opponent Shoubu/Sage/Cancel decision notification
+   */
+  showOpponentDecision(params) {
+    const { playerIndex, decision, dekiyakuValue } = params;
+    const playerName = playerIndex === 1 ? 'Opponent 1' : 'Opponent 2';
+
+    // Create notification element if it doesn't exist
+    let notification = document.getElementById('opponent-decision-notification');
+    if (!notification) {
+      notification = document.createElement('div');
+      notification.id = 'opponent-decision-notification';
+      notification.className = 'opponent-decision-notification';
+      document.body.appendChild(notification);
+    }
+
+    // Set notification content based on decision
+    let content = '';
+    if (decision === 'shoubu') {
+      content = `
+        <div class="notification-content">
+          <h3>🛑 ${playerName} Called Shoubu!</h3>
+          <p>They ended the round with ${dekiyakuValue} kan in dekiyaku.</p>
+        </div>
+      `;
+    } else if (decision === 'sage') {
+      content = `
+        <div class="notification-content">
+          <h3>⚔️ ${playerName} Called Sage!</h3>
+          <p>They're continuing to try for more dekiyaku (${dekiyakuValue} kan currently).</p>
+        </div>
+      `;
+    } else if (decision === 'cancel') {
+      content = `
+        <div class="notification-content">
+          <h3>🔄 ${playerName} Chose Cancel!</h3>
+          <p>They gave up on dekiyaku and will receive par value only.</p>
+        </div>
+      `;
+    }
+
+    notification.innerHTML = content;
+
+    // Show notification
+    notification.classList.add('show');
+
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+      notification.classList.remove('show');
+    }, 3000);
+  }
+
+  /**
    * Handle state changes and trigger animations
    */
   handleGameStateChange(beforeLengths, afterState, triggeredCard) {
@@ -2882,6 +3293,18 @@ class Game {
           });
         }
       }
+    } else if (this.currentGameMode === 'hachihachi') {
+      // Hachi-Hachi: Use players array with gameScore (cumulative) and roundScore
+      if (state.players && state.players.length > 0) {
+        state.players.forEach((player, index) => {
+          const label = this.getPlayerLabel(index, 3, false);
+          const total = player.gameScore || 0;
+          const scoreText = index === 0 ? total + roundText : total.toString();
+          const span = document.createElement('span');
+          span.innerHTML = `${label}: <strong>${scoreText}</strong>`;
+          this.scoreDisplayElement.appendChild(span);
+        });
+      }
     } else {
       // Koi-Koi: Use legacy 2-player score fields (only valid for 2P)
       const playerScore = (state.playerScore || 0) + roundText;
@@ -2940,6 +3363,34 @@ class Game {
     if (this.selectedCard3D && state.phase !== 'select_field') {
       this.selectedCard3D.z = 0;
       this.selectedCard3D = null;
+    }
+
+    // Handle gaji pulse animation for Sakura mode
+    if (this.currentGameMode === 'sakura') {
+      if (state.phase === 'gaji_selection' && state.selectedCards && state.selectedCards.length > 0) {
+        // Find the gaji card in the 3D system (cards is a Map)
+        const gajiCard = state.selectedCards[0];
+        const gajiCard3D = this.card3DManager.cards.get(gajiCard.id);
+
+        debugLogger.log('gameState', `🎴 updateUI: gaji_selection phase handling`, {
+          gajiCardName: gajiCard.name,
+          gajiCardId: gajiCard.id,
+          gajiCard3DFound: gajiCard3D !== undefined,
+          alreadyPulsing: this.gajiPulseCard3D ? this.gajiPulseCard3D.cardData.name : 'none',
+          needsNewPulse: gajiCard3D && gajiCard3D !== this.gajiPulseCard3D
+        });
+
+        if (gajiCard3D && gajiCard3D !== this.gajiPulseCard3D) {
+          debugLogger.log('gameState', `📍 Starting gaji pulse for ${gajiCard.name}`);
+          this.startGajiPulse(gajiCard3D);
+        }
+      } else {
+        // Not in gaji_selection, stop the pulse
+        if (this.gajiPulseCard3D) {
+          debugLogger.log('gameState', `📍 Exiting gaji_selection phase, stopping pulse`);
+          this.stopGajiPulse();
+        }
+      }
     }
 
     // Update scores - different calculation for Sakura vs Koi-Koi
@@ -3498,15 +3949,28 @@ class Game {
           }
         }
 
+        // Update game state (for AI turns, timers, etc.)
+        if (this.game && typeof this.game.update === 'function') {
+          try {
+            this.game.update(deltaTime);
+          } catch (err) {
+            debugLogger.logError('Error in game update', err);
+          }
+        }
+
         // Render
         try {
           const renderOptions = {
             helpMode: this.helpButton.classList.contains('active'),
             hoverX: this.hoverX,
             hoverY: this.hoverY,
-            isModalVisible: this.koikoiModal.classList.contains('show'),
+            isModalVisible: this.koikoiModal.classList.contains('show') && !this.isDecisionModalVisible,
             isGameOver: state.gameOver || false,
-            card3DManager: this.card3DManager
+            isRoundSummaryVisible: this.roundSummaryModal.classList.contains('show'),
+            isSageDecisionModalVisible: this.sageDecisionModal?.classList.contains('show') || false,
+            isKoikoiModalVisible: this.koikoiModal.classList.contains('show'),
+            card3DManager: this.card3DManager,
+            isDragging: this.isDragging
           };
 
           this.renderer.render(state, [], renderOptions);
@@ -4398,6 +4862,80 @@ class Game {
     // Update easing select
     document.getElementById('easing').value = params.easing;
   }
+
+  /**
+   * Show Hachi-Hachi Teyaku Payment Grid
+   * Teaching moment for payment/money mechanic
+   */
+  async showTeyakuPaymentGrid(params) {
+    await HachiHachiModals.showTeyakuPaymentGrid({
+      roundNumber: params.roundNumber,
+      playerTeyaku: params.playerTeyaku,
+      opponent1Teyaku: params.opponent1Teyaku,
+      opponent2Teyaku: params.opponent2Teyaku,
+      fieldMultiplier: params.fieldMultiplier,
+      onContinue: params.onContinue
+    });
+  }
+
+  /**
+   * Show Hachi-Hachi Sage/Shoubu decision modal
+   */
+  async showHachihachiDecision(decision, params) {
+    if (decision === 'sage') {
+      // Player needs to make Sage/Shoubu/Cancel decision
+      this.isDecisionModalVisible = true;
+      try {
+        await HachiHachiModals.showSageDecision({
+          dekiyakuList: params.dekiyakuList,
+          playerScore: params.playerScore,
+          opponent1Score: params.opponent1Score,
+          opponent2Score: params.opponent2Score,
+          roundNumber: params.roundNumber,
+          onSage: () => this.game.callSage(params.playerKey),
+          onShoubu: () => this.game.callShoubu(params.playerKey),
+          onCancel: () => this.game.callCancel(params.playerKey)
+        });
+      } finally {
+        this.isDecisionModalVisible = false;
+      }
+    }
+  }
+
+  /**
+   * Show Hachi-Hachi round summary
+   */
+  async showHachihachiRoundSummary(data) {
+    await HachiHachiModals.showRoundSummary({
+      roundNumber: data.roundNumber,
+      winner: data.winner,
+      fieldMultiplier: data.fieldMultiplier,
+      teyaku: data.teyaku,
+      dekiyaku: data.dekiyaku,
+      cardBreakdown: data.cardBreakdown,
+      scoreBreakdown: data.scoreBreakdown,
+      allScores: data.allScores,
+      stats: data.stats
+    });
+
+    // Continue to next round or end game
+    if (data.isGameOver) {
+      await HachiHachiModals.showGameEnd({
+        winner: data.winner,
+        finalScores: data.allScores.gameScores,
+        totalRounds: data.totalRounds,
+        stats: data.stats
+      });
+      this.switchGameMode('hachihachi'); // Start new game
+    } else {
+      this.game.nextRound();
+      this.updateUI();
+
+      // Reinitialize Card3D system for the new round to reset positions
+      this.card3DManager.initializeFromGameState(this.game.getState(), true);
+      debugLogger.log('3dCards', '✨ Card3D system reinitialized for Hachi-Hachi next round', null);
+    }
+  }
 }
 
 // Initialize game when DOM is ready
@@ -4448,6 +4986,42 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const game = new Game();
 
+  // Attach trick list methods to game instance for access from event listeners
+  game.showTrickList = function() {
+    const gameMode = this.currentGameMode;
+    this.trickListUI.show(gameMode);
+    debugLogger.log('gameState', `Trick list shown for ${gameMode} mode`, null);
+  };
+
+  game.hideTrickList = function() {
+    this.trickListUI.hide();
+    debugLogger.log('gameState', 'Trick list hidden', null);
+  };
+
+  // Position trick list button at slot 0 + y offset
+  game.updateTrickListButtonPosition = function() {
+    const trickListBtn = document.getElementById('trick-list-btn');
+    if (!trickListBtn || !this.card3DManager) return;
+
+    // Hide trick list button for Match game
+    if (this.currentGameMode === 'match') {
+      trickListBtn.style.display = 'none';
+      return;
+    }
+    trickListBtn.style.display = 'block';
+
+    const fieldConfig = LayoutManager.getZoneConfig('field', this.renderer.displayWidth, this.renderer.displayHeight, this.card3DManager.playerCount);
+    const layoutManager = new LayoutManager();
+    const dummyCard = { gridSlot: 0 };
+    const positions = layoutManager.layoutGrid([dummyCard], fieldConfig);
+
+    if (positions.length > 0) {
+      const slot0Pos = positions[0];
+      trickListBtn.style.left = slot0Pos.x + 'px';
+      trickListBtn.style.top = (slot0Pos.y + 170) + 'px'; // 170px below slot 0
+      trickListBtn.style.transform = 'translateX(-50%)'; // Center on x position
+    }
+  };
   // Initialize device detection and add CSS classes
   deviceDetection.addDeviceClasses();
 

@@ -35,6 +35,7 @@
         <select id="game-mode-select">
           <option value="koikoi">Koi Koi</option>
           <option value="sakura">Sakura (Hawaiian)</option>
+          <option value="hachihachi">Hachi-Hachi (88)</option>
           <option value="match">Match Game</option>
           <option value="shop">Koi Koi Shop</option>
         </select>
@@ -86,6 +87,7 @@
     <main>
       <canvas id="game-canvas"></canvas>
       <div id="game-status"></div>
+      <button id="trick-list-btn" class="trick-list-btn" title="View available tricks (yaku)">Trick List</button>
 
       <!-- Round Selection Modal -->
       <div id="round-modal" class="modal">
@@ -490,6 +492,19 @@
         </div>
       </div>
 
+      <!-- Trick List Modal -->
+      <div id="trick-list-modal" class="modal">
+        <div class="modal-content trick-list-modal-content">
+          <div class="trick-list-header">
+            <h2>Available Tricks (Yaku)</h2>
+            <button id="trick-list-close" class="close-btn">✕</button>
+          </div>
+          <div id="trick-list-content" class="trick-list-modal-body">
+            <!-- Will be populated dynamically -->
+          </div>
+        </div>
+      </div>
+
       <!-- Animation Tester Panel -->
       <div id="animation-tester-panel" class="animation-tester-panel hidden">
         <div class="animation-tester-controls">
@@ -669,7 +684,7 @@
   <!-- Loading Screen -->
   <div id="loading-screen" class="loading-screen">
     <div class="loading-content">
-      <h2 class="loading-title">Hanafuda Koi-Koi</h2>
+      <img src="./assets/graphics/hanafuda_logo.png" alt="Hanafuda" class="loading-logo">
       <div class="loading-spinner"></div>
       <p id="loading-phase" class="loading-phase">Initializing...</p>
       <div class="loading-progress-container">

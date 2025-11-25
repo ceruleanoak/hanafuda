@@ -38,6 +38,7 @@ export class Card3DManager {
     const zones = {
       deck: new Set(),
       drawnCard: new Set(),
+      opponentPlayedCard: new Set(), // Single card played by opponent during their turn
       field: new Set()
     };
 
@@ -45,6 +46,8 @@ export class Card3DManager {
     for (let i = 0; i < playerCount; i++) {
       zones[`player${i}Hand`] = new Set();
       zones[`player${i}Trick`] = new Set();
+      // Teyaku display zones for Hachi-Hachi (3-player mode)
+      zones[`player${i}Teyaku`] = new Set();
     }
 
     return zones;
@@ -125,6 +128,11 @@ export class Card3DManager {
     cardSources.push({ cards: gameState.deck?.cards || [], zone: 'deck' });
     cardSources.push({ cards: gameState.field || [], zone: 'field' });
 
+    // Add drawn card if present
+    if (gameState.drawnCard) {
+      cardSources.push({ cards: [gameState.drawnCard], zone: 'drawnCard' });
+    }
+
     // Use indexed player format for all player counts
     if (gameState.players && Array.isArray(gameState.players)) {
       // Players array available (primary source)
@@ -167,16 +175,10 @@ export class Card3DManager {
       field: this.zoneCards.field?.size || 0
     };
 
-    if (this.playerCount === 2) {
-      debugInfo.playerHand = this.zoneCards.playerHand?.size || 0;
-      debugInfo.opponentHand = this.zoneCards.opponentHand?.size || 0;
-      debugInfo.playerTrick = this.zoneCards.playerTrick?.size || 0;
-      debugInfo.opponentTrick = this.zoneCards.opponentTrick?.size || 0;
-    } else {
-      for (let i = 0; i < this.playerCount; i++) {
-        debugInfo[`player${i}Hand`] = this.zoneCards[`player${i}Hand`]?.size || 0;
-        debugInfo[`player${i}Trick`] = this.zoneCards[`player${i}Trick`]?.size || 0;
-      }
+    // Use indexed naming for all player counts
+    for (let i = 0; i < this.playerCount; i++) {
+      debugInfo[`player${i}Hand`] = this.zoneCards[`player${i}Hand`]?.size || 0;
+      debugInfo[`player${i}Trick`] = this.zoneCards[`player${i}Trick`]?.size || 0;
     }
 
     debugLogger.log('3dCards', `✅ Initialized ${totalCards} Card3D objects`, debugInfo);
@@ -284,7 +286,8 @@ export class Card3DManager {
     for (const [cardId, newZone] of currentMapping) {
       const card3D = this.cards.get(cardId);
       if (!card3D) {
-        debugLogger.logAnimationWarning('Card not found in Card3D system', { cardId });
+        // Card not yet initialized in Card3D system - skip it
+        // This can happen during initial setup or after switching game modes
         continue;
       }
 
@@ -350,6 +353,15 @@ export class Card3DManager {
   moveCardToZone(card3D, newZone) {
     const oldZone = card3D.homeZone;
 
+    // Convert legacy zone names to indexed names
+    const legacyMap = {
+      'playerHand': 'player0Hand',
+      'opponentHand': 'player1Hand',
+      'playerTrick': 'player0Trick',
+      'opponentTrick': 'player1Trick'
+    };
+    newZone = legacyMap[newZone] || newZone;
+
     // Validate new zone exists
     if (!this.zoneCards[newZone]) {
       console.error(`Invalid zone: ${newZone}. Available zones: ${Object.keys(this.zoneCards).join(', ')}`);
@@ -386,33 +398,43 @@ export class Card3DManager {
   }
 
   /**
-   * Get next available grid slot for field (prioritizes top-left)
-   * Slot 0 is reserved for deck (and position 0 of each row)
-   * Field cards use slots 1-8 (row 1), then 10-17 (row 2), then 19-26 (row 3), etc.
+   * Get next available slot for field (8-slot array with deck reserved at 0)
+   * Slot 0 is reserved for deck
+   * Field cards use slots 1-8 (8 fixed positions on first row)
+   * Returns the first empty slot, or extends beyond 9 if needed (fallback)
    */
   getNextAvailableFieldSlot() {
     const fieldCards = Array.from(this.zoneCards.field);
     const occupiedSlots = new Set(fieldCards.map(card => card.gridSlot).filter(slot => slot !== undefined));
-    const maxPerRow = 9; // Grid has 9 columns (0-8), with 0 reserved
 
-    // Find first unoccupied slot, skipping position 0 of each row
-    let slot = 1; // Start from slot 1 (position 0 is reserved)
-    while (true) {
-      // Skip position 0 of each row (slots 0, 9, 18, 27, etc.)
-      if (slot % maxPerRow === 0) {
-        slot++; // Skip to position 1 of next row
-      }
+    // Try slots 1-8 first (standard field size, slot 0 reserved for deck)
+    for (let slot = 1; slot <= 8; slot++) {
       if (!occupiedSlots.has(slot)) {
         return slot;
       }
+    }
+
+    // Fallback: if all 8 slots are occupied, find next available beyond 8
+    let slot = 9;
+    while (occupiedSlots.has(slot)) {
       slot++;
     }
+    return slot;
   }
 
   /**
    * Assign card to zone without animation (for initialization)
    */
   assignToZone(card3D, zone, animate = true) {
+    // Convert legacy zone names to indexed names
+    const legacyMap = {
+      'playerHand': 'player0Hand',
+      'opponentHand': 'player1Hand',
+      'playerTrick': 'player0Trick',
+      'opponentTrick': 'player1Trick'
+    };
+    zone = legacyMap[zone] || zone;
+
     card3D.homeZone = zone;
     this.zoneCards[zone].add(card3D);
     this.dirtyZones.add(zone);
@@ -519,9 +541,15 @@ export class Card3DManager {
       card3D.homePosition = { x: pos.x, y: pos.y, z: pos.z };
       card3D.homeIndex = pos.index;
 
-      // Update render layer
+      // Update render layer (but preserve animation layer 10 if card is display animating)
       if (config.renderLayer !== undefined) {
-        card3D.renderLayer = config.renderLayer;
+        if (card3D.isDisplayAnimating) {
+          // Card is display animating - keep it at layer 10, but save zone's layer for later
+          card3D.homeRenderLayer = config.renderLayer;
+        } else {
+          // Normal zone layer assignment
+          card3D.renderLayer = config.renderLayer;
+        }
       }
 
       // Update face state
@@ -542,11 +570,93 @@ export class Card3DManager {
         if (card3D.animationMode === 'idle') {
           // Use tween for smooth, deterministic animation
           const duration = this.getAnimationDuration(card3D, pos);
-          card3D.tweenTo(
-            { x: pos.x, y: pos.y, z: pos.z },
-            duration,
-            'easeInOutCubic'
-          );
+
+          // Determine if this is a trick zone capture (has priority for control point Z animation)
+          const isTrickZone = zone.includes('Trick');
+          // Capture the previous zone before any changes
+          const cardPreviousZone = card3D.previousZone;
+          // Check if card is currently in the trick zone (already captured, not being captured now)
+          const cardCurrentlyInTrickZone = card3D.homeZone === zone;
+
+          debugLogger.log('3dCards', `relayoutZone: zone=${zone}, isTrickZone=${isTrickZone}, cardPreviousZone=${cardPreviousZone}, currentZone=${card3D.homeZone}, animate=${animate}`, { cardId: card3D.id });
+
+          // For trick pile cards that are already in the trick pile, snap immediately (static repositioning)
+          // Only animate if card is being CAPTURED from another zone (hand or field)
+          // A card is being captured if: previousZone is explicitly set (not null/undefined) AND it's different from the current zone
+          const isBeingCaptured = cardPreviousZone !== undefined && cardPreviousZone !== null && cardPreviousZone !== zone;
+
+          if (isTrickZone && cardCurrentlyInTrickZone && !isBeingCaptured) {
+            // Card is in trick pile AND not being captured = just repositioning, snap immediately
+            card3D.snapToHome();
+          } else {
+            // Animate the card
+            // Apply display animation (with Z lift) only when card moves FROM hand zones
+            // BUT NOT for trick captures (they use control point Z instead)
+            // Hand cards should never be elevated - only cards being drawn/displayed get lift
+            const isFromHandZone = cardPreviousZone && cardPreviousZone.includes('Hand');
+            const isDisplayAnimation = !isTrickZone && cardPreviousZone !== null && !isFromHandZone;
+
+            // Build tween target
+            const tweenTarget = { x: pos.x, y: pos.y };
+
+            // Captured cards moving to trick piles get an arc via control point Z and X/Y curve
+            let controlPoint = null;
+            if (isTrickZone) {
+              // Use a control point with elevated Z to create a curved arc during animation
+              // Bezier: start at current Z, peak at 150 (control point), end at 0
+              // Also curve X and Y towards the trick pile using control point offset
+
+              // Determine direction to trick pile based on zone name
+              // Left piles: player1Trick, player0Trick (bottom-right in 2-player, but left in others)
+              // Right piles: player0Trick (bottom-right), player3Trick (top-right in 4-player)
+              const isLeftPile = zone.includes('Trick') && (zone === 'player1Trick' || (this.playerCount === 3 && zone === 'player2Trick'));
+              const isRightPile = zone.includes('Trick') && (zone === 'player0Trick' || (this.playerCount === 4 && zone === 'player3Trick'));
+
+              // Control point curves towards the pile
+              // X offset: negative for left piles (-30), positive for right piles (+30)
+              const xCurve = isLeftPile ? -30 : (isRightPile ? 30 : 0);
+              // Y offset: lower control point (positive Y = down, which is lower on screen)
+              const yCurve = 40;
+
+              controlPoint = {
+                x: (card3D.x + pos.x) / 2 + xCurve,
+                y: (card3D.y + pos.y) / 2 + yCurve,
+                z: 150
+              };
+              // IMPORTANT: Must explicitly set target.z even if it's 0
+              // This ensures the bezier curve is properly applied in updateTween
+              tweenTarget.z = 0; // Return to z=0 at end of arc
+
+              // Elevate render layer so the scale effect (based on Z) is visible during arc
+              card3D.homeRenderLayer = card3D.renderLayer;
+              card3D.renderLayer = 10;
+              card3D.isDisplayAnimating = true;
+            } else if (zone !== 'field') {
+              // Non-field, non-trick zones animate normally with Z
+              tweenTarget.z = pos.z;
+            }
+
+            debugLogger.log('3dCards', `ANIMATING trick card (capture)`, { cardId: card3D.id, zone, cardPreviousZone, duration, hasControlPoint: !!controlPoint });
+
+            card3D.tweenTo(
+              tweenTarget,
+              duration,
+              'easeInOutCubic',
+              controlPoint,
+              0.5, // flipTiming
+              null, // peakScale
+              isDisplayAnimation
+            );
+
+            // Clear previousZone immediately to prevent re-animation on subsequent layout updates
+            // This is safe because we've already determined animation behavior above
+            card3D.previousZone = null;
+
+            // For field cards, snap the Z value immediately (don't animate it)
+            if (zone === 'field') {
+              card3D.z = pos.z;
+            }
+          }
         }
         // If card is already animating (tween or spring), let it continue
       } else {
