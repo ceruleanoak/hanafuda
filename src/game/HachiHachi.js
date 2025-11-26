@@ -138,6 +138,109 @@ export class HachiHachi {
   }
 
   /**
+   * Make AI decision for sage continuation at turn start
+   * Decides whether to continue sage or cancel
+   * @param {number} playerIndex - Player index
+   * @returns {string} 'continue' or 'cancel'
+   */
+  _makeOpponentSageContinuationDecision(playerIndex) {
+    const player = this.players[playerIndex];
+    const currentDekiyakuValue = (player.dekiyaku || []).reduce((sum, d) => sum + d.value, 0);
+    const baselineValue = this.sageBaselineKakuyaku[playerIndex] || 0;
+    const hasImproved = currentDekiyakuValue > baselineValue;
+    const handRemaining = player.hand.length;
+    const deckRemaining = this.deck.count;
+
+    // If no cards left, must cancel (can't continue playing)
+    if (handRemaining === 0) {
+      debugLogger.log('hachihachi', `🔮 Opponent ${playerIndex} AI: CANCEL sage (hand empty)`, {
+        currentDekiyakuValue: currentDekiyakuValue,
+        reason: 'No cards left in hand'
+      });
+      return 'cancel';
+    }
+
+    // If already improved, continue to try for more
+    if (hasImproved) {
+      debugLogger.log('hachihachi', `🔮 Opponent ${playerIndex} AI: Continue sage (already improved)`, {
+        baselineValue: baselineValue,
+        currentDekiyakuValue: currentDekiyakuValue,
+        reason: 'Already gained new dekiyaku, try for more'
+      });
+      return 'continue';
+    }
+
+    // If deck is very low, cancel to secure current value
+    if (deckRemaining <= 2) {
+      debugLogger.log('hachihachi', `🔮 Opponent ${playerIndex} AI: CANCEL sage (deck critical)`, {
+        deckRemaining: deckRemaining,
+        reason: 'Deck nearly exhausted, secure current points'
+      });
+      return 'cancel';
+    }
+
+    // If deck is somewhat low, play conservatively and cancel
+    if (deckRemaining <= 5) {
+      debugLogger.log('hachihachi', `🔮 Opponent ${playerIndex} AI: CANCEL sage (deck low)`, {
+        deckRemaining: deckRemaining,
+        reason: 'Deck running low, take safe option'
+      });
+      return 'cancel';
+    }
+
+    // Still have plenty of cards - continue trying to improve
+    debugLogger.log('hachihachi', `🔮 Opponent ${playerIndex} AI: Continue sage (plenty of cards)`, {
+      deckRemaining: deckRemaining,
+      reason: 'Sufficient cards remaining to try for improvement'
+    });
+    return 'continue';
+  }
+
+  /**
+   * Trigger UI decision modal for sage continuation (cancel or continue)
+   * @private
+   */
+  _triggerSageContinuationDecision() {
+    if (this.uiCallback && this.currentPlayerIndex === 0) {
+      const player = this.players[0];
+      const baselineValue = this.sageBaselineKakuyaku[0] || 0;
+      const currentDekiyakuValue = (player.dekiyaku || []).reduce((sum, d) => sum + d.value, 0);
+      const hasImproved = currentDekiyakuValue > baselineValue;
+
+      debugLogger.log('hachihachi', `📞 Invoking UI callback for Sage Continuation decision`, {
+        playerIndex: 0,
+        baselineValue: baselineValue,
+        currentDekiyakuValue: currentDekiyakuValue,
+        hasImproved: hasImproved
+      });
+
+      // Call UI with sage continuation decision
+      this.uiCallback('sageContinuation', {
+        playerKey: 0,
+        dekiyakuList: player.dekiyaku,
+        baselineValue: baselineValue,
+        currentValue: currentDekiyakuValue,
+        hasImproved: hasImproved,
+        fieldMultiplier: this.fieldMultiplier,
+        deckRemaining: this.deck.count
+      });
+    }
+  }
+
+  /**
+   * Resume turn after sage continuation decision (player chose to continue)
+   */
+  resumeTurnAfterSageDecision() {
+    debugLogger.log('hachihachi', `⚔️ Player 0 chose to CONTINUE sage`, {
+      currentPhase: this.phase
+    });
+
+    // Move to normal select_hand phase
+    this.phase = 'select_hand';
+    this.message = 'Your turn! Select a card from your hand.';
+  }
+
+  /**
    * Set callbacks for UI
    */
   setRoundSummaryCallback(callback) {
@@ -246,6 +349,11 @@ export class HachiHachi {
     for (let i = 0; i < 3; i++) {
       this.sageBaselineKakuyaku[i] = 0; // Will be set when sage is called
     }
+
+    // Round end reason tracking
+    this.roundEndReason = null; // 'shoubu', 'cancel', or null (deck exhausted)
+    this.shoubuPlayerIndex = null; // Which player called shoubu
+    this.cancelPlayerIndex = null; // Which player called cancel
 
     // Track opponent decisions for display in round summary
     this.opponentDecisions = {}; // { playerIndex: { decision, dekiyakuValue } }
@@ -1144,7 +1252,43 @@ export class HachiHachi {
         return;
       }
 
-      // Next player's turn
+      // Check if current player has called sage before - give them option to cancel or continue
+      if (this.sagePlayers.has(this.currentPlayerIndex)) {
+        const currentPlayer = this.players[this.currentPlayerIndex];
+        const currentDekiyakuValue = (currentPlayer.dekiyaku || []).reduce((sum, d) => sum + d.value, 0);
+
+        debugLogger.log('hachihachi', `🔮 Player ${this.currentPlayerIndex} has sage active at turn start`, {
+          dekiyakuValue: currentDekiyakuValue,
+          canCancel: true
+        });
+
+        // Player has sage - give them decision to continue or cancel
+        if (this.currentPlayerIndex === 0) {
+          // Human player - show decision modal
+          this.phase = 'sage_decision';
+          this._triggerSageContinuationDecision();
+          return;
+        } else {
+          // AI player - make decision
+          const decision = this._makeOpponentSageContinuationDecision(this.currentPlayerIndex);
+          if (decision === 'cancel') {
+            this.callCancel(this.currentPlayerIndex);
+            return;
+          }
+          // Continuing sage - notify UI
+          if (this.opponentDecisionCallback) {
+            this.opponentDecisionCallback({
+              playerIndex: this.currentPlayerIndex,
+              decision: 'sage_continue',
+              dekiyakuList: currentPlayer.dekiyaku,
+              dekiyakuValue: currentDekiyakuValue
+            });
+          }
+          // Otherwise continue to normal turn
+        }
+      }
+
+      // Next player's turn (normal play, no sage continuation decision needed)
       if (this.currentPlayerIndex === 0) {
         // Human player's turn
         this.phase = 'select_hand';
@@ -1235,6 +1379,10 @@ export class HachiHachi {
       });
     }
 
+    // Store which player called shoubu for scoring
+    this.roundEndReason = 'shoubu';
+    this.shoubuPlayerIndex = playerIndex;
+
     // CRITICAL: When someone calls Shoubu, finalize ALL players' current dekiyaku
     // This ensures all players' dekiyaku are locked in for settlement
     for (let i = 0; i < 3; i++) {
@@ -1309,10 +1457,10 @@ export class HachiHachi {
     const playerIndex = typeof playerKey === 'number' ? playerKey : this.currentPlayerIndex;
     const player = this.players[playerIndex];
 
-    debugLogger.log('hachihachi', `🔄 Player ${playerIndex} chose CANCEL (reduce to par value)`, {
+    debugLogger.log('hachihachi', `🔄 Player ${playerIndex} chose CANCEL (half dekiyaku value)`, {
       currentDekiyaku: player.dekiyaku.map(d => d.name),
       currentValue: player.dekiyaku.reduce((sum, d) => sum + d.value, 0),
-      safetyNote: 'Will receive par value (0 kan) instead of dekiyaku'
+      note: 'Will receive half dekiyaku value from each opponent'
     });
 
     // Store opponent decision for display in summary
@@ -1333,15 +1481,19 @@ export class HachiHachi {
       });
     }
 
+    // Store which player called cancel for scoring
+    this.roundEndReason = 'cancel';
+    this.cancelPlayerIndex = playerIndex;
+
     // Cancel sage if they were playing sage
     this.sagePlayers.delete(playerIndex);
 
     // Store special flag to indicate cancel was chosen
-    // This prevents dekiyaku from being scored
+    // This prevents full dekiyaku from being scored (only half value)
     player.cancelledSage = true;
-    player.finalizedDekiyaku = []; // Empty dekiyaku - only par value scores
+    player.finalizedDekiyaku = player.dekiyaku.slice(); // Store for half-value scoring
 
-    // End the round (with no dekiyaku)
+    // End the round (with half dekiyaku)
     this.phase = 'round_end';
     this.endRound();
   }
@@ -1379,9 +1531,9 @@ export class HachiHachi {
    */
   endRound() {
     this.phase = 'round_end';
-    debugLogger.log('hachihachi', `🏁 ROUND ${this.currentRound} ENDED - Deck exhausted, calculating scores`, {
+    debugLogger.log('hachihachi', `🏁 ROUND ${this.currentRound} ENDED - Calculating scores`, {
       fieldMultiplier: this.fieldMultiplier,
-      parValue: this.PAR_VALUE
+      roundEndReason: this.roundEndReason || 'deck_exhausted'
     });
 
     // Verify all deck cards are accounted for
@@ -1398,130 +1550,214 @@ export class HachiHachi {
       });
     }
 
-    // Calculate scores for each player
-    let totalPoints = 0;
-    const CARD_VALUES = { 'bright': 20, 'ribbon': 5, 'animal': 10, 'chaff': 1 };
-
+    // Initialize all scores to 0 (dekiyaku is the ONLY scoring method)
     for (let i = 0; i < 3; i++) {
-      const player = this.players[i];
-
-      // Count card points (raw points from captured cards)
-      const cardPoints = player.captured.reduce((sum, card) => {
-        return sum + (CARD_VALUES[card.type] || 0);
-      }, 0);
-
-      totalPoints += cardPoints;
-
-      // Par value scoring: (cardPoints - 88) × fieldMultiplier
-      const cardScore = (cardPoints - this.PAR_VALUE) * this.fieldMultiplier;
-
-      // Total round score: cardScore only
-      // NOTE: Teyaku are paid at round START via applyTeyakuSettlements()
-      // Dekiyaku is zero-sum and will be settled after all players are scored
-      const totalScore = cardScore;
-
-      player.roundScore = totalScore;
-
-      // Use finalized dekiyaku if available (set when player chose Shoubu), otherwise use current
-      const dekiyakuToScore = player.finalizedDekiyaku || player.dekiyaku || [];
-
-      debugLogger.log('hachihachi', `📊 Player ${i} Round Score Breakdown (before dekiyaku settlement):`, {
-        capturedCards: player.captured.length,
-        rawCardPoints: cardPoints,
-        parValue: this.PAR_VALUE,
-        fieldMultiplier: this.fieldMultiplier,
-        cardScore: `(${cardPoints} - ${this.PAR_VALUE}) × ${this.fieldMultiplier} = ${cardScore}`,
-        note: 'Teyaku paid at round START (not included in roundScore)',
-        teyakuList: player.teyaku.map(t => `${t.name}(${t.value}×${this.fieldMultiplier})`).join(', ') || 'none',
-        dekiyakuList: dekiyakuToScore.map(d => `${d.name}(${d.value}×${this.fieldMultiplier})`).join(', ') || 'none',
-        scoreBeforeDekiyakuSettlement: totalScore
-      });
+      this.players[i].roundScore = 0;
     }
 
-    // Verify total points
-    if (totalPoints !== this.TOTAL_POINTS) {
-      debugLogger.log('hachihachi', `⚠️ Total points mismatch: ${totalPoints} points distributed (expected ${this.TOTAL_POINTS})`, {
-        difference: this.TOTAL_POINTS - totalPoints,
-        player0Points: this.players[0].captured.reduce((sum, c) => sum + (CARD_VALUES[c.type] || 0), 0),
-        player1Points: this.players[1].captured.reduce((sum, c) => sum + (CARD_VALUES[c.type] || 0), 0),
-        player2Points: this.players[2].captured.reduce((sum, c) => sum + (CARD_VALUES[c.type] || 0), 0)
-      });
-    }
+    // Determine how the round ended and handle scoring accordingly
+    let roundEndReason = this.roundEndReason || 'deck_exhausted';
+    let roundWinner = null;
+    const dekiyakuSettlements = [0, 0, 0]; // Track settlement amounts for display
 
-    // Check if anyone has dekiyaku
-    const playersWithDekiyaku = [];
-    for (let i = 0; i < 3; i++) {
-      const dekiyakuValue = (this.players[i].dekiyaku || []).reduce((sum, d) => sum + d.value, 0);
-      if (dekiyakuValue > 0) {
-        playersWithDekiyaku.push(i);
-      }
-    }
-
-    // Apply dekiyaku settlement based on how round ended
-    const dekiyakuSettlements = [0, 0, 0]; // Track settlement amounts for each player for display
-
-    // Determine how the round ended
-    let roundEndReason = '';
-    if (this.roundEndReason === 'shoubu') {
-      roundEndReason = 'Player called Shoubu';
-    } else if (this.roundEndReason === 'cancel') {
-      roundEndReason = 'Player called Cancel';
-    } else if (this.deck.count === 0) {
-      roundEndReason = 'Hands exhausted (all Sage)';
-    }
-
-    debugLogger.log('hachihachi', `📋 Dekiyaku Settlement - Round Ended By: ${roundEndReason}`, {
-      playersWithDekiyaku: playersWithDekiyaku,
-      dekiyakuValues: this.players.map((p, i) => `P${i}: ${(p.dekiyaku || []).reduce((sum, d) => sum + d.value, 0)}`).join(', ')
+    debugLogger.log('hachihachi', `📋 Round Ending - Method: ${roundEndReason}`, {
+      shoulduPlayerIndex: this.shoubuPlayerIndex,
+      cancelPlayerIndex: this.cancelPlayerIndex,
+      sagePlayers: Array.from(this.sagePlayers),
+      hasAnyDekiyaku: this.players.some(p => (p.dekiyaku || []).length > 0)
     });
 
-    // Only settle dekiyaku if someone has them
-    if (playersWithDekiyaku.length > 0) {
-      for (let i = 0; i < 3; i++) {
-        const player = this.players[i];
-        const dekiyakuToCount = player.dekiyaku || [];
+    // ============================================================================
+    // CASE 1: SHOUBU - Only the player who called shoubu scores
+    // ============================================================================
+    if (roundEndReason === 'shoubu') {
+      const shoubuPlayer = this.players[this.shoubuPlayerIndex];
+      const dekiyakuValue = (shoubuPlayer.dekiyaku || []).reduce((sum, d) => sum + d.value, 0);
 
-        let dekiyakuValue = 0;
-        dekiyakuToCount.forEach(d => {
-          dekiyakuValue += d.value * this.fieldMultiplier;
-        });
+      debugLogger.log('hachihachi', `🛑 SHOUBU SCORING: Player ${this.shoubuPlayerIndex} called Shoubu`, {
+        dekiyakuValue: dekiyakuValue,
+        willScore: dekiyakuValue > 0
+      });
 
-        if (dekiyakuValue > 0) {
-          // Player has dekiyaku - they collect points
-          let totalToCollect = dekiyakuValue * 2; // Always collect from 2 opponents in 3-player game
-          player.roundScore += totalToCollect;
-          dekiyakuSettlements[i] = totalToCollect;
+      if (dekiyakuValue > 0) {
+        // Player who called shoubu collects from each opponent
+        const pointsPerOpponent = dekiyakuValue * this.fieldMultiplier;
 
-          debugLogger.log('hachihachi', `💰 Player ${i} dekiyaku scoring:`, {
-            dekiyaku: dekiyakuToCount.map(d => `${d.name}(${d.value}kan)`).join(', '),
-            baseValue: dekiyakuToCount.reduce((sum, d) => sum + d.value, 0),
-            fieldMultiplier: `${this.fieldMultiplier}×`,
-            totalCollected: totalToCollect
-          });
-        } else if (playersWithDekiyaku.length > 0) {
-          // Player doesn't have dekiyaku, but others do - they pay
-          let totalToPay = 0;
-          for (let j of playersWithDekiyaku) {
-            if (i !== j) {
-              const otherDekiyakuToCount = this.players[j].dekiyaku || [];
-              let otherDekiyakuValue = 0;
-              otherDekiyakuToCount.forEach(d => {
-                otherDekiyakuValue += d.value * this.fieldMultiplier;
+        for (let i = 0; i < 3; i++) {
+          if (i === this.shoubuPlayerIndex) {
+            // This player collects from 2 opponents
+            shoubuPlayer.roundScore = pointsPerOpponent * 2;
+            dekiyakuSettlements[i] = pointsPerOpponent * 2;
+
+            debugLogger.log('hachihachi', `💰 Player ${i} (SHOUBU caller) collects:`, {
+              pointsPerOpponent: pointsPerOpponent,
+              totalCollected: pointsPerOpponent * 2,
+              reason: 'Called Shoubu with dekiyaku'
+            });
+          } else {
+            // Opponent pays
+            const paymentAmount = pointsPerOpponent;
+
+            // CRITICAL RULE: If opponent called sage, they pay DOUBLE
+            if (this.sagePlayers.has(i)) {
+              this.players[i].roundScore = -paymentAmount * 2;
+              dekiyakuSettlements[i] = -paymentAmount * 2;
+
+              debugLogger.log('hachihachi', `💸 Player ${i} (SAGE caller) pays DOUBLE:`, {
+                basePayment: paymentAmount,
+                doublePayment: paymentAmount * 2,
+                reason: 'Called Sage, must pay double to Shoubu caller'
               });
-              totalToPay += otherDekiyakuValue;
+            } else {
+              // Did not call sage - pay normal amount
+              this.players[i].roundScore = -paymentAmount;
+              dekiyakuSettlements[i] = -paymentAmount;
+
+              debugLogger.log('hachihachi', `💸 Player ${i} pays:`, {
+                payment: paymentAmount,
+                reason: 'Opponent called Shoubu'
+              });
             }
           }
+        }
 
-          if (totalToPay > 0) {
-            player.roundScore -= totalToPay;
-            dekiyakuSettlements[i] = -totalToPay;
+        roundWinner = this.shoubuPlayerIndex;
+      }
+    }
+    // ============================================================================
+    // CASE 2: CANCEL - Only the player who called cancel scores (half value)
+    // ============================================================================
+    else if (roundEndReason === 'cancel') {
+      const cancelPlayer = this.players[this.cancelPlayerIndex];
+      const dekiyakuValue = (cancelPlayer.dekiyaku || []).reduce((sum, d) => sum + d.value, 0);
 
-            debugLogger.log('hachihachi', `💸 Player ${i} dekiyaku payments:`, {
-              totalOwed: totalToPay,
-              reason: 'Other players have dekiyaku',
-              newRoundScore: player.roundScore
+      debugLogger.log('hachihachi', `🔄 CANCEL SCORING: Player ${this.cancelPlayerIndex} called Cancel`, {
+        dekiyakuValue: dekiyakuValue,
+        halfValue: Math.floor(dekiyakuValue / 2),
+        willScore: dekiyakuValue > 0
+      });
+
+      if (dekiyakuValue > 0) {
+        // Player who called cancel collects HALF value from each opponent
+        const halfValuePerOpponent = Math.floor((dekiyakuValue * this.fieldMultiplier) / 2);
+
+        for (let i = 0; i < 3; i++) {
+          if (i === this.cancelPlayerIndex) {
+            // This player collects half value from 2 opponents
+            cancelPlayer.roundScore = halfValuePerOpponent * 2;
+            dekiyakuSettlements[i] = halfValuePerOpponent * 2;
+
+            debugLogger.log('hachihachi', `💰 Player ${i} (CANCEL caller) collects half:`, {
+              halfValuePerOpponent: halfValuePerOpponent,
+              totalCollected: halfValuePerOpponent * 2,
+              reason: 'Called Cancel with dekiyaku'
+            });
+          } else {
+            // Opponent pays half value
+            const halfPayment = halfValuePerOpponent;
+            this.players[i].roundScore = -halfPayment;
+            dekiyakuSettlements[i] = -halfPayment;
+
+            debugLogger.log('hachihachi', `💸 Player ${i} pays half:`, {
+              payment: halfPayment,
+              reason: 'Opponent called Cancel'
             });
           }
+        }
+
+        roundWinner = this.cancelPlayerIndex;
+      }
+    }
+    // ============================================================================
+    // CASE 3: DECK EXHAUSTED - All sage players collect half their dekiyaku value
+    // ============================================================================
+    else {
+      // roundEndReason === 'deck_exhausted' (all players kept calling sage)
+      debugLogger.log('hachihachi', `📖 DECK EXHAUSTED SCORING: All players called Sage`, {
+        sagePlayers: Array.from(this.sagePlayers),
+        hasAnyDekiyaku: this.players.some(p => (p.dekiyaku || []).length > 0)
+      });
+
+      // Check if any player has dekiyaku
+      const hasAnyDekiyaku = this.players.some(p => (p.dekiyaku || []).length > 0);
+
+      if (hasAnyDekiyaku) {
+        // All players score half their dekiyaku value
+        for (let i = 0; i < 3; i++) {
+          const dekiyakuValue = (this.players[i].dekiyaku || []).reduce((sum, d) => sum + d.value, 0);
+
+          if (dekiyakuValue > 0) {
+            // This player collects half from each of 2 opponents
+            const halfValuePerOpponent = Math.floor((dekiyakuValue * this.fieldMultiplier) / 2);
+            this.players[i].roundScore = halfValuePerOpponent * 2;
+            dekiyakuSettlements[i] = halfValuePerOpponent * 2;
+
+            debugLogger.log('hachihachi', `💰 Player ${i} (deck exhausted) collects half:`, {
+              dekiyakuValue: dekiyakuValue,
+              halfValuePerOpponent: halfValuePerOpponent,
+              totalCollected: halfValuePerOpponent * 2,
+              reason: 'Has dekiyaku, deck exhausted'
+            });
+          } else {
+            // This player has no dekiyaku - they pay
+            let totalToPay = 0;
+
+            for (let j = 0; j < 3; j++) {
+              if (i !== j) {
+                const otherDekiyakuValue = (this.players[j].dekiyaku || []).reduce((sum, d) => sum + d.value, 0);
+                if (otherDekiyakuValue > 0) {
+                  totalToPay += Math.floor((otherDekiyakuValue * this.fieldMultiplier) / 2);
+                }
+              }
+            }
+
+            this.players[i].roundScore = -totalToPay;
+            dekiyakuSettlements[i] = -totalToPay;
+
+            debugLogger.log('hachihachi', `💸 Player ${i} (deck exhausted) pays:`, {
+              totalToPay: totalToPay,
+              reason: 'Has no dekiyaku, others do'
+            });
+          }
+        }
+
+        // Winner is the first player who called sage
+        // For deck exhaustion, find first sage player (or player 0 if all were sage)
+        const firstSagePlayer = Array.from(this.sagePlayers)[0] ?? 0;
+        roundWinner = firstSagePlayer;
+      } else {
+        // No one has dekiyaku - calculate par value for each player
+        debugLogger.log('hachihachi', `📊 DECK EXHAUSTED - No dekiyaku: Calculating par value for all players`, {});
+
+        const CARD_VALUES = { 'bright': 20, 'ribbon': 5, 'animal': 10, 'chaff': 1 };
+
+        for (let i = 0; i < 3; i++) {
+          const player = this.players[i];
+          const cardPoints = player.captured.reduce((sum, card) => {
+            return sum + (CARD_VALUES[card.type] || 0);
+          }, 0);
+
+          // Par value scoring: (cardPoints - 88) × fieldMultiplier
+          const parScore = (cardPoints - this.PAR_VALUE) * this.fieldMultiplier;
+          player.roundScore = parScore;
+          dekiyakuSettlements[i] = 0; // No dekiyaku settlement
+
+          debugLogger.log('hachihachi', `💰 Player ${i} (no dekiyaku) par value:`, {
+            cardPoints: cardPoints,
+            parValue: this.PAR_VALUE,
+            fieldMultiplier: this.fieldMultiplier,
+            parScore: parScore
+          });
+        }
+
+        // Winner is first sage player, or player with highest score if no sage
+        if (this.sagePlayers.size > 0) {
+          const firstSagePlayer = Array.from(this.sagePlayers)[0];
+          roundWinner = firstSagePlayer;
+        } else {
+          const scores = this.players.map(p => p.roundScore);
+          const maxScore = Math.max(...scores);
+          roundWinner = scores.findIndex(s => s === maxScore);
         }
       }
     }
@@ -1602,27 +1838,36 @@ export class HachiHachi {
       });
 
       // Calculate score breakdown for each player
-      // NOTE: roundScore has already been modified with teyaku, dekiyaku, and card payments
-      // We need to decompose it back to show each component for display
+      // NOTE: Score breakdown shows all component parts (teyaku, dekiyaku, par)
+      // Par is ONLY included when no dekiyaku exist
+      const CARD_VALUES_BREAKDOWN = { 'bright': 20, 'ribbon': 5, 'animal': 10, 'chaff': 1 };
+      const hasAnyDekiyakuInRound = this.players.some(p => (p.dekiyaku || []).length > 0);
+
       const scoreBreakdown = this.players.map((player, i) => {
         // Get teyaku settlement (already applied in applyTeyakuSettlements)
         const teyakuScore = this.teyakuSettlements[i] || 0;
 
-        // Get card points score (par value calculation)
-        const cardPoints = player.captured.reduce((sum, card) => {
-          return sum + (this.CARD_VALUES[card.type] || 0);
-        }, 0);
-        const cardScore = (cardPoints - this.PAR_VALUE) * this.fieldMultiplier;
-
-        // Use actual dekiyaku settlement calculated above
+        // Get dekiyaku settlement from the calculated values above
         const dekiyakuScore = dekiyakuSettlements[i];
+
+        // Calculate par value ONLY if no dekiyaku in this round
+        let parScore = 0;
+        if (!hasAnyDekiyakuInRound) {
+          const cardPoints = player.captured.reduce((sum, card) => {
+            return sum + (CARD_VALUES_BREAKDOWN[card.type] || 0);
+          }, 0);
+          parScore = (cardPoints - this.PAR_VALUE) * this.fieldMultiplier;
+        }
+
+        // Round total should be sum of all components
+        const roundTotal = teyakuScore + 0 + dekiyakuScore + parScore;
 
         return {
           teyakuScore: teyakuScore,
           potScore: 0, // Placeholder for future pot implementation
           dekiyakuScore: dekiyakuScore,
-          parScore: cardScore, // Par value score (capturedPoints - 88) × multiplier
-          roundTotal: roundScores[i] // Use actual roundScore which has all components
+          parScore: parScore, // Par value score (only when no dekiyaku)
+          roundTotal: roundTotal // Sum of all components
         };
       });
 

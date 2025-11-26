@@ -16,7 +16,6 @@ export class Renderer {
     this.backgroundColor = '#000';
     this.onResizeCallback = null;
     this.overlayCtx = null; // For drawing hover previews above modals
-    this.cancelSageButtonBounds = null; // Bounds of Cancel Sage button for click detection
 
     this.setupCanvas();
   }
@@ -327,18 +326,19 @@ export class Renderer {
     }
 
     // Draw field slot highlights when dragging a hand card (shows where to drop)
-    // Show during select_hand phase and any phase where we might drag from player hand
-    if (isDragging && gameState.field && gameState.field.length >= 0) {
-      debugLogger.log('render', `🟡 isDragging=${isDragging}, phase=${gameState.phase}, field=${gameState.field.length} cards`, null);
-
-      if (gameState.phase === 'select_hand' || gameState.phase === 'select_field') {
-        const layoutManager = new LayoutManager();
-        // Get player count from card3DManager if available, otherwise default to 2
-        const playerCount = card3DManager.playerCount || 2;
-        debugLogger.log('render', `✅ Drawing field slot highlights`, null);
-        this.drawFieldSlotHighlights(gameState, layoutManager, playerCount);
-      }
-    }
+    // TEMPORARILY DISABLED - helper transparency not working correctly in production
+    // TODO: Fix and re-enable later
+    // if (isDragging && gameState.field && gameState.field.length >= 0) {
+    //   debugLogger.log('render', `🟡 isDragging=${isDragging}, phase=${gameState.phase}, field=${gameState.field.length} cards`, null);
+    //
+    //   if (gameState.phase === 'select_hand' || gameState.phase === 'select_field') {
+    //     const layoutManager = new LayoutManager();
+    //     // Get player count from card3DManager if available, otherwise default to 2
+    //     const playerCount = card3DManager.playerCount || 2;
+    //     debugLogger.log('render', `✅ Drawing field slot highlights`, null);
+    //     this.drawFieldSlotHighlights(gameState, layoutManager, playerCount);
+    //   }
+    // }
 
     // Hover interactions (show when no modal visible, or when overlay canvas available for decision modals)
     if (hoverX >= 0 && hoverY >= 0 && (!isModalVisible || this.overlayCtx) && !isGameOver) {
@@ -444,8 +444,7 @@ export class Renderer {
       this.drawTrickPileIndicators(gameState, card3DManager, playerCount);
     }
 
-    // Draw Cancel Sage button for Hachi-Hachi mode (store bounds for click detection)
-    this.cancelSageButtonBounds = this.drawCancelSageButton(gameState);
+    // Cancel Sage decision is now made at the beginning of each turn, not via a button
   }
 
   /**
@@ -1522,51 +1521,4 @@ export class Renderer {
     this.ctx.restore();
   }
 
-  /**
-   * The Cancel Sage button on the game field
-   * @param {Object} gameState - Current game state
-   * @returns {Object|null} Button bounds for click detection, or null if not visible
-   */
-  drawCancelSageButton(gameState) {
-    // Only draw for Hachi-Hachi mode when player has sage active
-    if (gameState.gameType !== 'hachihachi' || !gameState.playerHasSageActive) {
-      return null;
-    }
-
-    const buttonWidth = 120;
-    const buttonHeight = 50;
-    const padding = 20;
-
-    // Position button in bottom-right area of game field
-    const buttonX = this.displayWidth - buttonWidth - padding;
-    const buttonY = this.displayHeight - buttonHeight - padding;
-
-    this.ctx.save();
-
-    // Draw button background
-    this.ctx.fillStyle = 'rgba(220, 80, 80, 0.8)';
-    this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
-
-    // Draw button border
-    this.ctx.strokeStyle = 'rgba(255, 255, 255, 1)';
-    this.ctx.lineWidth = 2;
-    this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
-
-    // Draw button text
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = 'bold 14px sans-serif';
-    this.ctx.textAlign = 'center';
-    this.ctx.textBaseline = 'middle';
-    this.ctx.fillText('Cancel Sage', buttonX + buttonWidth / 2, buttonY + buttonHeight / 2);
-
-    this.ctx.restore();
-
-    // Return button bounds for click detection
-    return {
-      x: buttonX,
-      y: buttonY,
-      width: buttonWidth,
-      height: buttonHeight
-    };
-  }
 }

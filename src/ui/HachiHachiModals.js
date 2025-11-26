@@ -14,7 +14,11 @@ export class HachiHachiModals {
    */
   static showSageDecision(params) {
     return new Promise((resolve) => {
-      const { dekiyakuList, playerScore, roundNumber, opponent1Score, opponent2Score, allPlayers = [], deckRemaining = 0, fieldCardCount = 0, parValue = 88, fieldMultiplier = 1 } = params;
+      const {
+        dekiyakuList, playerScore, roundNumber, opponent1Score, opponent2Score, allPlayers = [],
+        deckRemaining = 0, fieldCardCount = 0, parValue = 88, fieldMultiplier = 1,
+        baselineValue, currentValue, hasImproved, isSageContinuation = false
+      } = params;
 
       // Calculate dekiyaku value
       const dekiyakuValue = dekiyakuList.reduce((sum, d) => sum + d.value, 0);
@@ -58,7 +62,11 @@ export class HachiHachiModals {
 
       // Title
       const title = document.createElement('h2');
-      title.textContent = 'Dekiyaku Formed!';
+      if (isSageContinuation) {
+        title.textContent = '🔮 Sage Continuation Decision';
+      } else {
+        title.textContent = 'Dekiyaku Formed!';
+      }
       title.style.cssText = `
         margin: 0;
         font-size: 28px;
@@ -240,8 +248,22 @@ export class HachiHachiModals {
         return btn;
       };
 
-      buttonDiv.appendChild(createButton('SAGE', '#ff6b6b', params.onSage));     // Red - risky
-      buttonDiv.appendChild(createButton('SHOUBU', '#6bcf7f', params.onShoubu));  // Green - end
+      if (isSageContinuation) {
+        // Sage continuation decision: Continue or Cancel
+        buttonDiv.style.gridTemplateColumns = '1fr 1fr'; // 2 columns
+        buttonDiv.appendChild(createButton('CONTINUE', '#ff6b6b', params.onSage));     // Red - risky
+        buttonDiv.appendChild(createButton('CANCEL', '#ffa500', params.onCancel));      // Orange - safe
+      } else {
+        // Initial dekiyaku decision: Sage, Shoubu, or Cancel
+        buttonDiv.appendChild(createButton('SAGE', '#ff6b6b', params.onSage));         // Red - risky
+        buttonDiv.appendChild(createButton('SHOUBU', '#6bcf7f', params.onShoubu));      // Green - end
+
+        // Add Cancel button for initial decision too
+        if (params.onCancel) {
+          buttonDiv.style.gridTemplateColumns = '1fr 1fr 1fr'; // 3 columns
+          buttonDiv.appendChild(createButton('CANCEL', '#ffa500', params.onCancel));   // Orange - safe
+        }
+      }
 
       modal.appendChild(buttonDiv);
       overlay.appendChild(modal);
@@ -482,20 +504,32 @@ export class HachiHachiModals {
             ? dekiyakuList.reduce((sum, d) => sum + (d.value || 0), 0) * fieldMultiplier
             : 0;
 
-          // Calculate final round score (cards + dekiyaku only, teyaku already paid at start)
-          const roundTotal = cardScore + dekiyakuTotal;
+          // Check if ANY player has dekiyaku in this round
+          const hasAnyDekiyaku = dekiyakuArray.some(arr => arr && arr.length > 0);
+
+          // Calculate final round score
+          let roundTotal;
+          if (hasAnyDekiyaku) {
+            // If dekiyaku exist, only use dekiyaku score
+            roundTotal = dekiyakuTotal;
+          } else {
+            // If no dekiyaku, use par value score
+            roundTotal = cardScore;
+          }
 
           let html = `<div style="font-weight: bold; color: #d4af37; font-size: 11px;">${name}:</div>`;
           html += `<div style="margin-left: 5px; color: #aaa; font-size: 10px; margin-top: 2px;">`;
           html += `Brights: ${cards.brights} | Ribbons: ${cards.ribbons} | Animals: ${cards.animals} | Chaff: ${cards.chaffs}`;
           html += `</div>`;
 
-          // Base card points calculation
-          html += `<div style="margin-left: 5px; color: #ccc; font-size: 9px; margin-top: 3px;">`;
-          html += `${rawPoints}pts → (${rawPoints}-${parValue})×${fieldMultiplier} = ${cardScore} kan`;
-          html += `</div>`;
+          // Only show par calculation if NO dekiyaku in this round
+          if (!hasAnyDekiyaku) {
+            html += `<div style="margin-left: 5px; color: #ccc; font-size: 9px; margin-top: 3px;">`;
+            html += `${rawPoints}pts → (${rawPoints}-${parValue})×${fieldMultiplier} = ${cardScore} kan`;
+            html += `</div>`;
+          }
 
-          // Show dekiyaku as zero-sum component (separate line)
+          // Show dekiyaku if this player has any
           if (dekiyakuTotal !== 0) {
             const dekiyakuColor = dekiyakuTotal > 0 ? '#87ceeb' : '#ff6b6b';
             html += `<div style="margin-left: 5px; color: ${dekiyakuColor}; font-size: 9px; margin-top: 2px;">`;

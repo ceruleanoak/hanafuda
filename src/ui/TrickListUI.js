@@ -78,47 +78,109 @@ export class TrickListUI {
 
   /**
    * Get complete Koi-Koi yaku definitions
+   * Card names drawn from HANAFUDA_DECK in cards.js for consistency
    */
   getKoikoiYaku() {
     return [
-      { name: 'Five Brights', points: 15, type: 'brights', cards: [1, 9, 29, 41, 45] },
-      { name: 'Four Brights', points: 10, type: 'brights', cards: [1, 9, 29, 45] },
-      { name: 'Rainy Four', points: 8, type: 'brights', cards: [1, 9, 29, 41] },
-      { name: 'Three Brights', points: 6, type: 'brights', cards: [1, 9, 29] },
-      { name: 'Poetry Ribbons', points: 6, type: 'ribbons', cards: [2, 6, 10] },
-      { name: 'Blue Ribbons', points: 6, type: 'ribbons', cards: [22, 34, 38] },
-      { name: 'Boar-Deer-Butterfly', points: 6, type: 'animals', cards: [25, 37, 21] },
-      { name: 'Ribbons (5+)', points: '5+', type: 'ribbons', cards: [2, 6, 10, 14, 18, 22, 26] },
-      { name: 'Animals (5+)', points: '5+', type: 'animals', cards: [5, 13, 17, 21, 25, 30, 33, 37, 42] },
-      { name: 'Chaff (10+)', points: '1+', type: 'chaff', cards: [3, 4, 7, 8, 11, 12, 15, 16, 19, 20, 23, 24, 27, 28, 31, 32, 35, 36, 39, 40, 43, 44, 46, 47, 48] },
-      { name: 'Viewing Sake', points: 3, type: 'special', cards: [9, 33] },
-      { name: 'Moon Viewing', points: 3, type: 'special', cards: [29, 33] }
+      { name: 'Five Brights', points: 15, type: 'brights', description: 'Crane + Curtain + Moon + Rain man + Phoenix', cards: [1, 9, 29, 41, 45] },
+      { name: 'Four Brights', points: 8, type: 'brights', description: 'Crane + Curtain + Moon + Phoenix (no Rain man)', cards: [1, 9, 29, 45] },
+      { name: 'Rainy Four', points: 7, type: 'brights', description: 'Rain man + any 3 of: Crane, Curtain, Moon, Phoenix', cards: [1, 9, 29, 41] },
+      { name: 'Three Brights', points: 6, type: 'brights', description: 'Any 3 of: Crane, Curtain, Moon, Rain man, Phoenix', cards: [1, 9, 29] },
+      { name: 'Poetry Ribbons', points: 5, type: 'ribbons', description: 'Red ribbons: Jan + Feb + Mar (+1 per extra)', cards: [2, 6, 10] },
+      { name: 'Blue Ribbons', points: 5, type: 'ribbons', description: 'Blue ribbons: Jun + Sep + Oct (+1 per extra)', cards: [22, 34, 38] },
+      { name: 'Boar-Deer-Butterfly', points: 5, type: 'animals', description: 'Boar + Deer + Butterflies', cards: [25, 37, 21] },
+      { name: 'Ribbons (5+)', points: '5+', type: 'ribbons', description: 'Any 5+ ribbon cards (+1 per extra)', cards: [2, 6, 10, 14, 18, 22, 26, 34, 38, 43] },
+      { name: 'Animals (5+)', points: '5+', type: 'animals', description: 'Any 5+ animal cards (+1 per extra)', cards: [5, 13, 17, 21, 25, 30, 33, 37, 42] },
+      { name: 'Flower Viewing Sake', points: 5, type: 'special', description: 'Sake cup + Curtain', cards: [33, 9] },
+      { name: 'Moon Viewing Sake', points: 5, type: 'special', description: 'Sake cup + Moon', cards: [33, 29] },
+      { name: 'Chaff (10+)', points: '1+', type: 'chaff', description: 'Any 10+ chaff cards (+1 per extra)', cards: [3, 4, 7, 8, 11, 12, 15, 16, 19, 20, 23, 24, 27, 28, 31, 32, 35, 36, 39, 40, 44, 46, 47, 48] }
     ];
   }
 
   /**
    * Get Sakura yaku definitions
+   * 8 traditional yaku - each consists of exactly 3 cards
+   * Each yaku imposes a -50 point penalty on opponents
+   * Card names drawn from HANAFUDA_DECK in cards.js for consistency
    */
   getSakuraYaku() {
     return [
-      { name: 'Brights', points: '1 ea', type: 'brights', cards: [1, 9, 29, 41, 45] },
-      { name: 'Animals', points: '1 ea', type: 'animals', cards: [5, 13, 17, 21, 25, 30, 33, 37, 42] },
-      { name: 'Ribbons', points: '1 ea', type: 'ribbons', cards: [2, 6, 10, 14, 18, 22, 26, 34, 38, 43] },
-      { name: 'Chaff', points: '1 ea', type: 'chaff', cards: [3, 4, 7, 8, 11, 12, 15, 16, 19, 20, 23, 24, 27, 28, 31, 32, 35, 36, 39, 40, 44, 46, 47, 48] }
+      // Bright Yaku (2 Brights + 1 Animal each)
+      {
+        name: 'Drinking (Nomi)',
+        description: 'Curtain + Moon + Sake cup',
+        type: 'brights',
+        cards: [9, 29, 33],
+        points: '-50'
+      },
+      {
+        name: 'Spring (Omote)',
+        description: 'Crane + Bush warbler + Curtain',
+        type: 'brights',
+        cards: [1, 5, 9],
+        points: '-50'
+      },
+
+      // Ribbon Yaku (3 Ribbons each)
+      {
+        name: 'Red Ribbons (Akatan)',
+        description: 'Jan + Feb + Mar red ribbons',
+        type: 'ribbons',
+        cards: [2, 6, 10],
+        points: '-50'
+      },
+      {
+        name: 'Blue Ribbons (Aotan)',
+        description: 'Jun + Sep + Oct blue ribbons',
+        type: 'ribbons',
+        cards: [22, 34, 38],
+        points: '-50'
+      },
+      {
+        name: 'Grass Ribbons (Kusatan)',
+        description: 'Apr + May + Jul red ribbons',
+        type: 'ribbons',
+        cards: [14, 18, 26],
+        points: '-50'
+      },
+
+      // Animal Yaku (3 Animals each)
+      {
+        name: 'Animals A',
+        description: 'Butterflies + Sake cup + Deer',
+        type: 'animals',
+        cards: [21, 33, 37],
+        points: '-50'
+      },
+      {
+        name: 'Animals B',
+        description: 'Cuckoo + Bridge + Boar',
+        type: 'animals',
+        cards: [13, 17, 25],
+        points: '-50'
+      },
+      {
+        name: 'Boar-Geese-Deer (Ganbo)',
+        description: 'Boar + Geese + Deer',
+        type: 'animals',
+        cards: [25, 30, 37],
+        points: '-50'
+      }
     ];
   }
 
   /**
    * Get Hachi-Hachi dekiyaku definitions
+   * Card names drawn from HANAFUDA_DECK in cards.js for consistency
    */
   getHachihachiYaku() {
     return [
-      { name: 'Five Brights', points: 12, type: 'brights', cards: [1, 9, 29, 41, 45] },
-      { name: 'Four Brights', points: 10, type: 'brights', cards: [1, 9, 29, 45] },
-      { name: 'Seven Ribbons', points: 10, type: 'ribbons', cards: [2, 6, 10, 14, 18, 22, 26] },
-      { name: 'Poetry Ribbons', points: 7, type: 'ribbons', cards: [2, 6, 10] },
-      { name: 'Blue Ribbons', points: 7, type: 'ribbons', cards: [22, 34, 38] },
-      { name: 'Boar-Deer-Butterfly', points: 7, type: 'animals', cards: [25, 37, 21] }
+      { name: 'Five Brights', points: 12, type: 'brights', description: 'Crane + Curtain + Moon + Rain man + Phoenix', cards: [1, 9, 29, 41, 45] },
+      { name: 'Four Brights', points: 10, type: 'brights', description: 'Crane + Curtain + Moon + Phoenix', cards: [1, 9, 29, 45] },
+      { name: 'Seven Ribbons', points: 10, type: 'ribbons', description: 'All red ribbons except November', cards: [2, 6, 10, 14, 18, 22, 26] },
+      { name: 'Poetry Ribbons', points: 7, type: 'ribbons', description: 'Jan + Feb + Mar red ribbons', cards: [2, 6, 10] },
+      { name: 'Blue Ribbons', points: 7, type: 'ribbons', description: 'Jun + Sep + Oct blue ribbons', cards: [22, 34, 38] },
+      { name: 'Boar-Deer-Butterfly', points: 7, type: 'animals', description: 'Boar + Deer + Butterflies', cards: [25, 37, 21] }
     ];
   }
 
@@ -138,7 +200,11 @@ export class TrickListUI {
     let html = '<div class="trick-list-items">';
 
     yakuList.forEach(yaku => {
-      html += `<div class="trick-entry">`;
+      // Add data-description attribute for tooltip hover on modes with descriptions
+      const hasDescription = yaku.description && ['sakura', 'koikoi', 'hachihachi'].includes(gameMode);
+      const tooltipAttr = hasDescription ? ` data-description="${yaku.description}"` : '';
+
+      html += `<div class="trick-entry${hasDescription ? ' has-tooltip' : ''}"${tooltipAttr}>`;
       html += `<div class="trick-header">`;
       html += `<div class="trick-name">${yaku.name}</div>`;
       html += `<span class="trick-pts">${yaku.points}</span>`;

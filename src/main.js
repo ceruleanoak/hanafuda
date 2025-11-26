@@ -602,6 +602,11 @@ class Game {
     this.roundSummaryModal.classList.remove('show');
     this.cardBackModal.classList.remove('show');
     this.variationsModal.classList.remove('show');
+    this.trickListUI.hide();
+
+    // Remove Hachi-Hachi modal overlays that are created dynamically
+    const hachihiachiOverlays = document.querySelectorAll('.modal-overlay');
+    hachihiachiOverlays.forEach(overlay => overlay.remove());
   }
 
   /**
@@ -934,6 +939,7 @@ class Game {
       // Hide Koi Koi specific UI elements
       document.getElementById('score').style.display = 'none';
       document.getElementById('variations-btn').style.display = 'none';
+      document.getElementById('trick-list-btn').style.display = 'none';
 
       // Keep options button visible but change its behavior
       document.getElementById('options-btn').style.display = 'inline-block';
@@ -947,6 +953,7 @@ class Game {
       // Hide score display for shop mode
       document.getElementById('score').style.display = 'none';
       document.getElementById('variations-btn').style.display = 'none';
+      document.getElementById('trick-list-btn').style.display = 'none';
 
       // Update instructions
       this.instructionsElement.textContent = 'Achieve your bonus chance!';
@@ -957,6 +964,7 @@ class Game {
       document.getElementById('score').style.display = 'flex';
       document.getElementById('options-btn').style.display = 'inline-block';
       document.getElementById('variations-btn').style.display = 'none';
+      document.getElementById('trick-list-btn').style.display = 'inline-block';
 
       // Update instructions
       this.instructionsElement.textContent = 'Sakura (Hawaiian Hanafuda) - Click cards to select them';
@@ -967,6 +975,7 @@ class Game {
       document.getElementById('score').style.display = 'flex';
       document.getElementById('options-btn').style.display = 'inline-block';
       document.getElementById('variations-btn').style.display = 'none';
+      document.getElementById('trick-list-btn').style.display = 'inline-block';
 
       // Update instructions
       this.instructionsElement.textContent = 'Hachi-Hachi (88) - 3-player game with Sage/Shoubu decisions';
@@ -977,6 +986,7 @@ class Game {
       document.getElementById('score').style.display = 'flex';
       document.getElementById('options-btn').style.display = 'inline-block';
       document.getElementById('variations-btn').style.display = 'inline-block';
+      document.getElementById('trick-list-btn').style.display = 'inline-block';
 
       // Update instructions
       this.instructionsElement.textContent = 'Click cards to select them';
@@ -1039,6 +1049,9 @@ class Game {
       // For Koi Koi, show round modal
       this.showRoundModal();
     }
+
+    // Update trick list button position after mode change
+    this.updateTrickListButtonPosition();
   }
 
   handleMouseDown(event) {
@@ -1104,17 +1117,6 @@ class Game {
     if (this.currentGameMode === 'hachihachi') {
       const gameState = this.game.getState();
       debugLogger.log('gameState', `🎲 Hachi-Hachi click in phase: ${gameState.phase}`, null);
-
-      // Check if Cancel Sage button was clicked
-      if (this.renderer.cancelSageButtonBounds) {
-        const bounds = this.renderer.cancelSageButtonBounds;
-        if (x >= bounds.x && x <= bounds.x + bounds.width &&
-            y >= bounds.y && y <= bounds.y + bounds.height) {
-          debugLogger.log('gameState', '⚠️ Cancel Sage button clicked', null);
-          this.game.cancelSage();
-          return;
-        }
-      }
 
       // Only allow interactions during playing phases
       if (gameState.phase !== 'select_hand' && gameState.phase !== 'select_field' &&
@@ -2706,11 +2708,22 @@ class Game {
           yakuCardHTML += `<div class="yaku-item" style="color: #888; font-style: italic;">No yaku</div>`;
         }
 
-        // Calculate penalty this player RECEIVES from other players' yaku
+        // Calculate penalty this player RECEIVES from opponents' yaku
+        // (Only opponents, not allies in teams mode)
         let penaltyReceived = 0;
         data.playerScores.forEach((otherScore, otherIndex) => {
           if (otherIndex !== index) {
-            penaltyReceived += otherScore.yakuPenalty;
+            // Check if otherIndex is an opponent (not an ally)
+            let isOpponent = true;
+            if (displayData.isTeamsMode && playerCount === 4) {
+              // In teams mode: allies are (0,2) and (1,3)
+              const myTeam = (index === 0 || index === 2) ? [0, 2] : [1, 3];
+              isOpponent = !myTeam.includes(otherIndex);
+            }
+
+            if (isOpponent) {
+              penaltyReceived += otherScore.ownYakuValue;
+            }
           }
         });
 
@@ -2806,8 +2819,15 @@ class Game {
     } else if (decision === 'cancel') {
       content = `
         <div class="notification-content">
-          <h3>🔄 ${playerName} Chose Cancel!</h3>
-          <p>They gave up on dekiyaku and will receive par value only.</p>
+          <h3>🔄 ${playerName} Called Cancel!</h3>
+          <p>They're settling for half dekiyaku value (${dekiyakuValue} kan).</p>
+        </div>
+      `;
+    } else if (decision === 'sage_continue') {
+      content = `
+        <div class="notification-content">
+          <h3>⚔️ ${playerName} Continues Sage!</h3>
+          <p>They're keeping their ${dekiyakuValue} kan and trying for more.</p>
         </div>
       `;
     }
@@ -4609,7 +4629,7 @@ class Game {
    */
   async showHachihachiDecision(decision, params) {
     if (decision === 'sage') {
-      // Player needs to make Sage/Shoubu/Cancel decision
+      // Player needs to make Sage/Shoubu/Cancel decision after forming dekiyaku
       this.isDecisionModalVisible = true;
       try {
         await HachiHachiModals.showSageDecision({
@@ -4620,7 +4640,31 @@ class Game {
           roundNumber: params.roundNumber,
           onSage: () => this.game.callSage(params.playerKey),
           onShoubu: () => this.game.callShoubu(params.playerKey),
-          onCancel: () => this.game.callCancel(params.playerKey)
+          onCancel: () => this.game.callCancel(params.playerKey),
+          isSageContinuation: false
+        });
+      } finally {
+        this.isDecisionModalVisible = false;
+      }
+    } else if (decision === 'sageContinuation') {
+      // Player has called sage before - now at turn start they can cancel or continue
+      this.isDecisionModalVisible = true;
+      try {
+        await HachiHachiModals.showSageDecision({
+          dekiyakuList: params.dekiyakuList,
+          baselineValue: params.baselineValue,
+          currentValue: params.currentValue,
+          hasImproved: params.hasImproved,
+          roundNumber: params.roundNumber,
+          fieldMultiplier: params.fieldMultiplier,
+          deckRemaining: params.deckRemaining,
+          onSage: () => {
+            // Continue sage - resume turn
+            this.game.resumeTurnAfterSageDecision();
+            this.updateUI();
+          },
+          onCancel: () => this.game.callCancel(params.playerKey),
+          isSageContinuation: true
         });
       } finally {
         this.isDecisionModalVisible = false;
