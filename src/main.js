@@ -2371,7 +2371,7 @@ class Game {
       }
       title.textContent = `Game Over - ${winner}`;
     } else {
-      title.textContent = `Round ${data.currentRound} Complete!`;
+      title.textContent = `Round ${data.roundNumber} Complete!`;
     }
 
     // Determine player count and update data attribute
