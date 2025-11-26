@@ -2190,11 +2190,36 @@ export class Sakura {
       playerScores[i].matchScore = this.players[i].matchScore;
     }
 
-    // Prepare summary data (backward compatible for 2-player UI)
+    // Prepare summary data (HachiHachi-aligned structure)
     const summaryData = {
-      // All player scores
+      // Core round info
+      roundNumber: this.currentRound,
+      totalRounds: this.totalRounds,
+      isGameOver: this.currentRound >= this.totalRounds,
+      playerCount: this.playerCount,
+
+      // Winner (HachiHachi-style: single winner index)
+      winner: roundWinnerIndex,
+
+      // Score data (HachiHachi-style arrays)
+      allScores: {
+        roundScores: playerScores.map(s => s.roundScore),
+        gameScores: this.players.map(p => p.matchScore)
+      },
+
+      // Detailed score breakdown (HachiHachi-style array)
+      scoreBreakdown: playerScores.map(s => ({
+        basePoints: s.basePoints,
+        yakuPenalty: s.yakuPenalty,
+        ownYakuValue: s.ownYakuValue,
+        roundTotal: s.roundScore
+      })),
+
+      // Yaku data per player
+      yaku: playerScores.map(s => s.yaku),
+
+      // All player scores (for backward compatibility)
       playerScores,
-      roundWinnerIndex,
 
       // Backward compatibility fields (for 2-player UI)
       playerBasePoints: playerScores[0].basePoints,
@@ -2209,13 +2234,7 @@ export class Sakura {
       opponentMatchScore: this.players[1]?.matchScore || 0,
       playerTotalScore: this.players[0].matchScore,
       opponentTotalScore: this.players[1]?.matchScore || 0,
-      roundWinner: roundWinnerIndex === 0 ? 'player' : (roundWinnerIndex === 1 ? 'opponent' : `player${roundWinnerIndex}`),
-
-      // Round info
-      roundNumber: this.currentRound,
-      totalRounds: this.totalRounds,
-      playerCount: this.playerCount,
-      isGameOver: this.currentRound >= this.totalRounds
+      roundWinner: roundWinnerIndex === 0 ? 'player' : (roundWinnerIndex === 1 ? 'opponent' : `player${roundWinnerIndex}`)
     };
 
     // Show round summary
