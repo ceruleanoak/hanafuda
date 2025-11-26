@@ -2212,7 +2212,7 @@ export class Sakura {
       roundWinner: roundWinnerIndex === 0 ? 'player' : (roundWinnerIndex === 1 ? 'opponent' : `player${roundWinnerIndex}`),
 
       // Round info
-      currentRound: this.currentRound,
+      roundNumber: this.currentRound,
       totalRounds: this.totalRounds,
       playerCount: this.playerCount,
       isGameOver: this.currentRound >= this.totalRounds
