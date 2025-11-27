@@ -48,6 +48,35 @@ export class AnimationPipeline {
 
       // Field self-adjustment (field → field, triggered by relayoutZone)
       'field→field': ANIMATION_STAGE.FIELD_SELF_ADJUST,
+
+      // Self-transitions (repositioning within same zone, no animation)
+      'player0Hand→player0Hand': null,
+      'player1Hand→player1Hand': null,
+      'player2Hand→player2Hand': null,
+      'player3Hand→player3Hand': null,
+      'drawnCard→drawnCard': null,
+      'opponentPlayedCard→opponentPlayedCard': null,
+
+      // Opponent played card display transitions
+      'player0Hand→opponentPlayedCard': ANIMATION_STAGE.HAND_TO_FIELD,
+      'player1Hand→opponentPlayedCard': ANIMATION_STAGE.HAND_TO_FIELD,
+      'player2Hand→opponentPlayedCard': ANIMATION_STAGE.HAND_TO_FIELD,
+      'player3Hand→opponentPlayedCard': ANIMATION_STAGE.HAND_TO_FIELD,
+
+      // Opponent played card to trick transitions
+      'opponentPlayedCard→player0Trick': ANIMATION_STAGE.FIELD_TO_TRICK,
+      'opponentPlayedCard→player1Trick': ANIMATION_STAGE.FIELD_TO_TRICK,
+      'opponentPlayedCard→player2Trick': ANIMATION_STAGE.FIELD_TO_TRICK,
+      'opponentPlayedCard→player3Trick': ANIMATION_STAGE.FIELD_TO_TRICK,
+
+      // Drawn card automatic match to trick
+      'drawnCard→player0Trick': ANIMATION_STAGE.FIELD_TO_TRICK,
+      'drawnCard→player1Trick': ANIMATION_STAGE.FIELD_TO_TRICK,
+      'drawnCard→player2Trick': ANIMATION_STAGE.FIELD_TO_TRICK,
+      'drawnCard→player3Trick': ANIMATION_STAGE.FIELD_TO_TRICK,
+
+      // Drawn card to field (no match)
+      'drawnCard→field': ANIMATION_STAGE.HAND_TO_FIELD,
     };
 
     // Game mode → animation stages mapping
@@ -94,17 +123,60 @@ export class AnimationPipeline {
    */
   getStageForTransition(fromZone, toZone, context = {}) {
     const key = `${fromZone}→${toZone}`;
-    const stageName = this.transitionMap[key];
 
-    if (!stageName) {
-      // Don't warn for null/undefined fromZone (initial placement)
-      if (fromZone !== null && fromZone !== undefined) {
-        console.warn(`No animation stage defined for transition: ${key}`);
-      }
-      return null;
+    // Check explicit map first
+    if (key in this.transitionMap) {
+      const stageName = this.transitionMap[key];
+      // If mapped to null, it's a no-animation repositioning
+      return stageName ? getStage(stageName) : null;
     }
 
-    return getStage(stageName);
+    // Pattern-based matching for dynamic player counts
+    // Match 'playerXHand→playerXHand' pattern (self-transitions)
+    if (/^player\d+Hand→player\d+Hand$/.test(key)) {
+      return null;  // Self-transition, no animation
+    }
+
+    // Match 'deck→playerXHand' pattern
+    if (/^deck→player\d+Hand$/.test(key)) {
+      return getStage(ANIMATION_STAGE.DECK_TO_HAND);
+    }
+
+    // Match 'playerXHand→field' pattern
+    if (/^player\d+Hand→field$/.test(key)) {
+      return getStage(ANIMATION_STAGE.HAND_TO_FIELD);
+    }
+
+    // Match 'field→playerXTrick' pattern
+    if (/^field→player\d+Trick$/.test(key)) {
+      return getStage(ANIMATION_STAGE.FIELD_TO_TRICK);
+    }
+
+    // Match 'drawnCard→playerXTrick' pattern
+    if (/^drawnCard→player\d+Trick$/.test(key)) {
+      return getStage(ANIMATION_STAGE.FIELD_TO_TRICK);
+    }
+
+    // Match 'playerXHand→playerXTeyaku' pattern
+    if (/^player\d+Hand→player\d+Teyaku$/.test(key)) {
+      return getStage(ANIMATION_STAGE.HACHIHACHI_TEYAKU_DISPLAY);
+    }
+
+    // Match 'playerXTeyaku→playerXHand' pattern
+    if (/^player\d+Teyaku→player\d+Hand$/.test(key)) {
+      return getStage(ANIMATION_STAGE.HACHIHACHI_TEYAKU_DISPLAY);
+    }
+
+    // Match 'playerXHand→playerXTrick' pattern (direct hand to trick)
+    if (/^player\d+Hand→player\d+Trick$/.test(key)) {
+      return getStage(ANIMATION_STAGE.HAND_TO_TRICK);
+    }
+
+    // Don't warn for null/undefined fromZone (initial placement)
+    if (fromZone !== null && fromZone !== undefined) {
+      console.warn(`No animation stage defined for transition: ${key}`);
+    }
+    return null;
   }
 
   /**
