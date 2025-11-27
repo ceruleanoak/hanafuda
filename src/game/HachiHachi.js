@@ -60,6 +60,13 @@ export class HachiHachi {
   }
 
   /**
+   * Update game options (called when options change)
+   */
+  updateOptions(gameOptions) {
+    this.gameOptions = gameOptions;
+  }
+
+  /**
    * Trigger UI decision modal for Shoubu/Sage/Cancel
    * @private
    */
