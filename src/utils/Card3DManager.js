@@ -5,6 +5,7 @@
 import { Card3D } from './Card3D.js';
 import { LayoutManager } from './LayoutManager.js';
 import { debugLogger } from './DebugLogger.js';
+import { ANIMATION_STAGE, STAGE_DEFINITIONS, getStage } from './AnimationStageRegistry.js';
 
 export class Card3DManager {
   constructor(viewportWidth, viewportHeight, playerCount = 2) {
@@ -193,7 +194,7 @@ export class Card3DManager {
 
     debugLogger.log('3dCards', '🎬 Applying Toss Across animation to field cards', { endFaceUp });
 
-    // Toss Across animation preset parameters
+    // Toss Across animation preset parameters (special case, not in registry)
     const duration = 1350;
     const easing = 'easeOutCubic';
     const flipTiming = 0.5;
@@ -589,8 +590,11 @@ export class Card3DManager {
             // Captured cards moving to trick piles get an arc via control point Z and X/Y curve
             let controlPoint = null;
             if (isTrickZone) {
+              // Get stage definition for field-to-trick animation
+              const trickStage = getStage(ANIMATION_STAGE.FIELD_TO_TRICK);
+
               // Use a control point with elevated Z to create a curved arc during animation
-              // Bezier: start at current Z, peak at 150 (control point), end at 0
+              // Bezier: start at current Z, peak at stage.controlPoint.z (150), end at 0
               // Also curve X and Y towards the trick pile using control point offset
 
               // Determine direction to trick pile based on zone name
@@ -608,7 +612,7 @@ export class Card3DManager {
               controlPoint = {
                 x: (card3D.x + pos.x) / 2 + xCurve,
                 y: (card3D.y + pos.y) / 2 + yCurve,
-                z: 150
+                z: trickStage?.controlPoint?.z || 150 // Use registry value, fallback to 150
               };
               // IMPORTANT: Must explicitly set target.z even if it's 0
               // This ensures the bezier curve is properly applied in updateTween
@@ -625,10 +629,15 @@ export class Card3DManager {
 
             debugLogger.log('3dCards', `ANIMATING trick card (capture)`, { cardId: card3D.id, zone, cardPreviousZone, duration, hasControlPoint: !!controlPoint });
 
+            // Get easing from registry (use FIELD_TO_TRICK for trick captures, otherwise default)
+            const easing = isTrickZone
+              ? (getStage(ANIMATION_STAGE.FIELD_TO_TRICK)?.easing || 'easeInOutCubic')
+              : 'easeInOutCubic';
+
             card3D.tweenTo(
               tweenTarget,
               duration,
-              'easeInOutCubic',
+              easing,
               controlPoint,
               0.5, // flipTiming
               null, // peakScale
