@@ -308,6 +308,7 @@ export class LayoutManager {
       } else if (playerCount === 3) {
         // 3-Player Layout: P0 bottom, P1 top-left, P2 top-right
         return {
+          ...baseConfigs,
           player0Hand: {
             type: 'row',
             anchorPoint: { x: 50, y: viewportHeight - 170 + HEADER_OFFSET },
@@ -380,6 +381,7 @@ export class LayoutManager {
         // Trick piles in four corners: You (bottom-right), Opponent1 (bottom-left), Opponent2 (top-left), Opponent3 (top-right)
         // Deck integrated into field grid at position 0
         return {
+          ...baseConfigs,
           player0Hand: {
             type: 'row',
             anchorPoint: { x: 50, y: viewportHeight - 170 + HEADER_OFFSET },
