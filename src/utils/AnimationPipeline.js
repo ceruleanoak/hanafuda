@@ -18,6 +18,9 @@ export class AnimationPipeline {
       'deck→player2Hand': ANIMATION_STAGE.DECK_TO_HAND,
       'deck→player3Hand': ANIMATION_STAGE.DECK_TO_HAND,
 
+      // Deck to drawn card display (use same display animation as DECK_TO_HAND)
+      'deck→drawnCard': ANIMATION_STAGE.DECK_TO_HAND,
+
       // Hand to field transitions (all players)
       'player0Hand→field': ANIMATION_STAGE.HAND_TO_FIELD,
       'player1Hand→field': ANIMATION_STAGE.HAND_TO_FIELD,
