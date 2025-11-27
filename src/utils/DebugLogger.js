@@ -10,7 +10,7 @@ export class DebugLogger {
       message: true,
       gameState: false,
       hachihachi: true,
-      '3dCards': false, // Disabled - very verbose logging
+      '3dCards': true, // Disabled - very verbose logging
       slots: false,     // Disabled - slot highlighting debug logs
       render: false,    // Disabled by default as it's very verbose
       error: true

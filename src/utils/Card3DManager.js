@@ -352,8 +352,6 @@ export class Card3DManager {
   moveCardToZone(card3D, newZone) {
     const oldZone = card3D.homeZone;
 
-    debugLogger.log('3dCards', `moveCardToZone: ${card3D.cardData?.name} from ${oldZone} to ${newZone}`, { cardId: card3D.id });
-
     // Convert legacy zone names to indexed names
     const legacyMap = {
       'playerHand': 'player0Hand',
@@ -578,8 +576,6 @@ export class Card3DManager {
           // A card is being captured if: previousZone is explicitly set (not null/undefined) AND it's different from the current zone
           const isBeingCaptured = cardPreviousZone !== undefined && cardPreviousZone !== null && cardPreviousZone !== zone;
 
-          debugLogger.log('3dCards', `relayoutZone: zone=${zone}, isTrickZone=${isTrickZone}, cardPreviousZone=${cardPreviousZone}, currentZone=${card3D.homeZone}, animate=${animate}`, { cardId: card3D.id });
-
           // For trick pile cards that are already in the trick pile, snap immediately (static repositioning)
           // Only animate if card is being CAPTURED from another zone (hand or field)
           if (isTrickZone && cardCurrentlyInTrickZone && !isBeingCaptured) {
@@ -587,8 +583,12 @@ export class Card3DManager {
             card3D.snapToHome();
           } else {
             // Animate the card using AnimationPipeline for automatic stage detection
-            // Get animation stage from zone transition
-            const animationStage = animationPipeline.getStageForTransition(cardPreviousZone || zone, zone);
+            // For display zones without a previous zone, default to deck as source
+            let sourceZone = cardPreviousZone;
+            if (!sourceZone && (zone === 'drawnCard' || zone === 'opponentPlayedCard')) {
+              sourceZone = 'deck';
+            }
+            const animationStage = animationPipeline.getStageForTransition(sourceZone || zone, zone);
 
             // Use stage duration if available, otherwise calculate based on distance
             const duration = animationStage?.duration || this.getAnimationDuration(card3D, pos);
@@ -656,15 +656,6 @@ export class Card3DManager {
                 card3D.wait(displayDelay);
               }
             } else {
-              debugLogger.log('3dCards', `ANIMATING card (stage: ${animationStage?.description || 'none'})`, {
-                cardId: card3D.id,
-                zone,
-                cardPreviousZone,
-                duration,
-                easing,
-                hasControlPoint: !!controlPoint
-              });
-
               card3D.tweenTo(
                 tweenTarget,
                 duration,
