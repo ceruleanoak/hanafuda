@@ -145,7 +145,7 @@ class Game {
     });
 
     // Initialize Card3D system from initial game state
-    this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
+    this.card3DManager.setAnimationMode(this.gameOptions.get('animationMode'));
     this.card3DManager.initializeFromGameState(this.game.getState());
     debugLogger.log('3dCards', '✨ Card3D system initialized on page load', null);
 
@@ -621,7 +621,7 @@ class Game {
     this.updateUI();
 
     // Initialize Card3D system from game state with Toss Across animation
-    this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
+    this.card3DManager.setAnimationMode(this.gameOptions.get('animationMode'));
     this.card3DManager.initializeFromGameState(this.game.getState(), true);
     debugLogger.log('3dCards', '✨ Card3D system initialized for shop game', null);
 
@@ -770,7 +770,7 @@ class Game {
 
     // Load current animation setting
     const animCheckbox = document.getElementById('match-animations-enabled');
-    animCheckbox.checked = this.gameOptions.get('animationsEnabled', true);
+    animCheckbox.checked = this.gameOptions.get('animationMode') === '3d';
 
     // Show high scores for normal mode by default
     this.showHighScores(false);
@@ -788,7 +788,7 @@ class Game {
     this.hideAllModals();
 
     // Save animation setting to game options
-    this.gameOptions.set('animationsEnabled', animEnabled);
+    this.gameOptions.set('animationMode', animEnabled ? '3d' : 'none');
 
     this.game.startNewGame(bonusEnabled, this.renderer.displayWidth, this.renderer.displayHeight);
     this.updateUI();
@@ -908,7 +908,7 @@ class Game {
     // Don't use Toss Across animation if we just switched game modes, only for new games in same mode
     const shouldAnimate = !this.justSwitchedMode;
     this.justSwitchedMode = false; // Reset flag after use
-    this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
+    this.card3DManager.setAnimationMode(this.gameOptions.get('animationMode'));
     this.card3DManager.initializeFromGameState(this.game.getState(), shouldAnimate);
     debugLogger.log('3dCards', '✨ Card3D system initialized for new game', null);
   }
@@ -998,7 +998,7 @@ class Game {
       this.updateUI();
 
       // Initialize Card3D system from game state
-      this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
+      this.card3DManager.setAnimationMode(this.gameOptions.get('animationMode'));
       this.card3DManager.initializeFromGameState(this.game.getState(), false);
 
       // Override card positions to use match game's predetermined positions
@@ -1019,7 +1019,7 @@ class Game {
       });
 
       // Apply Toss Across animation if enabled and we didn't just switch modes
-      if (this.gameOptions.get('animationsEnabled') && !this.justSwitchedMode) {
+      if (this.gameOptions.get('animationMode') === '3d' && !this.justSwitchedMode) {
         this.card3DManager.applyTossAcrossAnimation(false); // false = end face down
       } else {
         // If animations disabled or we just switched modes, immediately position cards
@@ -1376,8 +1376,8 @@ class Game {
         if (success) {
           // Get UPDATED game state after first selection
           const updatedGameState = this.game.getState();
-          if (updatedGameState.phase === 'select_field') {
-            // Card just moved to select_field, now match with field card
+          if (updatedGameState.phase === 'select_field' || updatedGameState.phase === 'gaji_selection') {
+            // Card just moved to select_field or gaji_selection, now match with field card
             success = this.game.selectCard(this.dropTargetCard3D.cardData, 'field');
           }
           this.updateUI();
@@ -1454,19 +1454,23 @@ class Game {
             // Koi Koi/Sakura logic: allow placing on field directly
             debugLogger.log('gameState', `Card dragged to field: ${this.draggedCardData.name}`, null);
 
-            // For Koi-Koi/Sakura, drag-to-empty-field attempts placement directly
-            let success = this.game.placeCardOnField(this.draggedCardData);
+            // For Koi-Koi/Sakura, drag-to-empty-field requires two steps:
+            // 1. Select the hand card first
+            let success = this.game.selectCard(this.draggedCardData, 'player');
 
             if (success) {
-              debugLogger.log('gameState', `✅ Card placed on field via drag`, null);
+              // 2. Place the card on field
+              success = this.game.placeCardOnField(this.draggedCardData);
+              debugLogger.log('gameState', success ? `✅ Card placed on field` : `❌ Failed to place card`, null);
               this.updateUI();
             } else {
-              debugLogger.log('gameState', `❌ Failed to place card on field`, null);
               this.cancelDrag();
             }
 
             // Reset drag state
-            this.draggedCard3D.isDragging = false;
+            if (this.draggedCard3D) {
+              this.draggedCard3D.isDragging = false;
+            }
             this.draggedCard3D = null;
             this.draggedCardData = null;
             this.isDragging = false;
@@ -2187,7 +2191,11 @@ class Game {
       document.getElementById('viewing-sake').value = options.viewingSakeMode;
       document.getElementById('moon-viewing-sake').value = options.moonViewingSakeMode;
       document.getElementById('ai-difficulty').value = options.aiDifficulty;
-      document.getElementById('animations-enabled').checked = options.animationsEnabled;
+      // Set animation mode radio button
+      const animationModeRadio = document.querySelector(`input[name="animation-mode"][value="${options.animationMode}"]`);
+      if (animationModeRadio) {
+        animationModeRadio.checked = true;
+      }
       document.getElementById('audio-enabled').checked = options.audioEnabled;
 
       this.optionsModal.classList.add('show');
@@ -2205,6 +2213,9 @@ class Game {
    * Save options from modal
    */
   saveOptions() {
+    // Get selected animation mode from radio buttons
+    const selectedAnimationMode = document.querySelector('input[name="animation-mode"]:checked')?.value || '3d';
+
     const newOptions = {
       koikoiEnabled: document.getElementById('koikoi-enabled').checked,
       multiplierMode: document.getElementById('multiplier-mode').value,
@@ -2213,7 +2224,7 @@ class Game {
       viewingSakeMode: document.getElementById('viewing-sake').value,
       moonViewingSakeMode: document.getElementById('moon-viewing-sake').value,
       aiDifficulty: document.getElementById('ai-difficulty').value,
-      animationsEnabled: document.getElementById('animations-enabled').checked,
+      animationMode: selectedAnimationMode,
       audioEnabled: document.getElementById('audio-enabled').checked
     };
 
@@ -2224,7 +2235,7 @@ class Game {
 
     // Update Card3DManager animation settings
     if (this.card3DManager) {
-      this.card3DManager.setAnimationsEnabled(newOptions.animationsEnabled);
+      this.card3DManager.setAnimationMode(newOptions.animationMode);
     }
 
     // Update AudioManager settings
@@ -2252,7 +2263,7 @@ class Game {
       this.helpMode = this.gameOptions.get('helpMode');
       // Update Card3DManager
       if (this.card3DManager) {
-        this.card3DManager.setAnimationsEnabled(this.gameOptions.get('animationsEnabled'));
+        this.card3DManager.setAnimationMode(this.gameOptions.get('animationMode'));
       }
       // Update AudioManager
       if (this.audioManager) {
@@ -2949,7 +2960,7 @@ class Game {
       });
 
       // Only animate if animations are enabled
-      if (this.gameOptions.get('animationsEnabled')) {
+      if (this.gameOptions.get('animationMode') === '3d') {
         const startPos = {
           x: triggeredCard._lastRenderX || 0,
           y: triggeredCard._lastRenderY || 0
@@ -2974,7 +2985,7 @@ class Game {
    */
   fallbackSimpleAnimation(cards, capturedZone) {
     // Skip if animations are disabled
-    if (!this.gameOptions.get('animationsEnabled')) {
+    if (this.gameOptions.get('animationMode') !== '3d') {
       return;
     }
 
@@ -3231,7 +3242,7 @@ class Game {
    */
   playSequence(sequence, onComplete = null) {
     // Check if animations are disabled
-    if (!this.gameOptions.get('animationsEnabled')) {
+    if (this.gameOptions.get('animationMode') !== '3d') {
       debugLogger.log('animation', `⏭️  Skipping animation (disabled): ${sequence.name}`, null);
       if (onComplete) onComplete();
       return;

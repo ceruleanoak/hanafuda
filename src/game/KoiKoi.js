@@ -721,24 +721,37 @@ export class KoiKoi {
 
   /**
    * Place card on field without capturing
+   * @param {Object} card - The card to place (optional, uses selectedCards[0] if not provided)
+   * @returns {boolean} - True if card was placed successfully
    */
-  placeCardOnField() {
-    const cardIndex = this.playerHand.findIndex(c => c.id === this.selectedCards[0].id);
+  placeCardOnField(card = null) {
+    // If card not provided, use selectedCards (for backward compatibility)
+    const cardToPlace = card || (this.selectedCards.length > 0 ? this.selectedCards[0] : null);
+
+    if (!cardToPlace) {
+      debugLogger.log('gameState', `❌ placeCardOnField: No card to place`, null);
+      return false;
+    }
+
+    const cardIndex = this.playerHand.findIndex(c => c.id === cardToPlace.id);
     if (cardIndex >= 0) {
-      const card = this.playerHand.splice(cardIndex, 1)[0];
+      const handCard = this.playerHand.splice(cardIndex, 1)[0];
 
       // Check for 4-card same-month capture
-      if (this.checkFourCardCapture(card, 'player')) {
+      if (this.checkFourCardCapture(handCard, 'player')) {
         this.selectedCards = [];
         this.drawPhase();
-        return;
+        return true;
       }
 
-      this.field.push(card);
+      this.field.push(handCard);
       this.assignFieldGridSlots();
       this.selectedCards = [];
       this.drawPhase();
+      return true;
     }
+
+    return false;
   }
 
   /**

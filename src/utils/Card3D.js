@@ -68,7 +68,7 @@ export class Card3D {
     this.homeIndex = 0; // Index within zone for layout ordering
 
     // ===== ANIMATION STATE =====
-    this.animationMode = 'idle'; // 'physics', 'tween', 'spring', 'idle'
+    this.animationMode = 'idle'; // 'physics', 'tween', 'spring', 'idle', 'wait'
 
     // Tween mode properties
     this.tweenTarget = null; // {x, y, z, rotation, scale, faceUp}
@@ -79,6 +79,10 @@ export class Card3D {
     this.tweenDuration = 0; // ms
     this.tweenProgress = 0; // 0-1
     this.tweenEasing = 'easeInOutQuad';
+
+    // Wait mode properties (for no-animation display delays)
+    this.waitStartTime = 0;
+    this.waitDuration = 0;
 
     // Spring mode properties
     this.springStrength = 8.0; // Spring force coefficient
@@ -123,6 +127,9 @@ export class Card3D {
         break;
       case 'spring':
         this.updateSpring(deltaTime);
+        break;
+      case 'wait':
+        this.updateWait(deltaTime);
         break;
       case 'idle':
         // No updates needed
@@ -379,6 +386,35 @@ export class Card3D {
   }
 
   /**
+   * Wait mode: delay without animation (for no-animation mode display pauses)
+   */
+  updateWait(deltaTime) {
+    const elapsed = performance.now() - this.waitStartTime;
+    if (elapsed >= this.waitDuration) {
+      this.animationMode = 'idle';
+      this.waitStartTime = 0;
+      this.waitDuration = 0;
+      this.isAtHome = true;
+
+      if (this.onArriveAtHome) {
+        this.onArriveAtHome();
+        this.onArriveAtHome = null;
+      }
+    }
+  }
+
+  /**
+   * Start a wait animation (display delay without card movement)
+   * Used in 'none' animation mode to show drawn cards and opponent plays
+   */
+  wait(duration) {
+    this.animationMode = 'wait';
+    this.waitStartTime = performance.now();
+    this.waitDuration = Math.max(0, duration);
+    this.isAtHome = false;
+  }
+
+  /**
    * Update face-up/down animation (smooth flip)
    */
   updateFaceAnimation(deltaTime) {
@@ -601,6 +637,9 @@ export class Card3D {
       this.y = this.homePosition.y;
       this.z = this.homePosition.z || 0;
       this.stop();
+      // Also snap face orientation to target (instant flip for no-animation mode)
+      this.faceUp = this.targetFaceUp;
+      this.faceUpVelocity = 0;
       this.animationMode = 'idle';
       this.isAtHome = true;
     }

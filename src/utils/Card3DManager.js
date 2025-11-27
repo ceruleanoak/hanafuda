@@ -29,7 +29,7 @@ export class Card3DManager {
     this.renderQueue = [];
 
     // Animation settings
-    this.useAnimations = true;
+    this.animationMode = '3d';  // '3d' = smooth animations, 'none' = instant positioning
   }
 
   /**
@@ -82,14 +82,21 @@ export class Card3DManager {
   }
 
   /**
-   * Enable or disable animations (affects layout centering)
+   * Set animation mode: '3d' for smooth animations, 'none' for instant positioning
    */
-  setAnimationsEnabled(enabled) {
-    if (this.useAnimations !== enabled) {
-      this.useAnimations = enabled;
+  setAnimationMode(mode) {
+    if (this.animationMode !== mode) {
+      this.animationMode = mode;
       // Mark all zones dirty to recalculate layouts
       Object.keys(this.zoneCards).forEach(zone => this.dirtyZones.add(zone));
     }
+  }
+
+  /**
+   * Enable or disable animations (legacy compatibility - redirects to setAnimationMode)
+   */
+  setAnimationsEnabled(enabled) {
+    this.setAnimationMode(enabled ? '3d' : 'none');
   }
 
   /**
@@ -175,7 +182,7 @@ export class Card3DManager {
     // Initial layout for all zones
     Object.keys(this.zoneCards).forEach(zone => {
       // For new games with animations enabled, use Toss Across animation for field cards
-      const shouldAnimateField = isNewGame && this.useAnimations && zone === 'field';
+      const shouldAnimateField = isNewGame && this.animationMode === '3d' && zone === 'field';
       this.relayoutZone(zone, false); // No animation for initial layout
 
       // Apply Toss Across animation to field cards after initial layout
@@ -516,13 +523,13 @@ export class Card3DManager {
 
     // Get zone configuration using unified indexed zone names
     // No translation needed - all zones use indexed names (player0Hand, player1Hand, etc.)
-    const config = LayoutManager.getZoneConfig(zone, this.viewportWidth, this.viewportHeight, this.playerCount, this.useAnimations);
+    const config = LayoutManager.getZoneConfig(zone, this.viewportWidth, this.viewportHeight, this.playerCount, this.animationMode === '3d');
 
     // Convert set to array for layout calculation
     const cards = Array.from(zoneSet);
 
     // Calculate positions
-    const positions = this.layoutManager.layout(cards, config, this.useAnimations);
+    const positions = this.layoutManager.layout(cards, config, this.animationMode === '3d');
 
     // Update each card's home position
     cards.forEach((card3D, i) => {
@@ -629,32 +636,48 @@ export class Card3DManager {
               tweenTarget.z = pos.z;
             }
 
-            debugLogger.log('3dCards', `ANIMATING card (stage: ${animationStage?.description || 'none'})`, {
-              cardId: card3D.id,
-              zone,
-              cardPreviousZone,
-              duration,
-              easing,
-              hasControlPoint: !!controlPoint
-            });
+            // Skip tweening if animation mode is 'none' (instant positioning)
+            if (this.animationMode === 'none') {
+              card3D.snapToHome();
+              card3D.previousZone = null;
 
-            card3D.tweenTo(
-              tweenTarget,
-              duration,
-              easing,
-              controlPoint,
-              animationStage?.flipTiming || 0.5,
-              null, // peakScale
-              isDisplayAnimation
-            );
+              // For display animations (showing drawn/played cards), add a wait delay
+              // This lets players see what happened even without animation
+              if (animationStage?.isDisplayAnimation ||
+                  zone === 'drawnCard' ||
+                  zone === 'opponentPlayedCard') {
+                // Use stage duration or default 400ms for display delay
+                const displayDelay = animationStage?.duration || 400;
+                card3D.wait(displayDelay);
+              }
+            } else {
+              debugLogger.log('3dCards', `ANIMATING card (stage: ${animationStage?.description || 'none'})`, {
+                cardId: card3D.id,
+                zone,
+                cardPreviousZone,
+                duration,
+                easing,
+                hasControlPoint: !!controlPoint
+              });
 
-            // Clear previousZone immediately to prevent re-animation on subsequent layout updates
-            // This is safe because we've already determined animation behavior above
-            card3D.previousZone = null;
+              card3D.tweenTo(
+                tweenTarget,
+                duration,
+                easing,
+                controlPoint,
+                animationStage?.flipTiming || 0.5,
+                null, // peakScale
+                isDisplayAnimation
+              );
 
-            // For field cards, snap the Z value immediately (don't animate it)
-            if (zone === 'field') {
-              card3D.z = pos.z;
+              // Clear previousZone immediately to prevent re-animation on subsequent layout updates
+              // This is safe because we've already determined animation behavior above
+              card3D.previousZone = null;
+
+              // For field cards, snap the Z value immediately (don't animate it)
+              if (zone === 'field') {
+                card3D.z = pos.z;
+              }
             }
           }
         }
@@ -692,7 +715,7 @@ export class Card3DManager {
     if (this.dirtyZones.size === 0) return;
 
     // If viewport changed, snap all cards to positions without animation
-    const shouldAnimate = this.useAnimations && !this.viewportChangedDirty;
+    const shouldAnimate = this.animationMode === '3d' && !this.viewportChangedDirty;
 
     this.dirtyZones.forEach(zone => {
       this.relayoutZone(zone, shouldAnimate);

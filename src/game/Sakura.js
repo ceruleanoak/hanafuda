@@ -918,6 +918,47 @@ export class Sakura {
   }
 
   /**
+   * Place card on field without capturing (for drag-and-drop support)
+   * @param {Object} card - The card to place (optional, uses selectedCards[0] if not provided)
+   * @returns {boolean} - True if card was placed successfully
+   */
+  placeCardOnField(card = null) {
+    // If card not provided, use selectedCards (for backward compatibility)
+    const cardToPlace = card || (this.selectedCards.length > 0 ? this.selectedCards[0] : null);
+
+    if (!cardToPlace) {
+      debugLogger.log('sakura', `❌ placeCardOnField: No card to place`, null);
+      return false;
+    }
+
+    // Verify we're in the right phase
+    if (this.phase !== 'select_field') {
+      debugLogger.log('sakura', `❌ placeCardOnField: Wrong phase (${this.phase})`, null);
+      return false;
+    }
+
+    // Find and remove card from player's hand
+    const cardIndex = this.playerHand.findIndex(c => c.id === cardToPlace.id);
+    if (cardIndex < 0) {
+      debugLogger.log('sakura', `❌ placeCardOnField: Card not in hand`, { cardId: cardToPlace.id });
+      return false;
+    }
+
+    const handCard = this.playerHand.splice(cardIndex, 1)[0];
+
+    // Add to field
+    this.field.push(handCard);
+    this.message = 'Card placed on field.';
+    this.selectedCards = [];
+    this.drawnCardMatches = [];
+
+    debugLogger.log('sakura', `➕ Card placed on field: ${handCard.name}`, null);
+
+    this.proceedToDrawPhase();
+    return true;
+  }
+
+  /**
    * Proceed to draw phase (Phase 2)
    */
   proceedToDrawPhase() {

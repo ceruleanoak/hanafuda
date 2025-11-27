@@ -160,11 +160,18 @@
               <h3>Appearance</h3>
 
               <div class="option-row">
-                <label for="animations-enabled">
-                  <input type="checkbox" id="animations-enabled" checked>
-                  Enable 3D Animations
-                </label>
-                <span class="option-description">Show animated card movements with 3D physics-based system</span>
+                <label>Animation Mode:</label>
+                <div class="animation-mode-group">
+                  <label for="animation-mode-3d">
+                    <input type="radio" id="animation-mode-3d" name="animation-mode" value="3d" checked>
+                    3D Animations
+                  </label>
+                  <label for="animation-mode-none">
+                    <input type="radio" id="animation-mode-none" name="animation-mode" value="none">
+                    No Animations
+                  </label>
+                </div>
+                <span class="option-description">Choose between smooth 3D animations or instant card positioning</span>
               </div>
 
               <div class="option-row">

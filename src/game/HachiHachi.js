@@ -284,6 +284,7 @@ export class HachiHachi {
     this.field = [];
     this.drawnCard = null;
     this.drawnCardMatches = [];
+    this.opponentPlayedCard = null;
     this.selectedCards = [];
     this.fieldMultiplier = 1;
     this.phase = 'not_started';
@@ -1084,9 +1085,11 @@ export class HachiHachi {
     if (matches.length === 0) {
       // Add to field
       this.field.push(card);
-      this.drawnCard = null;
-      // Proceed to next player after brief delay for animation
-      setTimeout(() => this.nextPlayer(), 300);
+      // Keep card visible for display, then clear and proceed (need delay so opponent can see the drawn card)
+      setTimeout(() => {
+        this.drawnCard = null;
+        this.nextPlayer();
+      }, 400);
     } else if (matches.length === 3) {
       // Hiki! All 4 cards of the month - auto-capture all without decision
       this.phase = 'playing';
@@ -1170,6 +1173,7 @@ export class HachiHachi {
       // Single match - auto-capture
       this.phase = 'playing';
       setTimeout(() => {
+        // Show opponent's drawn card before capturing (400ms delay for visibility)
         const currentPlayer = this.players[this.currentPlayerIndex];
         const fieldCard = matches[0];
 
@@ -1322,8 +1326,9 @@ export class HachiHachi {
     const matchingCards = hand.filter(c => this.field.some(fc => fc.month === c.month));
     const cardToPlay = matchingCards.length > 0 ? matchingCards[0] : hand[0];
 
-    // Select the card (enters select_field phase)
-    this.selectCard(cardToPlay, 'player');
+    // Show the opponent's card before processing
+    this.opponentPlayedCard = cardToPlay;
+    this.message = `Opponent plays ${cardToPlay.name}...`;
 
     // CRITICAL: Calculate fresh matches for this opponent's card, not reuse player's drawnCardMatches
     const freshMatches = this.field.filter(fc => fc.month === cardToPlay.month);
@@ -1333,18 +1338,26 @@ export class HachiHachi {
       matchCount: freshMatches.length
     });
 
-    // Check if there are matches
-    if (freshMatches.length > 0) {
-      // Match with first matching field card
-      setTimeout(() => {
-        this.selectFieldCard(freshMatches[0]);
-      }, 400);
-    } else {
-      // Place on field
-      setTimeout(() => {
-        this.placeCardOnField(cardToPlay);
-      }, 400);
-    }
+    // Wait a bit to show the opponent card, then process
+    setTimeout(() => {
+      // Select the card (enters select_field phase)
+      this.selectCard(cardToPlay, 'player');
+
+      // Check if there are matches
+      if (freshMatches.length > 0) {
+        // Match with first matching field card
+        setTimeout(() => {
+          this.selectFieldCard(freshMatches[0]);
+          this.opponentPlayedCard = null;
+        }, 400);
+      } else {
+        // Place on field
+        setTimeout(() => {
+          this.placeCardOnField(cardToPlay);
+          this.opponentPlayedCard = null;
+        }, 400);
+      }
+    }, 400);
   }
 
   /**
