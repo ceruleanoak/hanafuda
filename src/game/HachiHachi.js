@@ -1925,6 +1925,7 @@ export class HachiHachi {
       field: this.field,
       drawnCard: this.drawnCard,
       drawnCardMatches: this.drawnCardMatches,
+      opponentPlayedCard: this.opponentPlayedCard,
 
       // Player data (N-player format)
       players: this.players.map((p, i) => ({
