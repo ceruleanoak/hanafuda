@@ -411,7 +411,8 @@ export class Card3D {
     this.animationMode = 'wait';
     this.waitStartTime = performance.now();
     this.waitDuration = Math.max(0, duration);
-    this.isAtHome = false;
+    // Note: Don't change isAtHome - it should remain in whatever state it was
+    // (typically true if called after snapToHome)
   }
 
   /**
