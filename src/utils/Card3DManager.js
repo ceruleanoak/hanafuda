@@ -284,6 +284,9 @@ export class Card3DManager {
       if (!card3D) {
         // Card not yet initialized in Card3D system - skip it
         // This can happen during initial setup or after switching game modes
+        if (newZone === 'drawnCard' || newZone === 'opponentPlayedCard') {
+          debugLogger.log('3dCards', `⚠️ Card ${cardId} should be in ${newZone} but not found in Card3D system`, { cardId });
+        }
         continue;
       }
 
@@ -348,6 +351,8 @@ export class Card3DManager {
    */
   moveCardToZone(card3D, newZone) {
     const oldZone = card3D.homeZone;
+
+    debugLogger.log('3dCards', `moveCardToZone: ${card3D.cardData?.name} from ${oldZone} to ${newZone}`, { cardId: card3D.id });
 
     // Convert legacy zone names to indexed names
     const legacyMap = {
