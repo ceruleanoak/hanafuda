@@ -6,6 +6,7 @@ import { Card3D } from './Card3D.js';
 import { LayoutManager } from './LayoutManager.js';
 import { debugLogger } from './DebugLogger.js';
 import { ANIMATION_STAGE, STAGE_DEFINITIONS, getStage } from './AnimationStageRegistry.js';
+import { animationPipeline } from './AnimationPipeline.js';
 
 export class Card3DManager {
   constructor(viewportWidth, viewportHeight, playerCount = 2) {
@@ -556,45 +557,46 @@ export class Card3DManager {
       // Trigger animation if needed
       if (animate) {
         if (card3D.animationMode === 'idle') {
-          // Use tween for smooth, deterministic animation
-          const duration = this.getAnimationDuration(card3D, pos);
-
-          // Determine if this is a trick zone capture (has priority for control point Z animation)
-          const isTrickZone = zone.includes('Trick');
           // Capture the previous zone before any changes
           const cardPreviousZone = card3D.previousZone;
+          // Determine if this is a trick zone capture
+          const isTrickZone = zone.includes('Trick');
           // Check if card is currently in the trick zone (already captured, not being captured now)
           const cardCurrentlyInTrickZone = card3D.homeZone === zone;
+          // A card is being captured if: previousZone is explicitly set (not null/undefined) AND it's different from the current zone
+          const isBeingCaptured = cardPreviousZone !== undefined && cardPreviousZone !== null && cardPreviousZone !== zone;
 
           debugLogger.log('3dCards', `relayoutZone: zone=${zone}, isTrickZone=${isTrickZone}, cardPreviousZone=${cardPreviousZone}, currentZone=${card3D.homeZone}, animate=${animate}`, { cardId: card3D.id });
 
           // For trick pile cards that are already in the trick pile, snap immediately (static repositioning)
           // Only animate if card is being CAPTURED from another zone (hand or field)
-          // A card is being captured if: previousZone is explicitly set (not null/undefined) AND it's different from the current zone
-          const isBeingCaptured = cardPreviousZone !== undefined && cardPreviousZone !== null && cardPreviousZone !== zone;
-
           if (isTrickZone && cardCurrentlyInTrickZone && !isBeingCaptured) {
             // Card is in trick pile AND not being captured = just repositioning, snap immediately
             card3D.snapToHome();
           } else {
-            // Animate the card
+            // Animate the card using AnimationPipeline for automatic stage detection
+            // Get animation stage from zone transition
+            const animationStage = animationPipeline.getStageForTransition(cardPreviousZone || zone, zone);
+
+            // Use stage duration if available, otherwise calculate based on distance
+            const duration = animationStage?.duration || this.getAnimationDuration(card3D, pos);
+            const easing = animationStage?.easing || 'easeInOutCubic';
+
             // Apply display animation (with Z lift) only when card moves FROM hand zones
             // BUT NOT for trick captures (they use control point Z instead)
             // Hand cards should never be elevated - only cards being drawn/displayed get lift
             const isFromHandZone = cardPreviousZone && cardPreviousZone.includes('Hand');
-            const isDisplayAnimation = !isTrickZone && cardPreviousZone !== null && !isFromHandZone;
+            const isDisplayAnimation = animationStage?.isDisplayAnimation ||
+              (!isTrickZone && cardPreviousZone !== null && !isFromHandZone);
 
             // Build tween target
             const tweenTarget = { x: pos.x, y: pos.y };
 
             // Captured cards moving to trick piles get an arc via control point Z and X/Y curve
             let controlPoint = null;
-            if (isTrickZone) {
-              // Get stage definition for field-to-trick animation
-              const trickStage = getStage(ANIMATION_STAGE.FIELD_TO_TRICK);
-
+            if (isTrickZone && animationStage?.controlPoint) {
               // Use a control point with elevated Z to create a curved arc during animation
-              // Bezier: start at current Z, peak at stage.controlPoint.z (150), end at 0
+              // Bezier: start at current Z, peak at stage.controlPoint.z, end at 0
               // Also curve X and Y towards the trick pile using control point offset
 
               // Determine direction to trick pile based on zone name
@@ -612,7 +614,7 @@ export class Card3DManager {
               controlPoint = {
                 x: (card3D.x + pos.x) / 2 + xCurve,
                 y: (card3D.y + pos.y) / 2 + yCurve,
-                z: trickStage?.controlPoint?.z || 150 // Use registry value, fallback to 150
+                z: animationStage.controlPoint.z
               };
               // IMPORTANT: Must explicitly set target.z even if it's 0
               // This ensures the bezier curve is properly applied in updateTween
@@ -627,19 +629,21 @@ export class Card3DManager {
               tweenTarget.z = pos.z;
             }
 
-            debugLogger.log('3dCards', `ANIMATING trick card (capture)`, { cardId: card3D.id, zone, cardPreviousZone, duration, hasControlPoint: !!controlPoint });
-
-            // Get easing from registry (use FIELD_TO_TRICK for trick captures, otherwise default)
-            const easing = isTrickZone
-              ? (getStage(ANIMATION_STAGE.FIELD_TO_TRICK)?.easing || 'easeInOutCubic')
-              : 'easeInOutCubic';
+            debugLogger.log('3dCards', `ANIMATING card (stage: ${animationStage?.description || 'none'})`, {
+              cardId: card3D.id,
+              zone,
+              cardPreviousZone,
+              duration,
+              easing,
+              hasControlPoint: !!controlPoint
+            });
 
             card3D.tweenTo(
               tweenTarget,
               duration,
               easing,
               controlPoint,
-              0.5, // flipTiming
+              animationStage?.flipTiming || 0.5,
               null, // peakScale
               isDisplayAnimation
             );
