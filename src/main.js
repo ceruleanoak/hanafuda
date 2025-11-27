@@ -2574,7 +2574,7 @@ class Game {
     if (data.isGameOver) {
       continueBtn.textContent = 'Start New Game';
     } else {
-      continueBtn.textContent = `Continue to Round ${data.currentRound + 1}`;
+      continueBtn.textContent = `Continue to Round ${data.roundNumber + 1}`;
     }
 
     // Show modal
@@ -2606,7 +2606,7 @@ class Game {
    */
   showSakuraRoundSummary(data) {
     // Determine if game is over
-    const isGameOver = data.currentRound >= data.totalRounds;
+    const isGameOver = data.roundNumber >= data.totalRounds;
 
     // If game over, play animation first
     if (isGameOver) {
@@ -2637,7 +2637,7 @@ class Game {
     // Build data structure for unified display function
     const displayData = {
       playerCount: playerCount,
-      currentRound: data.currentRound,
+      roundNumber: data.roundNumber,
       isGameOver: isGameOver,
       playerTotalScore: data.playerMatchScore,
       opponentTotalScore: data.opponentMatchScore,
@@ -2747,7 +2747,7 @@ class Game {
     if (isGameOver) {
       continueBtn.textContent = 'Start New Game';
     } else {
-      continueBtn.textContent = `Continue to Round ${data.currentRound + 1}`;
+      continueBtn.textContent = `Continue to Round ${data.roundNumber + 1}`;
     }
 
     // Show modal
