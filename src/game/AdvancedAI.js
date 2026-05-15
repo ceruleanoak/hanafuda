@@ -8,6 +8,7 @@
 
 import { CARD_TYPES } from '../data/cards.js';
 import { Yaku } from './Yaku.js';
+import { debugLogger } from '../utils/DebugLogger.js';
 
 export class AdvancedAI {
   /**
@@ -124,7 +125,7 @@ export class AdvancedAI {
       const needed = 3 - inoShikaChoCount;
       const remaining = 3 - inoShikaChoCount - opponentCount;
 
-      if (remaining >= needed) {
+      if (opponentCount < 2) { // Pursue threat unless opponent already holds 2+ ino-shika-cho animals
         threats.push({
           type: 'inoshikacho',
           name: 'Boar-Deer-Butterfly',
@@ -226,20 +227,24 @@ export class AdvancedAI {
     }
 
     if (sakeCup && !curtain && !moon) {
-      const opponentCurtain = opponentCards.find(c => c.name.includes('curtain'));
-      const opponentMoon = opponentCards.find(c => c.name.includes('moon'));
-      if (!opponentCurtain || !opponentMoon) {
+      // Check whether the AI (opponentCards) has already captured the player's needed viewing cards
+      const aiHasCurtain = opponentCards.find(c => c.name.includes('curtain'));
+      const aiHasMoon = opponentCards.find(c => c.name.includes('moon'));
+      // Threat exists if at least one of curtain/moon is still available (not held by AI)
+      if (!aiHasCurtain || !aiHasMoon) {
         threats.push({
           type: 'viewing',
-          name: !opponentCurtain ? 'Viewing Sake' : 'Moon Viewing Sake',
+          // Player still needs curtain → Viewing Sake; still needs moon → Moon Viewing Sake
+          name: !aiHasCurtain ? 'Viewing Sake' : 'Moon Viewing Sake',
           current: 1,
           needed: 1,
           points: 3,
           priority: 3,
           cards: [sakeCup],
           missingCards: {
-            curtain: !opponentCurtain,
-            moon: !opponentMoon
+            // Player is missing curtain/moon (we know both are absent from player's captures)
+            curtain: !curtain, // true — player doesn't have curtain
+            moon: !moon        // true — player doesn't have moon
           }
         });
       }
@@ -317,7 +322,7 @@ export class AdvancedAI {
       const opponentHasButterflies = opponentHas(c => c.name.includes('butterflies'));
       const opponentCount = [opponentHasBoar, opponentHasDeer, opponentHasButterflies].filter(Boolean).length;
 
-      if (3 - opponentCount >= 3) { // Still possible
+      if (opponentCount < 2) { // Still possible: don't pursue if opponent already has 2+ ino-shika-cho animals
         opportunities.push({
           type: 'inoshikacho',
           name: 'Boar-Deer-Butterfly',
@@ -631,16 +636,16 @@ export class AdvancedAI {
         // If completion probability is high (>60%) and the risk is significant, call shobu
         if (completionProbability > 0.6) {
           if (gapIfPlayerScores > 10 || (highestThreat.needed === 1 && highestThreat.points >= 1)) {
-            console.log(`Advanced AI: High risk detected - player needs ${highestThreat.needed} for ${highestThreat.name} (${highestThreat.points} pts)`);
-            console.log(`Advanced AI: Completion probability: ${(completionProbability * 100).toFixed(0)}% with ${remainingTurns} turns left`);
-            console.log(`Advanced AI: Calling shobu to avoid 2x penalty (AI: ${potentialAIScore} vs Player: ${currentPlayerScore})`);
+            debugLogger.log('gameState', `Advanced AI: High risk detected - player needs ${highestThreat.needed} for ${highestThreat.name} (${highestThreat.points} pts)`);
+            debugLogger.log('gameState', `Advanced AI: Completion probability: ${(completionProbability * 100).toFixed(0)}% with ${remainingTurns} turns left`);
+            debugLogger.log('gameState', `Advanced AI: Calling shobu to avoid 2x penalty (AI: ${potentialAIScore} vs Player: ${currentPlayerScore})`);
             return false; // Too risky to continue
           }
         }
       }
 
       // Low/moderate threat - continue playing to try to catch up
-      console.log(`Advanced AI: Behind but threat is manageable - koi-koi (AI: ${potentialAIScore} vs Player: ${currentPlayerScore})`);
+      debugLogger.log('gameState', `Advanced AI: Behind but threat is manageable - koi-koi (AI: ${potentialAIScore} vs Player: ${currentPlayerScore})`);
       return true;
     }
 
@@ -648,7 +653,7 @@ export class AdvancedAI {
 
     // If we have a comfortable lead (5+ points), take the win
     if (scoreMargin >= 5 && score >= 4) {
-      console.log(`Advanced AI: Calling shobu with comfortable lead (margin: ${scoreMargin})`);
+      debugLogger.log('gameState', `Advanced AI: Calling shobu with comfortable lead (margin: ${scoreMargin})`);
       return Math.random() < 0.15; // 15% koi-koi, mostly take the win
     }
 
@@ -661,8 +666,8 @@ export class AdvancedAI {
     if (highestThreat && highestThreat.needed <= 2) {
       // High completion probability (>60%) means we should be very conservative
       if (completionProbability > 0.6) {
-        console.log(`Advanced AI: Player close to ${highestThreat.name} (needs ${highestThreat.needed}, ${(completionProbability * 100).toFixed(0)}% likely)`);
-        console.log(`Advanced AI: Calling shobu to avoid risk (score: ${score}, margin: ${scoreMargin})`);
+        debugLogger.log('gameState', `Advanced AI: Player close to ${highestThreat.name} (needs ${highestThreat.needed}, ${(completionProbability * 100).toFixed(0)}% likely)`);
+        debugLogger.log('gameState', `Advanced AI: Calling shobu to avoid risk (score: ${score}, margin: ${scoreMargin})`);
 
         // Only koi-koi if we have a very strong position
         if (score >= 8 && scoreMargin >= 10) {
@@ -672,10 +677,10 @@ export class AdvancedAI {
       } else if (completionProbability > 0.4) {
         // Moderate probability (40-60%) - be conservative with medium scores
         if (score >= 6 && scoreMargin < 10) {
-          console.log(`Advanced AI: Moderate threat risk - calling shobu`);
+          debugLogger.log('gameState', `Advanced AI: Moderate threat risk - calling shobu`);
           return Math.random() < 0.3; // 30% koi-koi
         } else if (score >= 3 && scoreMargin < 5) {
-          console.log(`Advanced AI: High threat + narrow lead - calling shobu`);
+          debugLogger.log('gameState', `Advanced AI: High threat + narrow lead - calling shobu`);
           return false;
         }
       }

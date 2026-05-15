@@ -10,10 +10,12 @@ export class DebugLogger {
       message: true,
       gameState: false,
       hachihachi: true,
-      '3dCards': true, // Disabled - very verbose logging
+      '3dCards': true, // Logs 3D card zone transitions, tween targets, and Card3DManager state changes
       slots: false,     // Disabled - slot highlighting debug logs
       render: false,    // Disabled by default as it's very verbose
-      error: true
+      error: true,
+      init: false,
+      audio: false
     };
 
     // Track all messages shown to player
@@ -74,6 +76,9 @@ export class DebugLogger {
    * Log player-visible message
    */
   logMessage(message) {
+    if (this.messageHistory.length >= 1000) {
+      this.messageHistory.shift();
+    }
     this.messageHistory.push({
       timestamp: new Date().toISOString(),
       message
@@ -116,7 +121,7 @@ export class DebugLogger {
    */
   logAnimationCompleted(card) {
     this.animationStats.completed++;
-    this.animationStats.active--;
+    this.animationStats.active = Math.max(0, this.animationStats.active - 1);
 
     this.log('animation', `Animation Completed ✓`, {
       card: card.name,
@@ -137,13 +142,32 @@ export class DebugLogger {
    * Log game state change
    */
   logGameStateChange(beforeState, afterState, action) {
-    this.log('gameState', `State Change: ${action}`, {
-      phase: `${beforeState.phase} → ${afterState.phase}`,
-      playerCaptured: `${beforeState.playerCaptured.length} → ${afterState.playerCaptured.length}`,
-      opponentCaptured: `${beforeState.opponentCaptured.length} → ${afterState.opponentCaptured.length}`,
-      field: `${beforeState.field.length} → ${afterState.field.length}`,
-      deckCount: afterState.deckCount
-    });
+    const safeLen = (state, key) => {
+      const val = state && state[key];
+      return Array.isArray(val) ? val.length : (val !== undefined ? val : '?');
+    };
+
+    const data = {
+      phase: `${beforeState?.phase} → ${afterState?.phase}`,
+      field: `${safeLen(beforeState, 'field')} → ${safeLen(afterState, 'field')}`,
+      deckCount: afterState?.deckCount
+    };
+
+    // Log 2-player fields only if they exist on the state object
+    if ('playerCaptured' in (beforeState || {}) || 'playerCaptured' in (afterState || {})) {
+      data.playerCaptured = `${safeLen(beforeState, 'playerCaptured')} → ${safeLen(afterState, 'playerCaptured')}`;
+    }
+    if ('opponentCaptured' in (beforeState || {}) || 'opponentCaptured' in (afterState || {})) {
+      data.opponentCaptured = `${safeLen(beforeState, 'opponentCaptured')} → ${safeLen(afterState, 'opponentCaptured')}`;
+    }
+
+    // Log any extra captured arrays present (e.g. players[0..n] in multi-player modes)
+    const extraKeys = Object.keys(afterState || {}).filter(k => k.startsWith('player') && k.endsWith('Captured') && k !== 'playerCaptured');
+    for (const key of extraKeys) {
+      data[key] = `${safeLen(beforeState, key)} → ${safeLen(afterState, key)}`;
+    }
+
+    this.log('gameState', `State Change: ${action}`, data);
   }
 
   /**

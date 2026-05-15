@@ -359,6 +359,15 @@ export class LayoutManager {
             faceUp: 1,
             renderLayer: 2
           },
+          player0Teyaku: {
+            type: 'row',
+            anchorPoint: { x: 50, y: viewportHeight - 240 + HEADER_OFFSET },
+            centerX: centerX,
+            spacing: 60,
+            maxCards: 4,
+            faceUp: 1,
+            renderLayer: 3
+          },
           player1Teyaku: {
             type: 'row',
             anchorPoint: { x: 150, y: 220 + HEADER_OFFSET },
@@ -509,13 +518,14 @@ export class LayoutManager {
    * Uses unified indexed naming for all player counts
    */
   static getZoneNamesForPlayerCount(playerCount) {
-    const baseZones = ['deck', 'drawnCard', 'field'];
+    const baseZones = ['deck', 'drawnCard', 'opponentPlayedCard', 'field'];
     const playerZones = [];
 
     // Add indexed zone names for all players
     for (let i = 0; i < playerCount; i++) {
       playerZones.push(`player${i}Hand`);
       playerZones.push(`player${i}Trick`);
+      playerZones.push(`player${i}Teyaku`);
     }
 
     return [...baseZones, ...playerZones];

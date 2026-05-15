@@ -45,6 +45,13 @@ export class MatchGame {
   }
 
   /**
+   * Update game options
+   */
+  updateOptions(gameOptions) {
+    this.gameOptions = gameOptions;
+  }
+
+  /**
    * Start a new match game
    * @param {boolean} bonusMultiplierEnabled - Whether to enable bonus multipliers
    * @param {number} viewportWidth - Current viewport width
@@ -105,7 +112,13 @@ export class MatchGame {
         ...card,
         position: { x, y },
         state: 'facedown', // 'facedown', 'faceup', 'matched'
-        id: `${card.month}-${card.type}-${index}` // Unique identifier
+        // NOTE: This composite string id intentionally shadows the numeric HANAFUDA_DECK card id.
+        // MatchGame uses it as a unique per-slot identifier for click detection and state tracking
+        // (two cards of the same month must be distinguishable by index). The original numeric id
+        // from HANAFUDA_DECK is still accessible via spread properties if needed (e.g., card.month,
+        // card.type, card.name), but `id` here is NOT the canonical card id and should not be used
+        // to look up cards in HANAFUDA_DECK.
+        id: `${card.month}-${card.type}-${index}` // Unique per-slot identifier (not HANAFUDA_DECK id)
       });
     });
 
@@ -426,8 +439,9 @@ export class MatchGame {
 
   /**
    * Helper method to check if animations are enabled
+   * Uses 'animationMode' key from GameOptions ('3d' = enabled, 'none' = disabled)
    */
   areAnimationsEnabled() {
-    return this.gameOptions ? this.gameOptions.get('animationsEnabled', true) : true;
+    return this.gameOptions ? this.gameOptions.get('animationMode') !== 'none' : true;
   }
 }

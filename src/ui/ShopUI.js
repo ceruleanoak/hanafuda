@@ -64,11 +64,22 @@ export class ShopUI {
     const medium = conditions.filter(c => c.difficulty === 2);
     const hard = conditions.filter(c => c.difficulty === 3);
 
-    return [
-      easy[Math.floor(Math.random() * easy.length)],
-      medium[Math.floor(Math.random() * medium.length)],
-      hard[Math.floor(Math.random() * hard.length)]
-    ];
+    // Helper: pick a random item from a bucket; falls back to any available condition
+    // if the requested bucket is empty, to prevent undefined entries in the result array.
+    const pickFrom = (bucket) => {
+      if (bucket.length > 0) {
+        return bucket[Math.floor(Math.random() * bucket.length)];
+      }
+      // Fallback: pick any condition so the array is never sparse
+      if (conditions.length > 0) {
+        return conditions[Math.floor(Math.random() * conditions.length)];
+      }
+      // Last-resort default if WIN_CONDITIONS is somehow empty
+      return { id: 'default', name: 'Standard Game', description: 'Play a standard game of Koi-Koi.', difficulty: 1, stars: '★' };
+    };
+
+    const result = [pickFrom(easy), pickFrom(medium), pickFrom(hard)];
+    return result;
   }
 
   /**
@@ -237,6 +248,16 @@ export class ShopUI {
    * Attach event listeners to the modal elements
    */
   attachEventListeners(modalElement) {
+    // Completion guard: ensures onComplete fires at most once per shop session
+    let completed = false;
+    const safeComplete = (cards, condition) => {
+      if (completed) return;
+      completed = true;
+      if (this.onComplete) {
+        this.onComplete(cards, condition);
+      }
+    };
+
     // Win condition selection
     const conditionCards = modalElement.querySelectorAll('.win-condition-card');
     conditionCards.forEach(card => {
@@ -260,9 +281,9 @@ export class ShopUI {
         if (result.success) {
           this.renderToModal(modalElement);
 
-          // If shop is complete, enable start button
-          if (this.isComplete() && this.onComplete) {
-            this.onComplete(this.selectedCards, this.selectedWinCondition);
+          // If shop is complete, notify via safeComplete to prevent double-fire
+          if (this.isComplete()) {
+            safeComplete(this.selectedCards, this.selectedWinCondition);
           }
         } else if (result.error) {
           // Show error message
@@ -275,9 +296,7 @@ export class ShopUI {
     const startButton = modalElement.querySelector('#shop-start-game');
     if (startButton && !startButton.disabled) {
       startButton.addEventListener('click', () => {
-        if (this.onComplete) {
-          this.onComplete(this.selectedCards, this.selectedWinCondition);
-        }
+        safeComplete(this.selectedCards, this.selectedWinCondition);
       });
     }
   }

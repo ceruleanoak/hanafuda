@@ -373,12 +373,6 @@ export class Card3DManager {
       this.dirtyZones.add(oldZone);
     }
 
-    // Reset animation state to allow new zone layout to animate the card
-    // This prevents cards from getting stuck when moving zones
-    if (card3D.animationMode !== 'idle') {
-      card3D.animationMode = 'idle';
-    }
-
     // If moving to field zone, assign next available grid slot
     if (newZone === 'field' && card3D.gridSlot === undefined) {
       card3D.gridSlot = this.getNextAvailableFieldSlot();
@@ -540,6 +534,9 @@ export class Card3DManager {
       card3D.homePosition = { x: pos.x, y: pos.y, z: pos.z };
       card3D.homeIndex = pos.index;
 
+      // Capture previousZone at the top of the iteration before any mutations
+      const cardPreviousZone = card3D.previousZone;
+
       // Update render layer (but preserve animation layer 10 if card is display animating)
       if (config.renderLayer !== undefined) {
         if (card3D.isDisplayAnimating) {
@@ -556,7 +553,7 @@ export class Card3DManager {
         card3D.targetFaceUp = config.faceUp;
 
         // If moving from deck to field/trick, flip face up during animation
-        if (card3D.previousZone === 'deck' && config.faceUp === 1 && animate) {
+        if (cardPreviousZone === 'deck' && config.faceUp === 1 && animate) {
           // Set target face up immediately so flip starts
           card3D.setFaceUp(1);
           // Clear previous zone tracking after using it
@@ -567,8 +564,7 @@ export class Card3DManager {
       // Trigger animation if needed
       if (animate) {
         if (card3D.animationMode === 'idle') {
-          // Capture the previous zone before any changes
-          const cardPreviousZone = card3D.previousZone;
+          // cardPreviousZone already captured above before any zone mutations
           // Determine if this is a trick zone capture
           const isTrickZone = zone.includes('Trick');
           // Check if card is currently in the trick zone (already captured, not being captured now)
@@ -614,7 +610,7 @@ export class Card3DManager {
               // Determine direction to trick pile based on zone name
               // Left piles: player1Trick, player0Trick (bottom-right in 2-player, but left in others)
               // Right piles: player0Trick (bottom-right), player3Trick (top-right in 4-player)
-              const isLeftPile = zone.includes('Trick') && (zone === 'player1Trick' || (this.playerCount === 3 && zone === 'player2Trick'));
+              const isLeftPile = zone.includes('Trick') && (zone === 'player1Trick' || (this.playerCount === 3 && zone === 'player2Trick') || (this.playerCount === 4 && zone === 'player2Trick'));
               const isRightPile = zone.includes('Trick') && (zone === 'player0Trick' || (this.playerCount === 4 && zone === 'player3Trick'));
 
               // Control point curves towards the pile
@@ -777,7 +773,7 @@ export class Card3DManager {
     if (this.renderQueueDirty) {
       this.renderQueue = Array.from(this.cards.values())
         .filter(card => card.isVisible);
-      this.renderQueueDirty = true; // Keep dirty to force sort
+      this.renderQueueDirty = false; // Mark as clean after rebuild
     }
 
     // Sort by render layer first, then Z position

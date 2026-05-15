@@ -1,3 +1,6 @@
+// NOTE: This file is not imported anywhere in the codebase.
+// HachiHachi.js implements its own inline AI. This file is dead code.
+
 /**
  * HachiHachiAI - AI decision making for Hachi-Hachi opponents
  *
@@ -96,6 +99,10 @@ export class HachiHachiAI {
     }
 
     // Risk-reward analysis
+    // BUG: This branch is unreachable. expectedGainFromSage = dekiyakuValue * 0.6, and
+    // lossIfFail * 1.5 = dekiyakuValue * 0.5 * 1.5 = dekiyakuValue * 0.75. Since 0.6 < 0.75,
+    // the condition is always false. To make this reachable, either raise sageRiskFactor above
+    // 0.75 (e.g. 0.8) or lower the multiplier (e.g. lossIfFail * 1.2, which is dekiyakuValue * 0.6).
     if (expectedGainFromSage > lossIfFail * 1.5) {
       return 'sage'; // Good risk-reward ratio
     }

@@ -13,7 +13,11 @@ export class HachiHachiModals {
    * @returns {Promise} Resolves when user makes decision
    */
   static showSageDecision(params) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+      // Safety reject path: if no user interaction occurs within 30 seconds, reject with timeout
+      const timeoutId = setTimeout(() => reject(new Error('showSageDecision: timed out waiting for user input')), 30000);
+      const resolveAndClear = () => { clearTimeout(timeoutId); resolve(); };
+
       const {
         dekiyakuList, playerScore, roundNumber, opponent1Score, opponent2Score, allPlayers = [],
         deckRemaining = 0, fieldCardCount = 0, parValue = 88, fieldMultiplier = 1,
@@ -243,7 +247,7 @@ export class HachiHachiModals {
         btn.addEventListener('click', () => {
           overlay.remove();
           onClick();
-          resolve();
+          resolveAndClear();
         });
         return btn;
       };
@@ -276,7 +280,11 @@ export class HachiHachiModals {
    * @param {Object} params - {roundNumber, dekiyakuValue, cardPointsValue, finalScore, winner, allScores, fieldMultiplier}
    */
   static showRoundSummary(params) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+      // Safety reject path: if no user interaction occurs within 30 seconds, reject with timeout
+      const timeoutId = setTimeout(() => reject(new Error('showRoundSummary: timed out waiting for user input')), 30000);
+      const resolveAndClear = () => { clearTimeout(timeoutId); resolve(); };
+
       const { roundNumber, winner, allScores, fieldMultiplier, teyaku, dekiyaku, cardBreakdown, scoreBreakdown, opponentDecisions, stats } = params;
 
       // Create modal overlay
@@ -368,6 +376,29 @@ export class HachiHachiModals {
       const teyakuArray = teyaku ? [teyaku.player, teyaku.opponent1, teyaku.opponent2] : [[], [], []];
       const dekiyakuArray = dekiyaku ? [dekiyaku.player, dekiyaku.opponent1, dekiyaku.opponent2] : [[], [], []];
 
+      // Shared helper: calculate net teyaku payment for a given player index
+      const calculateNetTeyakuPayment = (playerIndex) => {
+        const playerTeyakuValue = getTeyakuTotal(teyakuArray[playerIndex]);
+        let netPayment = 0;
+
+        // Collect from other players if this player has teyaku
+        if (playerTeyakuValue > 0) {
+          netPayment += playerTeyakuValue * 2; // Collect from both other players
+        }
+
+        // Pay to other players who have teyaku
+        for (let j = 0; j < 3; j++) {
+          if (j !== playerIndex) {
+            const otherTeyakuValue = getTeyakuTotal(teyakuArray[j]);
+            if (otherTeyakuValue > 0) {
+              netPayment -= otherTeyakuValue;
+            }
+          }
+        }
+
+        return netPayment;
+      };
+
       // LEFT COLUMN: Scoring breakdown section
       if (teyaku || dekiyaku) {
         const breakdownDiv = document.createElement('div');
@@ -392,29 +423,6 @@ export class HachiHachiModals {
 
           const teyakuList = teyakuArray[i] || [];
           const dekiyakuList = dekiyakuArray[i] || [];
-
-          // Calculate net teyaku payment for this player (same logic as payment modal)
-          const calculateNetTeyakuPayment = (playerIndex) => {
-            const playerTeyakuValue = getTeyakuTotal(teyakuArray[playerIndex]);
-            let netPayment = 0;
-
-            // Collect from other players if this player has teyaku
-            if (playerTeyakuValue > 0) {
-              netPayment += playerTeyakuValue * 2; // Collect from both other players
-            }
-
-            // Pay to other players who have teyaku
-            for (let j = 0; j < 3; j++) {
-              if (j !== playerIndex) {
-                const otherTeyakuValue = getTeyakuTotal(teyakuArray[j]);
-                if (otherTeyakuValue > 0) {
-                  netPayment -= otherTeyakuValue;
-                }
-              }
-            }
-
-            return netPayment;
-          };
 
           const netTeyakuPayment = calculateNetTeyakuPayment(i);
 
@@ -474,28 +482,6 @@ export class HachiHachiModals {
 
           // Calculate net teyaku payment for this player (including what others collect from them)
           const teyakuList = teyakuArray[i] || [];
-          const calculateNetTeyakuPayment = (playerIndex) => {
-            const playerTeyakuValue = getTeyakuTotal(teyakuArray[playerIndex]);
-            let netPayment = 0;
-
-            // Collect from other players if this player has teyaku
-            if (playerTeyakuValue > 0) {
-              netPayment += playerTeyakuValue * 2; // Collect from both other players
-            }
-
-            // Pay to other players who have teyaku
-            for (let j = 0; j < 3; j++) {
-              if (j !== playerIndex) {
-                const otherTeyakuValue = getTeyakuTotal(teyakuArray[j]);
-                if (otherTeyakuValue > 0) {
-                  netPayment -= otherTeyakuValue;
-                }
-              }
-            }
-
-            return netPayment;
-          };
-
           const netTeyakuPayment = calculateNetTeyakuPayment(i);
 
           // Calculate dekiyaku total for this player
@@ -683,7 +669,7 @@ export class HachiHachiModals {
       });
       continueBtn.addEventListener('click', () => {
         overlay.remove();
-        resolve();
+        resolveAndClear();
       });
       buttonDiv.appendChild(continueBtn);
       modal.appendChild(buttonDiv);
@@ -698,7 +684,11 @@ export class HachiHachiModals {
    * @param {Object} params - {winner, finalScores, totalRounds, stats}
    */
   static showGameEnd(params) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+      // Safety reject path: if no user interaction occurs within 30 seconds, reject with timeout
+      const timeoutId = setTimeout(() => reject(new Error('showGameEnd: timed out waiting for user input')), 30000);
+      const resolveAndClear = () => { clearTimeout(timeoutId); resolve(); };
+
       const { winner, finalScores, totalRounds } = params;
 
       // Create modal overlay
@@ -822,7 +812,7 @@ export class HachiHachiModals {
       });
       newGameBtn.addEventListener('click', () => {
         overlay.remove();
-        resolve();
+        resolveAndClear();
       });
       buttonDiv.appendChild(newGameBtn);
       modal.appendChild(buttonDiv);
@@ -837,7 +827,11 @@ export class HachiHachiModals {
    * @param {Object} params - {roundNumber, playerTeyaku, opponent1Teyaku, opponent2Teyaku, fieldMultiplier, onContinue}
    */
   static showTeyakuPaymentGrid(params) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+      // Safety reject path: if no user interaction occurs within 30 seconds, reject with timeout
+      const timeoutId = setTimeout(() => reject(new Error('showTeyakuPaymentGrid: timed out waiting for user input')), 30000);
+      const resolveAndClear = () => { clearTimeout(timeoutId); resolve(); };
+
       const { roundNumber, playerTeyaku, opponent1Teyaku, opponent2Teyaku, fieldMultiplier, onContinue } = params;
 
       // Create modal overlay
@@ -1087,7 +1081,7 @@ export class HachiHachiModals {
       continueBtn.addEventListener('click', () => {
         overlay.remove();
         if (onContinue) onContinue();
-        resolve();
+        resolveAndClear();
       });
       buttonDiv.appendChild(continueBtn);
       modal.appendChild(buttonDiv);

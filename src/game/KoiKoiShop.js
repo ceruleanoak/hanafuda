@@ -7,7 +7,7 @@
 import { KoiKoi } from './KoiKoi.js';
 import { Deck } from './Deck.js';
 import { Yaku } from './Yaku.js';
-import { CARD_TYPES } from '../data/cards.js';
+import { HANAFUDA_DECK, CARD_TYPES } from '../data/cards.js';
 
 /**
  * Available bonus chances with difficulty ratings
@@ -255,6 +255,13 @@ export class KoiKoiShop extends KoiKoi {
     this.shopCards = []; // The 4 cards selected from the shop
     this.isShopMode = true;
     this.playerFieldDiscards = 0; // Track cards player discarded to field
+  }
+
+  /**
+   * Update game options (inherited from KoiKoi, re-declared for clarity)
+   */
+  updateOptions(gameOptions) {
+    this.gameOptions = gameOptions;
   }
 
   /**
@@ -637,10 +644,12 @@ export class KoiKoiShop extends KoiKoi {
 
   /**
    * Check if player won with any yaku before 10 cards remain in deck
+   * "Before 10 cards remain" means the deck still has >= 10 cards when the yaku is achieved,
+   * i.e., the player won early (speed run). The condition was previously inverted.
    */
   checkSpeedRun() {
-    // Must complete BEFORE 10 cards remain (i.e., when deck has < 10 cards)
-    if (this.deck.cards.length < 10) {
+    // Must have at least 10 cards remaining in the deck (won early, not near the end)
+    if (this.deck.cards.length >= 10) {
       const yaku = Yaku.checkYaku(this.playerCaptured, this.gameOptions);
       return yaku.length > 0;
     }
@@ -779,12 +788,14 @@ export class KoiKoiShop extends KoiKoi {
 
   /**
    * Check if player has collected no bird cards
-   * Birds: crane, bush warbler, cuckoo, geese, swallow
+   * Birds are Animal-type cards only: bush warbler, cuckoo, geese, swallow
+   * The crane (January) is a Bright card, not an Animal, so it is NOT counted as a bird.
    */
   checkHitchcock() {
-    const birdNames = ['crane', 'bush warbler', 'cuckoo', 'geese', 'swallow'];
+    const birdNames = ['bush warbler', 'cuckoo', 'geese', 'swallow'];
     const hasBirds = this.playerCaptured.some(card =>
-      birdNames.some(bird => card.name.includes(bird))
+      card.type === CARD_TYPES.ANIMAL &&
+      birdNames.some(bird => card.name.toLowerCase().includes(bird))
     );
     return !hasBirds;
   }

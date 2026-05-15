@@ -884,6 +884,7 @@ class Game {
   }
 
   startNewGame(rounds, playerCount) {
+    clearTimeout(this.roundSummaryTimer);
     this.hideAllModals();
 
     if (this.currentGameMode === 'match') {
@@ -2041,6 +2042,7 @@ class Game {
 
     const currentCardBack = getSelectedCardBack();
 
+    // TODO: load card backs from /src/data/cardBacks.js instead of hardcoding here
     // Map available card back images (only those that exist in public/assets/card-backs/)
     const availableCardBacks = [
       { id: 'sakura', name: 'Sakura', image: 'assets/card-backs/carback-flower.png', unlocked: true },
@@ -2161,7 +2163,13 @@ class Game {
    */
   updateVariationsButtonState() {
     const options = this.gameOptions.getAll();
-    const anyVariationEnabled = options.bombVariationEnabled;
+    const anyVariationEnabled =
+      options.bombVariationEnabled ||
+      options.chitsiobikiEnabled ||
+      options.victoryScoringEnabled ||
+      options.basaChuEnabled ||
+      options.bothPlayersScoreEnabled ||
+      options.oibanaEnabled;
 
     if (anyVariationEnabled) {
       this.variationsButton.classList.add('active');
@@ -2332,7 +2340,7 @@ class Game {
       // Delay showing modal to let animation play
       // Losing animation: ~1700ms, Showcase animations: ~2000-3000ms
       // Using 2500ms to ensure animation is visible before modal appears
-      setTimeout(() => {
+      this.roundSummaryTimer = setTimeout(() => {
         this.displayRoundSummaryModal(data);
       }, 2500);
     } else {
@@ -3424,6 +3432,8 @@ class Game {
    * Stage 7: Both cards → trick pile together
    */
   createMatchSequence(movingCard, targetCard, capturedZone, player, isDrawnCardMatch = false) {
+    // TODO: AnimationSequence is not defined — guard until it is implemented
+    if (typeof AnimationSequence === 'undefined') return null;
     const sequence = new AnimationSequence(`${player} Match`);
 
     // Use _renderX/Y which is set during last render (before cards moved to captured)
@@ -3524,6 +3534,8 @@ class Game {
    * All 4 cards of same month captured together
    */
   createFourOfAKindSequence(cards, month, capturedZone, player) {
+    // TODO: AnimationSequence is not defined — guard until it is implemented
+    if (typeof AnimationSequence === 'undefined') return null;
     const sequence = new AnimationSequence(`${player} Four of ${month}`);
 
     const celebrationY = 60; // Top of screen
@@ -4812,57 +4824,59 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   console.log(`Hanafuda Koi-Koi ready (v${APP_VERSION})`);
 
-  // Expose testing utilities to console
-  window.gameTestUtils = {
-    game,
-    card3DManager: game.card3DManager,
-    gameState: () => game.game.getState(),
-    validateGameState: () => {
-      const playerCount = game.selectedPlayerCount;
-      const results = GameStateValidator.validateCardAllocation(
-        game.game.getState(),
-        game.card3DManager,
-        playerCount
-      );
-      GameStateValidator.printResults(results);
-      return results;
-    },
-    validateZones: () => {
-      const results = GameStateValidator.validateZoneStructure(
-        game.card3DManager,
-        game.selectedPlayerCount
-      );
-      console.group('🧪 Zone Structure Validation');
-      results.forEach(r => console.log(r.message));
-      console.groupEnd();
-      return results;
-    },
-    logZoneCards: () => {
-      console.group('🎴 Cards in Each Zone');
-      if (game.card3DManager && game.card3DManager.zoneCards) {
-        Object.entries(game.card3DManager.zoneCards).forEach(([zoneName, cardSet]) => {
-          console.log(`${zoneName}: ${cardSet.size} cards`);
-        });
+  // Expose testing utilities to console — development only
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    window.gameTestUtils = {
+      game,
+      card3DManager: game.card3DManager,
+      gameState: () => game.game.getState(),
+      validateGameState: () => {
+        const playerCount = game.selectedPlayerCount;
+        const results = GameStateValidator.validateCardAllocation(
+          game.game.getState(),
+          game.card3DManager,
+          playerCount
+        );
+        GameStateValidator.printResults(results);
+        return results;
+      },
+      validateZones: () => {
+        const results = GameStateValidator.validateZoneStructure(
+          game.card3DManager,
+          game.selectedPlayerCount
+        );
+        console.group('🧪 Zone Structure Validation');
+        results.forEach(r => console.log(r.message));
+        console.groupEnd();
+        return results;
+      },
+      logZoneCards: () => {
+        console.group('🎴 Cards in Each Zone');
+        if (game.card3DManager && game.card3DManager.zoneCards) {
+          Object.entries(game.card3DManager.zoneCards).forEach(([zoneName, cardSet]) => {
+            console.log(`${zoneName}: ${cardSet.size} cards`);
+          });
+        }
+        console.groupEnd();
+      },
+      logPlayerCounts: () => {
+        const state = game.game.getState();
+        console.group('👥 Player Counts');
+        if (state.players && Array.isArray(state.players)) {
+          state.players.forEach((player, index) => {
+            console.log(`Player ${index}: hand=${player.hand?.length || 0}, trick=${player.trick?.length || 0}`);
+          });
+        }
+        console.log(`Field: ${state.field?.length || 0} cards`);
+        console.log(`Deck: ${state.deck?.length || 0} cards`);
+        console.groupEnd();
       }
-      console.groupEnd();
-    },
-    logPlayerCounts: () => {
-      const state = game.game.getState();
-      console.group('👥 Player Counts');
-      if (state.players && Array.isArray(state.players)) {
-        state.players.forEach((player, index) => {
-          console.log(`Player ${index}: hand=${player.hand?.length || 0}, trick=${player.trick?.length || 0}`);
-        });
-      }
-      console.log(`Field: ${state.field?.length || 0} cards`);
-      console.log(`Deck: ${state.deck?.length || 0} cards`);
-      console.groupEnd();
-    }
-  };
+    };
 
-  console.log('🧪 Testing utilities available at window.gameTestUtils');
-  console.log('  - gameTestUtils.validateGameState() - Full validation');
-  console.log('  - gameTestUtils.validateZones() - Zone structure check');
-  console.log('  - gameTestUtils.logZoneCards() - Show all zone contents');
-  console.log('  - gameTestUtils.logPlayerCounts() - Show player hand/trick counts');
+    console.log('🧪 Testing utilities available at window.gameTestUtils');
+    console.log('  - gameTestUtils.validateGameState() - Full validation');
+    console.log('  - gameTestUtils.validateZones() - Zone structure check');
+    console.log('  - gameTestUtils.logZoneCards() - Show all zone contents');
+    console.log('  - gameTestUtils.logPlayerCounts() - Show player hand/trick counts');
+  }
 });

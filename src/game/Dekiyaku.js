@@ -1,4 +1,5 @@
 import { debugLogger } from '../utils/DebugLogger.js';
+import { HANAFUDA_DECK, CARD_TYPES } from '../data/cards.js';
 
 /**
  * Dekiyaku (Built Combinations) for Hachi-Hachi
@@ -22,18 +23,23 @@ export class Dekiyaku {
     // Check each type
     const fiveB = this.checkFiveBrights(captured);
     const fourB = this.checkFourBrights(captured);
+    const threeB = this.checkThreeBrights(captured);
     const sevenR = this.checkSevenRibbons(captured);
     const poetryR = this.checkPoetryRibbons(captured);
     const blueR = this.checkBlueRibbons(captured);
     const bdb = this.checkBoarDeerButterfly(captured);
+    const animalPairs = this.checkAnimalPairs(captured);
 
-    // Five and Four Brights are mutually exclusive
+    // Five, Four, and Three Brights are mutually exclusive (highest applies)
     if (fiveB) {
       dekiyaku.push(fiveB);
       debugLogger.log('hachihachi', `✅ Found Five Brights (12 kan)`);
     } else if (fourB) {
       dekiyaku.push(fourB);
-      debugLogger.log('hachihachi', `✅ Found Four Brights (10 kan)`);
+      debugLogger.log('hachihachi', `✅ Found Four Brights (16 kan)`);
+    } else if (threeB) {
+      dekiyaku.push(threeB);
+      debugLogger.log('hachihachi', `✅ Found Three Brights (8 kan)`);
     }
 
     // All others are cumulative
@@ -43,7 +49,7 @@ export class Dekiyaku {
     }
     if (poetryR) {
       dekiyaku.push(poetryR);
-      debugLogger.log('hachihachi', `✅ Found Poetry Ribbons (7 kan)`);
+      debugLogger.log('hachihachi', `✅ Found Poetry Ribbons (5 kan)`);
     }
     if (blueR) {
       dekiyaku.push(blueR);
@@ -52,6 +58,10 @@ export class Dekiyaku {
     if (bdb) {
       dekiyaku.push(bdb);
       debugLogger.log('hachihachi', `✅ Found Boar, Deer, Butterfly (7 kan)`);
+    }
+    if (animalPairs) {
+      dekiyaku.push(animalPairs);
+      debugLogger.log('hachihachi', `✅ Found Animal Pairs (${animalPairs.value} kan)`);
     }
 
     return dekiyaku;
@@ -125,7 +135,7 @@ export class Dekiyaku {
       return {
         name: 'Four Brights',
         japName: 'Shikou',
-        value: 10,
+        value: 16,
         type: 'dekiyaku',
         cardsInvolved: cards
       };
@@ -180,7 +190,7 @@ export class Dekiyaku {
       return {
         name: 'Poetry Ribbons',
         japName: 'Akatan',
-        value: 7,
+        value: 5,
         type: 'dekiyaku',
         cardsInvolved: cards
       };
@@ -212,6 +222,45 @@ export class Dekiyaku {
         value: 7,
         type: 'dekiyaku',
         cardsInvolved: cards
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Three Brights (8 kan)
+   * Must have exactly 3 of the 5 bright cards
+   */
+  static checkThreeBrights(captured) {
+    const brights = captured.filter(c => c.type === CARD_TYPES.BRIGHT);
+
+    if (brights.length === 3) {
+      return {
+        name: 'Three Brights',
+        japName: 'Sankou',
+        value: 8,
+        type: 'dekiyaku',
+        cardsInvolved: brights
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Animal Pairs (1 kan per pair, max 3 kan)
+   * Each pair of Animal cards captured = 1 kan, maximum 3 pairs
+   */
+  static checkAnimalPairs(captured) {
+    const animals = captured.filter(c => c.type === CARD_TYPES.ANIMAL);
+    const pairs = Math.min(Math.floor(animals.length / 2), 3);
+
+    if (pairs > 0) {
+      return {
+        name: `Animal Pairs (${pairs})`,
+        japName: 'Tanezoro',
+        value: pairs,
+        type: 'dekiyaku',
+        cardsInvolved: animals.slice(0, pairs * 2)
       };
     }
     return null;
@@ -259,28 +308,36 @@ export class Dekiyaku {
   }
 
   static hasPoetryRibbon(captured, month) {
-    // Poetry ribbons are the red ribbons in months 1, 2, 3 (January, February, March)
-    // Card IDs: 2 (Jan), 6 (Feb), 10 (March)
-    const poetryRibbonIds = [2, 6, 10];
+    // Poetry ribbons are the red ribbons in January, February, March
+    const poetryRibbonIds = HANAFUDA_DECK
+      .filter(c => c.type === CARD_TYPES.RIBBON && c.ribbonColor === 'red' &&
+        ['January', 'February', 'March'].includes(c.month))
+      .map(c => c.id);
     return captured.some(c => poetryRibbonIds.includes(c.id) && c.month === month);
   }
 
   static getPoetryRibbon(captured, month) {
-    // Poetry ribbons are the red ribbons in months 1, 2, 3
-    const poetryRibbonIds = [2, 6, 10];
+    // Poetry ribbons are the red ribbons in January, February, March
+    const poetryRibbonIds = HANAFUDA_DECK
+      .filter(c => c.type === CARD_TYPES.RIBBON && c.ribbonColor === 'red' &&
+        ['January', 'February', 'March'].includes(c.month))
+      .map(c => c.id);
     return captured.find(c => poetryRibbonIds.includes(c.id) && c.month === month);
   }
 
   static hasBlueRibbon(captured, month) {
-    // Blue ribbons in months 6 (June), 9 (September), 10 (October)
-    // Card IDs: 22 (June), 34 (September), 38 (October)
-    const blueRibbonIds = [22, 34, 38];
+    // Blue ribbons in June, September, October
+    const blueRibbonIds = HANAFUDA_DECK
+      .filter(c => c.type === CARD_TYPES.RIBBON && c.ribbonColor === 'blue')
+      .map(c => c.id);
     return captured.some(c => blueRibbonIds.includes(c.id) && c.month === month);
   }
 
   static getBlueRibbon(captured, month) {
-    // Blue ribbons in months 6, 9, 10
-    const blueRibbonIds = [22, 34, 38];
+    // Blue ribbons in June, September, October
+    const blueRibbonIds = HANAFUDA_DECK
+      .filter(c => c.type === CARD_TYPES.RIBBON && c.ribbonColor === 'blue')
+      .map(c => c.id);
     return captured.find(c => blueRibbonIds.includes(c.id) && c.month === month);
   }
 

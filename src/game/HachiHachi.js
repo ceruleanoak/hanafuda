@@ -15,6 +15,16 @@ import { Deck } from './Deck.js';
 import { Teyaku } from './Teyaku.js';
 import { Dekiyaku } from './Dekiyaku.js';
 import { debugLogger } from '../utils/DebugLogger.js';
+import { HANAFUDA_DECK } from '../data/cards.js';
+
+// Standard hanafuda card point values (single source of truth for this module)
+const CARD_VALUES = { 'bright': 20, 'animal': 10, 'ribbon': 5, 'chaff': 1 };
+
+// Months (string names) whose bright cards trigger field multipliers
+// 2× (Large Field): January (Pine), March (Cherry Blossom), August (Moon)
+// 4× (Grand Field): November (Willow), December (Paulownia)
+const LARGE_FIELD_MONTHS = new Set(['January', 'March', 'August']);
+const GRAND_FIELD_MONTHS = new Set(['November', 'December']);
 
 export class HachiHachi {
   constructor(gameOptions = {}) {
@@ -30,9 +40,6 @@ export class HachiHachi {
     // Par value system
     this.PAR_VALUE = 88; // Each player's base
     this.TOTAL_POINTS = 264; // 88 × 3
-
-    // Card point values (single source of truth)
-    this.CARD_VALUES = { 'bright': 20, 'ribbon': 5, 'animal': 10, 'chaff': 1 };
 
     // Initialization - only set up state variables, don't deal yet
     this.initializeGameState();
@@ -479,33 +486,36 @@ export class HachiHachi {
   /**
    * Calculate field multiplier (1×, 2×, 4×)
    * Based on specific bright cards in the field:
-   * - 4× (Grand Field): Rain Man (November) or Phoenix (December)
-   * - 2× (Large Field): Crane (January), Curtain (March), or Moon (August)
+   * - 4× (Grand Field): Rain Man (November/month 11) or Phoenix (December/month 12)
+   * - 2× (Large Field): Crane (January/month 1), Curtain (March/month 3), or Moon (August/month 8)
    * - 1× (Small Field): No multiplier cards
+   *
+   * Uses HANAFUDA_DECK card data (type + month number) instead of name strings.
    */
   calculateFieldMultiplier() {
-    // Specific bright cards that trigger multipliers (card names as they appear in cards.js)
-    const largeBrightCards = ['January - bright - crane', 'March - bright - curtain', 'August - bright - moon'];
-    const grandBrightCards = ['November - bright - rain man', 'December - bright - phoenix'];
+    // HANAFUDA_DECK IDs run 1–48, 4 cards per month in order.
+    // Numeric month = ceil(id / 4), matching the month sets defined at module scope.
+    const _isBrightInMonth = (card, monthSet) => {
+      const data = HANAFUDA_DECK.find(d => d.id === card.id);
+      if (!data || data.type !== 'bright') return false;
+      return monthSet.has(data.month);
+    };
 
-    // Check for specific cards in the field
-    const hasGrandBright = this.field.some(c => grandBrightCards.includes(c.name));
-    const hasLargeBright = this.field.some(c => largeBrightCards.includes(c.name));
+    const grandCard = this.field.find(c => _isBrightInMonth(c, GRAND_FIELD_MONTHS));
+    const largeCard = this.field.find(c => _isBrightInMonth(c, LARGE_FIELD_MONTHS));
 
-    if (hasGrandBright) {
+    if (grandCard) {
       this.fieldMultiplier = 4;
-      const grandCard = this.field.find(c => grandBrightCards.includes(c.name));
       debugLogger.log('hachihachi', `🔴 Field multiplier: 4× (GRAND - ${grandCard.name})`, {
         fieldCards: this.field.map(c => `${c.name} (${c.type})`),
-        triggeringCard: `${grandCard.name}`,
+        triggeringCard: grandCard.name,
         multiplier: this.fieldMultiplier
       });
-    } else if (hasLargeBright) {
+    } else if (largeCard) {
       this.fieldMultiplier = 2;
-      const largeCard = this.field.find(c => largeBrightCards.includes(c.name));
       debugLogger.log('hachihachi', `🟡 Field multiplier: 2× (LARGE - ${largeCard.name})`, {
         fieldCards: this.field.map(c => `${c.name} (${c.type})`),
-        triggeringCard: `${largeCard.name}`,
+        triggeringCard: largeCard.name,
         multiplier: this.fieldMultiplier
       });
     } else {
@@ -1144,12 +1154,17 @@ export class HachiHachi {
           this._triggerShoubuSageDecision();
           return;
         } else if (newDekiyakuGained && this.currentPlayerIndex > 0) {
-          // Opponent - auto decide (for now, auto-sage to be aggressive)
-          debugLogger.log('hachihachi', `⚠️ Opponent ${this.currentPlayerIndex} captured dekiyaku from Hiki draw - auto-choosing SAGE`, {
+          // Opponent captured dekiyaku from Hiki draw - must call sage/shoubu before next player
+          const opponentDecision = this._makeOpponentDekiyakuDecision(this.currentPlayerIndex);
+          debugLogger.log('hachihachi', `⚠️ Opponent ${this.currentPlayerIndex} captured dekiyaku from Hiki draw - AI decision: ${opponentDecision}`, {
             newDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`),
             totalDekiyakuValue: newDekiyaku.reduce((sum, d) => sum + d.value, 0)
           });
-          setTimeout(() => this.nextPlayer(), 300);
+          if (opponentDecision === 'sage') {
+            this.callSage(this.currentPlayerIndex);
+          } else {
+            this.callShoubu(this.currentPlayerIndex);
+          }
         } else {
           // No new dekiyaku - proceed to next player
           debugLogger.log('hachihachi', `ℹ️ No new dekiyaku from Hiki draw - proceeding to next player`, {
@@ -1230,12 +1245,17 @@ export class HachiHachi {
           this._triggerShoubuSageDecision();
           return;
         } else if (newDekiyakuGained && this.currentPlayerIndex > 0) {
-          // Opponent - auto decide (for now, auto-sage to be aggressive)
-          debugLogger.log('hachihachi', `⚠️ Opponent ${this.currentPlayerIndex} captured dekiyaku from draw - auto-choosing SAGE`, {
+          // Opponent captured dekiyaku from auto-match draw - must call sage/shoubu before next player
+          const opponentDecision = this._makeOpponentDekiyakuDecision(this.currentPlayerIndex);
+          debugLogger.log('hachihachi', `⚠️ Opponent ${this.currentPlayerIndex} captured dekiyaku from auto-match draw - AI decision: ${opponentDecision}`, {
             newDekiyaku: newDekiyaku.map(d => `${d.name}(${d.value})`),
             totalDekiyakuValue: newDekiyaku.reduce((sum, d) => sum + d.value, 0)
           });
-          setTimeout(() => this.nextPlayer(), 300);
+          if (opponentDecision === 'sage') {
+            this.callSage(this.currentPlayerIndex);
+          } else {
+            this.callShoubu(this.currentPlayerIndex);
+          }
         } else {
           // No new dekiyaku - proceed to next player
           debugLogger.log('hachihachi', `ℹ️ No new dekiyaku from auto-match draw - proceeding to next player`, {
@@ -1749,8 +1769,6 @@ export class HachiHachi {
         // No one has dekiyaku - calculate par value for each player
         debugLogger.log('hachihachi', `📊 DECK EXHAUSTED - No dekiyaku: Calculating par value for all players`, {});
 
-        const CARD_VALUES = { 'bright': 20, 'ribbon': 5, 'animal': 10, 'chaff': 1 };
-
         for (let i = 0; i < 3; i++) {
           const player = this.players[i];
           const cardPoints = player.captured.reduce((sum, card) => {
@@ -1798,10 +1816,18 @@ export class HachiHachi {
     // Format: { roundScores: [p0, p1, p2], gameScores: [cumulative0, cumulative1, cumulative2] }
     const roundScores = scores; // Reuse scores from above logging section
 
-    // Calculate cumulative game scores
+    // Calculate cumulative game scores.
+    // gameScore accumulates: prior gameScore + teyaku settlements (fixed at deal time) + round dekiyaku/par score.
     const gameScores = this.players.map((p, i) => {
-      const cumulativeScore = (p.gameScore || 0) + p.roundScore;
+      const teyakuSettlement = this.teyakuSettlements ? (this.teyakuSettlements[i] || 0) : 0;
+      const cumulativeScore = (p.gameScore || 0) + teyakuSettlement + p.roundScore;
       this.players[i].gameScore = cumulativeScore;
+      debugLogger.log('hachihachi', `💳 Player ${i} game score updated:`, {
+        previousGameScore: p.gameScore - teyakuSettlement - p.roundScore,
+        teyakuSettlement: teyakuSettlement,
+        roundScore: p.roundScore,
+        newGameScore: cumulativeScore
+      });
       return cumulativeScore;
     });
 
@@ -1825,7 +1851,6 @@ export class HachiHachi {
       };
 
       // Build card breakdown for each player (show how many of each type)
-      const CARD_VALUES = { 'bright': 20, 'ribbon': 5, 'animal': 10, 'chaff': 1 };
       const cardBreakdown = this.players.map(player => {
         const breakdown = {
           brights: [],
@@ -1860,11 +1885,10 @@ export class HachiHachi {
       // Calculate score breakdown for each player
       // NOTE: Score breakdown shows all component parts (teyaku, dekiyaku, par)
       // Par is ONLY included when no dekiyaku exist
-      const CARD_VALUES_BREAKDOWN = { 'bright': 20, 'ribbon': 5, 'animal': 10, 'chaff': 1 };
       const hasAnyDekiyakuInRound = this.players.some(p => (p.dekiyaku || []).length > 0);
 
       const scoreBreakdown = this.players.map((player, i) => {
-        // Get teyaku settlement (already applied in applyTeyakuSettlements)
+        // Get teyaku settlement (already applied to gameScore at round end)
         const teyakuScore = this.teyakuSettlements[i] || 0;
 
         // Get dekiyaku settlement from the calculated values above
@@ -1874,7 +1898,7 @@ export class HachiHachi {
         let parScore = 0;
         if (!hasAnyDekiyakuInRound) {
           const cardPoints = player.captured.reduce((sum, card) => {
-            return sum + (CARD_VALUES_BREAKDOWN[card.type] || 0);
+            return sum + (CARD_VALUES[card.type] || 0);
           }, 0);
           parScore = (cardPoints - this.PAR_VALUE) * this.fieldMultiplier;
         }

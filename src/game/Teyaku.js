@@ -1,3 +1,5 @@
+import { HANAFUDA_DECK, CARD_TYPES } from '../data/cards.js';
+
 /**
  * Teyaku (Hand Combinations) for Hachi-Hachi
  *
@@ -46,7 +48,7 @@ export class Teyaku {
     // Check for each type in order of value (highest first)
     // This ensures we return the most valuable one
 
-    // Four-Three (7.5 kan) - Four of a kind + Triplet
+    // Four-Three (20 kan) - Four of a kind + Triplet
     const fourThree = this.checkFourThree(hand);
     if (fourThree) candidates.push({ ...fourThree, priority: 0 });
 
@@ -158,8 +160,8 @@ export class Teyaku {
   }
 
   static checkStandingTriplet(hand) {
-    // Standing triplets: Wisteria, Iris, Bush Clover (4,5,7) OR all three Paulownia chaff (12)
-    const standingMonths = [4, 5, 7, 12];
+    // Standing triplets: Wisteria (April), Iris (May), Bush Clover (July) OR Paulownia (December)
+    const standingMonths = ['April', 'May', 'July', 'December'];
     const monthCounts = this.countByMonth(hand);
 
     for (const month of standingMonths) {
@@ -201,7 +203,7 @@ export class Teyaku {
   }
 
   static checkTwoStandingTriplets(hand) {
-    const standingMonths = [4, 5, 7, 12];
+    const standingMonths = ['April', 'May', 'July', 'December'];
     const monthCounts = this.countByMonth(hand);
     let standingCount = 0;
     const standingMonthsFound = [];
@@ -227,13 +229,13 @@ export class Teyaku {
 
   static checkTripletAndStandingTriplet(hand) {
     const monthCounts = this.countByMonth(hand);
-    const standingMonths = [4, 5, 7, 12];
+    const standingMonths = ['April', 'May', 'July', 'December'];
     let regularTriplet = null;
     let standingTriplet = null;
 
     for (const [month, count] of Object.entries(monthCounts)) {
       if (count >= 3) {
-        if (standingMonths.includes(parseInt(month))) {
+        if (standingMonths.includes(month)) {
           standingTriplet = month;
         } else if (!regularTriplet) {
           regularTriplet = month;
@@ -476,7 +478,7 @@ export class Teyaku {
   }
 
   static getCardsOfMonth(hand, month) {
-    return hand.filter(c => c.month === parseInt(month));
+    return hand.filter(c => c.month === month);
   }
 
   static getTripletCards(hand, months) {
@@ -498,7 +500,7 @@ export class Teyaku {
   }
 
   static isChaffOrWillow(card) {
-    // Willow cards count as chaff for Group B teyaku
-    return card.type === 'chaff' || card.month === 11;
+    // Willow (November) cards count as chaff for Group B teyaku
+    return card.type === CARD_TYPES.CHAFF || card.month === 'November';
   }
 }

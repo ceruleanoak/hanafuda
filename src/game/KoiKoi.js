@@ -6,6 +6,7 @@ import { Deck } from './Deck.js';
 import { Yaku } from './Yaku.js';
 import { CARD_TYPES } from '../data/cards.js';
 import { AdvancedAI } from './AdvancedAI.js';
+import { debugLogger } from '../utils/DebugLogger.js';
 
 export class KoiKoi {
   constructor(gameOptions = null) {
@@ -14,15 +15,16 @@ export class KoiKoi {
     this.currentRound = 0;
     this.playerScore = 0;
     this.opponentScore = 0;
-    this.animationQueue = [];
-    this.isAnimating = false;
+    this.animationQueue = []; // DEPRECATED: use Card3DManager instead
+    this.isAnimating = false; // DEPRECATED: use Card3DManager instead
     this.gameOptions = gameOptions;
     this.audioManager = null; // Will be set by main.js
     this.uiCallback = null; // Will be set by main.js to show koi-koi modal
     this.roundSummaryCallback = null; // Will be set by main.js to show round summary modal
     this.opponentKoikoiCallback = null; // Will be set by main.js to show opponent koi-koi notification
     this.bombCardCounter = 0; // Counter for unique bomb card IDs
-    this.firstPlayerThisGame = null; // Track who went first in round 1 for alternating
+    this.firstPlayerThisGame = null; // Track who went first in round 1
+    this.lastRoundWinner = null; // Track who won the last round to set first player next round
 
     // Koi-koi state tracking
     this.koikoiState = {
@@ -96,6 +98,7 @@ export class KoiKoi {
     this.playerScore = 0;
     this.opponentScore = 0;
     this.firstPlayerThisGame = null; // Reset for new game
+    this.lastRoundWinner = null; // Reset for new game
     this.reset();
   }
 
@@ -117,13 +120,17 @@ export class KoiKoi {
       this.firstPlayerThisGame = Math.random() < 0.5 ? 'player' : 'opponent';
       this.currentPlayer = this.firstPlayerThisGame;
     } else {
-      // Subsequent rounds: alternate who goes first
-      if (this.currentRound % 2 === 1) {
-        // Odd rounds: same as first round
-        this.currentPlayer = this.firstPlayerThisGame;
+      // Subsequent rounds: the round loser goes first next round (KoiKoi rule)
+      // If the previous round was a draw (no winner), keep the same first player as last round
+      if (this.lastRoundWinner === 'player') {
+        // Player won last round → opponent (loser) goes first
+        this.currentPlayer = 'opponent';
+      } else if (this.lastRoundWinner === 'opponent') {
+        // Opponent won last round → player (loser) goes first
+        this.currentPlayer = 'player';
       } else {
-        // Even rounds: opposite of first round
-        this.currentPlayer = (this.firstPlayerThisGame === 'player') ? 'opponent' : 'player';
+        // Draw or no clear winner last round → same player goes first as previous round
+        this.currentPlayer = this.currentPlayer || this.firstPlayerThisGame;
       }
     }
 
@@ -330,6 +337,7 @@ export class KoiKoi {
 
   /**
    * Queue an animation
+   * @deprecated Use Card3DManager instead
    */
   queueAnimation(animation) {
     this.animationQueue.push(animation);
@@ -337,6 +345,7 @@ export class KoiKoi {
 
   /**
    * Clear animation queue
+   * @deprecated Use Card3DManager instead
    */
   clearAnimations() {
     this.animationQueue = [];
@@ -1894,6 +1903,16 @@ export class KoiKoi {
     }
 
     console.log(`[SCORING] Final round scores - Player: ${playerRoundScore}, Opponent: ${opponentRoundScore}`);
+
+    // Track round winner so next round's first player can be set correctly (loser goes first)
+    if (playerRoundScore > 0 && opponentRoundScore === 0) {
+      this.lastRoundWinner = 'player';
+    } else if (opponentRoundScore > 0 && playerRoundScore === 0) {
+      this.lastRoundWinner = 'opponent';
+    } else {
+      // Draw (both scored or neither scored) - no change to lastRoundWinner (keep previous)
+      this.lastRoundWinner = null;
+    }
 
     this.playerScore += playerRoundScore;
     this.opponentScore += opponentRoundScore;

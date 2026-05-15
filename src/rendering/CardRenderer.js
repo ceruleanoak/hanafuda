@@ -66,12 +66,22 @@ export class CardRenderer {
     if (this.loadingImages.has(imagePath)) {
       // Already loading, return a promise that waits
       return new Promise((resolve, reject) => {
-        const checkInterval = setInterval(() => {
+        const intervalId = setInterval(() => {
           if (this.imageCache.has(imagePath)) {
-            clearInterval(checkInterval);
+            clearInterval(intervalId);
+            clearTimeout(timeoutId);
             resolve(this.imageCache.get(imagePath));
+          } else if (this.failedImages.has(imagePath)) {
+            clearInterval(intervalId);
+            clearTimeout(timeoutId);
+            reject(new Error(`Failed to load image: ${imagePath}`));
           }
         }, 50);
+        // Timeout after 10 seconds to prevent indefinite hang
+        const timeoutId = setTimeout(() => {
+          clearInterval(intervalId);
+          reject(new Error(`Image load timeout: ${imagePath}`));
+        }, 10000);
       });
     }
 
@@ -294,85 +304,14 @@ export class CardRenderer {
   }
 
   /**
-   * Draw point value badge on card (for Sakura mode)
+   * Draw point value badge on card (for Sakura / Hachi-Hachi modes)
    * @param {CanvasRenderingContext2D} ctx
    * @param {number} pointValue - Point value to display
-   * @param {number} x - Card X position
-   * @param {number} y - Card Y position
+   * @param {number} x - Card X position (top-left corner)
+   * @param {number} y - Card Y position (top-left corner)
+   * @param {number} [scale=1] - Card scale factor (use >1 for 3D scaled cards)
    */
-  drawPointValueBadge(ctx, pointValue, x, y) {
-    const badgeSize = 24;
-    const badgeX = x + this.cardWidth - badgeSize - 4;
-    const badgeY = y + 4;
-    const badgeRadius = badgeSize / 2;
-
-    // Choose badge color based on point value
-    let badgeColor, textColor;
-    if (pointValue === 0) {
-      badgeColor = '#757575'; // Gray for 0 points
-      textColor = '#ffffff';
-    } else if (pointValue === 1) {
-      badgeColor = '#4CAF50'; // Green for 1 point
-      textColor = '#ffffff';
-    } else if (pointValue === 5) {
-      badgeColor = '#2196F3'; // Blue for 5 points
-      textColor = '#ffffff';
-    } else if (pointValue === 10) {
-      badgeColor = '#FF6B35'; // Orange for 10 points
-      textColor = '#ffffff';
-    } else if (pointValue === 20) {
-      badgeColor = '#FFC107'; // Gold for 20 points
-      textColor = '#000000';
-    } else {
-      badgeColor = '#9C27B0'; // Purple for other values
-      textColor = '#ffffff';
-    }
-
-    // Draw badge circle with shadow
-    ctx.save();
-
-    // Shadow
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-    ctx.shadowBlur = 4;
-    ctx.shadowOffsetX = 1;
-    ctx.shadowOffsetY = 1;
-
-    // Circle background
-    ctx.fillStyle = badgeColor;
-    ctx.beginPath();
-    ctx.arc(badgeX + badgeRadius, badgeY + badgeRadius, badgeRadius, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Border
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    // Reset shadow for text
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
-
-    // Draw point value text
-    ctx.fillStyle = textColor;
-    ctx.font = 'bold 12px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(pointValue.toString(), badgeX + badgeRadius, badgeY + badgeRadius);
-
-    ctx.restore();
-  }
-
-  /**
-   * Draw point value badge on scaled card (for Sakura mode with 3D cards)
-   * @param {CanvasRenderingContext2D} ctx
-   * @param {number} pointValue - Point value to display
-   * @param {number} x - Card X position
-   * @param {number} y - Card Y position
-   * @param {number} scale - Card scale factor
-   */
-  drawPointValueBadgeScaled(ctx, pointValue, x, y, scale) {
+  drawPointValueBadge(ctx, pointValue, x, y, scale = 1) {
     const badgeSize = 24 * scale;
     const scaledWidth = this.cardWidth * scale;
     const badgeX = x + scaledWidth - badgeSize - (4 * scale);
@@ -435,6 +374,19 @@ export class CardRenderer {
     ctx.fillText(pointValue.toString(), badgeX + badgeRadius, badgeY + badgeRadius);
 
     ctx.restore();
+  }
+
+  /**
+   * Draw point value badge on scaled card (for Sakura / Hachi-Hachi modes with 3D cards)
+   * Delegates to drawPointValueBadge with the provided scale factor.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} pointValue - Point value to display
+   * @param {number} x - Card X position (top-left corner)
+   * @param {number} y - Card Y position (top-left corner)
+   * @param {number} scale - Card scale factor
+   */
+  drawPointValueBadgeScaled(ctx, pointValue, x, y, scale) {
+    this.drawPointValueBadge(ctx, pointValue, x, y, scale);
   }
 
   /**

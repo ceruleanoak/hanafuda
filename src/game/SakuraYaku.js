@@ -90,12 +90,62 @@ export class SakuraYaku {
           name: yaku.name,
           displayName: yaku.displayName,
           description: yaku.description,
-          penalty: yaku.penalty
+          penalty: yaku.penalty,
+          cards: this.getYakuCards(yakuKey, cards)
         });
       }
     }
 
     return foundYaku;
+  }
+
+  /**
+   * Get the specific cards that form a given yaku
+   * @param {string} yakuKey - Key from YAKU_DEFINITIONS
+   * @param {Array} cards - Array of captured card objects
+   * @returns {Array} Array of card objects forming the yaku
+   */
+  getYakuCards(yakuKey, cards) {
+    switch (yakuKey) {
+      case 'DRINKING':
+        return cards.filter(c =>
+          (c.month === 'March' && c.type === CARD_TYPES.BRIGHT) ||
+          (c.month === 'August' && c.type === CARD_TYPES.BRIGHT) ||
+          (c.month === 'September' && c.type === CARD_TYPES.ANIMAL)
+        );
+      case 'SPRING':
+        return cards.filter(c =>
+          (c.month === 'January' && c.type === CARD_TYPES.BRIGHT) ||
+          (c.month === 'February' && c.type === CARD_TYPES.ANIMAL) ||
+          (c.month === 'March' && c.type === CARD_TYPES.BRIGHT)
+        );
+      case 'AKATAN':
+        return cards.filter(c =>
+          ['January', 'February', 'March'].includes(c.month) && c.type === CARD_TYPES.RIBBON
+        );
+      case 'AOTAN':
+        return cards.filter(c =>
+          ['June', 'September', 'October'].includes(c.month) && c.type === CARD_TYPES.RIBBON
+        );
+      case 'KUSATAN':
+        return cards.filter(c =>
+          ['April', 'May', 'July'].includes(c.month) && c.type === CARD_TYPES.RIBBON
+        );
+      case 'ANIMALS_A':
+        return cards.filter(c =>
+          ['June', 'September', 'October'].includes(c.month) && c.type === CARD_TYPES.ANIMAL
+        );
+      case 'ANIMALS_B':
+        return cards.filter(c =>
+          ['April', 'May', 'July'].includes(c.month) && c.type === CARD_TYPES.ANIMAL
+        );
+      case 'INOSHIKAGAN':
+        return cards.filter(c =>
+          ['July', 'August', 'October'].includes(c.month) && c.type === CARD_TYPES.ANIMAL
+        );
+      default:
+        return [];
+    }
   }
 
   /**
@@ -210,16 +260,16 @@ export class SakuraYaku {
     const progress = {};
 
     // Drinking progress: March bright + August bright + September animal
-    const dinkingCards = {
+    const drinkingCards = {
       march: cards.some(c => c.month === 'March' && c.type === CARD_TYPES.BRIGHT),
       august: cards.some(c => c.month === 'August' && c.type === CARD_TYPES.BRIGHT),
       september: cards.some(c => c.month === 'September' && c.type === CARD_TYPES.ANIMAL)
     };
-    const drinkingCount = Object.values(dinkingCards).filter(v => v).length;
+    const drinkingCount = Object.values(drinkingCards).filter(v => v).length;
     if (drinkingCount > 0 && drinkingCount < 3) {
       progress.DRINKING = {
         count: drinkingCount,
-        needed: Object.keys(dinkingCards).filter(k => !dinkingCards[k]),
+        needed: Object.keys(drinkingCards).filter(k => !drinkingCards[k]),
         priority: (drinkingCount / 3) * 100
       };
     }
@@ -350,10 +400,14 @@ export class SakuraYaku {
    */
   wouldHelpYaku(card, currentCards) {
     const progress = this.analyzeYakuProgress(currentCards);
+    const cardMonthLower = card.month.toLowerCase();
 
     for (let yakuKey in progress) {
       const yakuProgress = progress[yakuKey];
-      if (yakuProgress.needed.includes(card.month)) {
+      // Normalize needed entries to lowercase for comparison since some come from
+      // Object.keys (already lowercase) and others from month name arrays (title-case)
+      const neededLower = yakuProgress.needed.map(n => n.toLowerCase());
+      if (neededLower.includes(cardMonthLower)) {
         return true;
       }
     }

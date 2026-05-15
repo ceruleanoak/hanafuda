@@ -3,6 +3,8 @@
  * Designed for real-time rendering where all cards exist as 3D objects
  */
 
+import { debugLogger } from './DebugLogger.js';
+
 /**
  * Easing functions for tween animations
  */

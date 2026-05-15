@@ -16,6 +16,7 @@ export class Renderer {
     this.backgroundColor = '#000';
     this.onResizeCallback = null;
     this.overlayCtx = null; // For drawing hover previews above modals
+    this._layoutManager = new LayoutManager(); // Cached instance — never recreate per frame
 
     this.setupCanvas();
   }
@@ -221,11 +222,10 @@ export class Renderer {
     // Draw deck at field gridSlot 0 position (calculated from field layout)
     if (gameState.deckCount > 0) {
       const fieldConfig = LayoutManager.getZoneConfig('field', this.displayWidth, this.displayHeight, card3DManager.playerCount);
-      const layoutManager = new LayoutManager();
 
       // Create a dummy card with gridSlot 0 to calculate its position
       const dummyCard = { gridSlot: 0 };
-      const positions = layoutManager.layoutGrid([dummyCard], fieldConfig);
+      const positions = this._layoutManager.layoutGrid([dummyCard], fieldConfig);
       const slot0Position = positions[0];
 
       // Draw a stacked deck representation at slot 0 position (from center)
@@ -665,6 +665,7 @@ export class Renderer {
   get rightMargin() { return 30; }
   get verticalMargin() { return 40; }
 
+  // LEGACY: 2D rendering path — superseded by render3D(), kept for reference
   /**
    * Draw animating cards
    */
@@ -707,6 +708,7 @@ export class Renderer {
     }
   }
 
+  // LEGACY: 2D rendering path — superseded by render3D(), kept for reference
   /**
    * Draw celebration box for four-of-a-kind
    */
@@ -749,6 +751,7 @@ export class Renderer {
     this.ctx.restore();
   }
 
+  // LEGACY: 2D rendering path — superseded by render3D(), kept for reference
   /**
    * Draw opponent's played card hover area
    */
@@ -777,6 +780,7 @@ export class Renderer {
     this.ctx.restore();
   }
 
+  // LEGACY: 2D rendering path — superseded by render3D(), kept for reference
   /**
    * Draw drawn card in hover area
    */
@@ -811,6 +815,7 @@ export class Renderer {
     this.ctx.restore();
   }
 
+  // LEGACY: 2D rendering path — superseded by render3D(), kept for reference
   /**
    * Draw a row of cards centered horizontally
    */
@@ -842,6 +847,7 @@ export class Renderer {
     });
   }
 
+  // LEGACY: 2D rendering path — superseded by render3D(), kept for reference
   /**
    * Draw captured cards display
    */
@@ -876,6 +882,7 @@ export class Renderer {
     }
   }
 
+  // LEGACY: 2D rendering path — superseded by render3D(), kept for reference
   /**
    * Draw stack of captured cards with yaku and progress
    */
@@ -1026,6 +1033,7 @@ export class Renderer {
     this.ctx.restore();
   }
 
+  // LEGACY: 2D rendering path — superseded by render3D(), kept for reference
   /**
    * Find card at given screen coordinates
    */
@@ -1111,6 +1119,7 @@ export class Renderer {
     ctx.restore();
   }
 
+  // LEGACY: 2D rendering path — superseded by render3D(), kept for reference
   /**
    * Draw trick text list overlay (text-based list instead of card grid)
    */
@@ -1297,8 +1306,8 @@ export class Renderer {
           card,
           cardX,
           cardY,
+          false, // isSelected - not selected
           true,  // isFaceDown - show card backs
-          false,
           1.0
         );
         this.overlayCtx.restore();
@@ -1330,6 +1339,7 @@ export class Renderer {
     }
   }
 
+  // LEGACY: 2D rendering path — superseded by render3D(), kept for reference
   /**
    * Highlight matchable cards in help mode
    */
@@ -1404,6 +1414,7 @@ export class Renderer {
     this.ctx.restore();
   }
 
+  // LEGACY: 2D rendering path — superseded by render3D(), kept for reference
   /**
    * Draw 3D animated cards
    * @param {Animation3DManager} animation3DManager - The 3D animation manager
@@ -1418,6 +1429,7 @@ export class Renderer {
     });
   }
 
+  // LEGACY: 2D rendering path — superseded by render3D(), kept for reference
   /**
    * Draw empty field slot highlights for hand card drag zones
    * Shows transparent white fill on unoccupied field slots

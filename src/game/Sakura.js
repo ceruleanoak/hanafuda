@@ -264,8 +264,10 @@ export class Sakura {
     // Check for initial field Hiki (dealer advantage)
     this.checkInitialFieldHiki();
 
-    // Check for Chitsiobiki (three-of-a-kind trade)
-    this.checkChitsiobiki();
+    // Check for Chitsiobiki (three-of-a-kind trade) - only when variant is enabled
+    if (this.variants.chitsiobiki) {
+      this.checkChitsiobiki();
+    }
 
     // Locate Gaji card
     this.locateGaji();
@@ -1109,7 +1111,21 @@ export class Sakura {
           }, 900);
         }
       } else if (matches.length >= 2) {
-        // Multiple matches - auto capture first match (standard rule)
+        // BUG: When the drawn card matches 2 field cards, the player should be able to choose
+        // which field card to capture — just as they can when a hand card matches 2 field cards
+        // (see the `select_field` phase logic above in selectCard()). Currently the code
+        // auto-captures matches[0] without player input.
+        //
+        // Fix: Instead of the block below, set:
+        //   this.phase = 'select_drawn_match';
+        //   this.drawnCardMatches = matches;
+        //   this.message = `Drew ${this.drawnCard.month} - Choose which card to capture`;
+        // Then handle 'select_drawn_match' in selectFieldCard() (and selectCard() for the
+        // 'field' owner branch) similarly to how KoiKoi.js handles it at phase 'select_drawn_match'.
+        // Also update main.js field-card click handling to allow clicks in 'select_drawn_match'
+        // phase for Sakura, and clear this.drawnCard + call endTurn() after the capture.
+        //
+        // Auto capture first match (standard rule) — INCORRECT, player should choose
         this.phase = 'show_drawn';
         const chosen = matches[0];
         this.message = `Drew ${this.drawnCard.month} - Multiple matches, capturing first...`;
@@ -1194,8 +1210,15 @@ export class Sakura {
       setTimeout(proceedWithDraw, 150);
     }
 
-    // Check for Hiki from drawn card
-    // (This would happen if player captured 3 cards in Phase 1, then drew 4th)
+    // BUG: checkHikiAfterDraw() is called here synchronously, but this.drawnCard is still null
+    // at this point because proceedWithDraw (which sets this.drawnCard) runs asynchronously via
+    // waitForAllAnimations/setTimeout above. The guard `if (!this.drawnCard) return;` inside
+    // checkHikiAfterDraw causes it to always exit early here — it never actually runs.
+    // Fix: Remove this call and instead invoke checkHikiAfterDraw() inside proceedWithDraw,
+    // at the end of each animation completion callback (after the drawnCard capture logic,
+    // before each endTurn() call). Each of the three branches (no-match, single-match,
+    // multi-match) has its own animation callback chain where checkHikiAfterDraw should run
+    // after the drawn card has been moved to playerCaptured but before endTurn() is called.
     this.checkHikiAfterDraw();
   }
 
@@ -1309,7 +1332,7 @@ export class Sakura {
     }
 
     // Check if using Gaji would complete a Hiki for this player
-    const captured = playerIndex === 0 ? this.playerCaptured : (this.opponentCaptured || []);
+    const captured = this.players[playerIndex]?.captured || [];
     const suitCount = captured.filter(c => c.month === month).length;
 
     if (suitCount === 3) {
@@ -1341,7 +1364,7 @@ export class Sakura {
 
     // Get valid targets (cards that Gaji can capture)
     const validTargets = this.field.filter(card =>
-      this.canGajiCapture(card, 0)
+      this.canGajiCapture(card, this.currentPlayerIndex)
     );
 
     debugLogger.log('sakura', `⚡ Gaji valid targets:`, {
@@ -1385,7 +1408,7 @@ export class Sakura {
 
     // Get valid targets
     const validTargets = this.field.filter(card =>
-      this.canGajiCapture(card, 'player')
+      this.canGajiCapture(card, this.currentPlayerIndex)
     );
 
     debugLogger.log('sakura', `⚡ Drawn Gaji valid targets:`, {

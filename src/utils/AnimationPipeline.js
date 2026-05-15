@@ -6,6 +6,7 @@
  */
 
 import { ANIMATION_STAGE, STAGE_DEFINITIONS, getStage } from './AnimationStageRegistry.js';
+import { debugLogger } from './DebugLogger.js';
 
 export class AnimationPipeline {
   constructor() {
@@ -270,9 +271,5 @@ export const animationPipeline = new AnimationPipeline();
 // Expose to window for debugging
 if (typeof window !== 'undefined') {
   window.animationPipeline = animationPipeline;
-  console.log('AnimationPipeline available for debugging:');
-  console.log('  window.animationPipeline.getStageForTransition(fromZone, toZone)');
-  console.log('  window.animationPipeline.getStagesForGameMode(mode)');
-  console.log('  window.animationPipeline.validateMode(mode)');
-  console.log('  window.animationPipeline.generatePipelineDiagram(stages)');
+  debugLogger.log('animation', 'AnimationPipeline available for debugging: window.animationPipeline.getStageForTransition(fromZone, toZone) | getStagesForGameMode(mode) | validateMode(mode) | generatePipelineDiagram(stages)');
 }

@@ -2,7 +2,7 @@
  * Yaku - Scoring combinations in Koi-Koi
  */
 
-import { CARD_TYPES } from '../data/cards.js';
+import { HANAFUDA_DECK, CARD_TYPES } from '../data/cards.js';
 
 export class Yaku {
   /**
@@ -108,8 +108,9 @@ export class Yaku {
 
   static checkFourBrights(cards) {
     const brights = cards.filter(c => c.type === CARD_TYPES.BRIGHT);
-    const withoutRainMan = brights.filter(c => !c.name.includes('rain man'));
-    if (withoutRainMan.length === 4) {
+    // Rain Man is the November bright (Willow/Rain Man card)
+    const withoutRainMan = brights.filter(c => c.month !== 'November');
+    if (withoutRainMan.length >= 4) {
       return { name: 'Four Brights', points: 10, cards: withoutRainMan };
     }
     return null;
@@ -117,7 +118,8 @@ export class Yaku {
 
   static checkRainyFourBrights(cards) {
     const brights = cards.filter(c => c.type === CARD_TYPES.BRIGHT);
-    const hasRainMan = brights.some(c => c.name.includes('rain man'));
+    // Rain Man is the November bright (Willow/Rain Man card)
+    const hasRainMan = brights.some(c => c.month === 'November');
     if (brights.length === 4 && hasRainMan) {
       return { name: 'Rainy Four Brights', points: 8, cards: brights };
     }
@@ -126,7 +128,8 @@ export class Yaku {
 
   static checkThreeBrights(cards) {
     const brights = cards.filter(c => c.type === CARD_TYPES.BRIGHT);
-    const withoutRainMan = brights.filter(c => !c.name.includes('rain man'));
+    // Rain Man is the November bright (Willow/Rain Man card)
+    const withoutRainMan = brights.filter(c => c.month !== 'November');
     if (withoutRainMan.length >= 3) {
       return { name: 'Three Brights', points: 6, cards: withoutRainMan.slice(0, 3) };
     }
@@ -134,10 +137,11 @@ export class Yaku {
   }
 
   static checkPoetryRibbons(cards) {
+    // Poetry ribbons are the red ribbons from January, February, March
     const poetryRibbons = cards.filter(c =>
       c.type === CARD_TYPES.RIBBON &&
-      c.name.includes('poetry') &&
-      c.ribbonColor === 'red'
+      c.ribbonColor === 'red' &&
+      ['January', 'February', 'March'].includes(c.month)
     );
     if (poetryRibbons.length >= 3) {
       return { name: 'Poetry Ribbons', points: 6, cards: poetryRibbons.slice(0, 3) };
@@ -166,9 +170,10 @@ export class Yaku {
   }
 
   static checkInoShikaCho(cards) {
-    const boar = cards.find(c => c.name.includes('boar'));
-    const deer = cards.find(c => c.name.includes('deer'));
-    const butterflies = cards.find(c => c.name.includes('butterflies'));
+    // Boar = July animal, Deer = October animal, Butterflies = June animal
+    const boar = cards.find(c => c.month === 'July' && c.type === CARD_TYPES.ANIMAL);
+    const deer = cards.find(c => c.month === 'October' && c.type === CARD_TYPES.ANIMAL);
+    const butterflies = cards.find(c => c.month === 'June' && c.type === CARD_TYPES.ANIMAL);
 
     if (boar && deer && butterflies) {
       return { name: 'Boar-Deer-Butterfly', points: 6, cards: [boar, deer, butterflies] };
@@ -195,8 +200,9 @@ export class Yaku {
   }
 
   static checkHanami(cards) {
-    const curtain = cards.find(c => c.name.includes('curtain'));
-    const sakeCup = cards.find(c => c.name.includes('sake cup'));
+    // Curtain = March bright, Sake Cup = September animal
+    const curtain = cards.find(c => c.month === 'March' && c.type === CARD_TYPES.BRIGHT);
+    const sakeCup = cards.find(c => c.month === 'September' && c.type === CARD_TYPES.ANIMAL);
 
     if (curtain && sakeCup) {
       return { name: 'Viewing Sake', points: 3, cards: [curtain, sakeCup] };
@@ -205,8 +211,9 @@ export class Yaku {
   }
 
   static checkTsukimi(cards) {
-    const moon = cards.find(c => c.name.includes('moon'));
-    const sakeCup = cards.find(c => c.name.includes('sake cup'));
+    // Moon = August bright, Sake Cup = September animal
+    const moon = cards.find(c => c.month === 'August' && c.type === CARD_TYPES.BRIGHT);
+    const sakeCup = cards.find(c => c.month === 'September' && c.type === CARD_TYPES.ANIMAL);
 
     if (moon && sakeCup) {
       return { name: 'Moon Viewing Sake', points: 3, cards: [moon, sakeCup] };
@@ -226,6 +233,7 @@ export class Yaku {
    * @param {Array} cards - Array of captured cards
    * @param {Array} opponentCards - Array of opponent's captured cards (optional)
    * @returns {Array} Array of progress objects { name, current, needed, isPossible }
+   * // REFACTOR: duplicates filter logic already present in checkYaku — consider extracting shared card-group helpers
    */
   static checkYakuProgress(cards, opponentCards = []) {
     const progress = [];
@@ -241,16 +249,17 @@ export class Yaku {
     }
 
     // Poetry Ribbons progress (need 3)
+    // Poetry ribbons are the red ribbons from January, February, March
     const poetryRibbons = cards.filter(c =>
       c.type === CARD_TYPES.RIBBON &&
-      c.name.includes('poetry') &&
-      c.ribbonColor === 'red'
+      c.ribbonColor === 'red' &&
+      ['January', 'February', 'March'].includes(c.month)
     );
     if (poetryRibbons.length > 0 && poetryRibbons.length < 3) {
       const opponentPoetryRibbons = opponentCards.filter(c =>
         c.type === CARD_TYPES.RIBBON &&
-        c.name.includes('poetry') &&
-        c.ribbonColor === 'red'
+        c.ribbonColor === 'red' &&
+        ['January', 'February', 'March'].includes(c.month)
       ).length;
       const totalPoetryRibbons = 3;
       const remainingPoetryRibbons = totalPoetryRibbons - poetryRibbons.length - opponentPoetryRibbons;
@@ -305,14 +314,15 @@ export class Yaku {
     }
 
     // Boar-Deer-Butterfly progress
-    const boar = cards.find(c => c.name.includes('boar'));
-    const deer = cards.find(c => c.name.includes('deer'));
-    const butterflies = cards.find(c => c.name.includes('butterflies'));
+    // Boar = July animal, Deer = October animal, Butterflies = June animal
+    const boar = cards.find(c => c.month === 'July' && c.type === CARD_TYPES.ANIMAL);
+    const deer = cards.find(c => c.month === 'October' && c.type === CARD_TYPES.ANIMAL);
+    const butterflies = cards.find(c => c.month === 'June' && c.type === CARD_TYPES.ANIMAL);
     const inoShikaCho = [boar, deer, butterflies].filter(Boolean).length;
     if (inoShikaCho > 0 && inoShikaCho < 3) {
-      const opponentBoar = opponentCards.find(c => c.name.includes('boar'));
-      const opponentDeer = opponentCards.find(c => c.name.includes('deer'));
-      const opponentButterflies = opponentCards.find(c => c.name.includes('butterflies'));
+      const opponentBoar = opponentCards.find(c => c.month === 'July' && c.type === CARD_TYPES.ANIMAL);
+      const opponentDeer = opponentCards.find(c => c.month === 'October' && c.type === CARD_TYPES.ANIMAL);
+      const opponentButterflies = opponentCards.find(c => c.month === 'June' && c.type === CARD_TYPES.ANIMAL);
       const opponentInoShikaCho = [opponentBoar, opponentDeer, opponentButterflies].filter(Boolean).length;
       // Can only complete if opponent doesn't have any of the missing cards
       const isPossible = inoShikaCho + (3 - inoShikaCho - opponentInoShikaCho) >= 3;
