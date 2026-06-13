@@ -1791,29 +1791,40 @@ class Game {
       return;
     }
 
-    // Get all field cards and check if we're hovering over a matching one
+    // Get all field cards and check if the dragged card overlaps a matching one.
     const gameState = this.game.getState();
     let newDropTarget = null;
+    let bestDistSq = Infinity;
 
-    // Check each field card
+    // The dragged card is centered on the cursor (hoverX/hoverY). Register a drop
+    // when its footprint OVERLAPS a matching field card, rather than requiring the
+    // cursor to be near the field card's exact center — users align cards by overlap,
+    // so a center-only catch radius makes drag feel broken. Among overlapping
+    // matches, pick the closest.
+    const { width: cardW, height: cardH } = this.renderer.cardRenderer.getCardDimensions();
+    const dragScale = this.draggedCard3D.getScale ? this.draggedCard3D.getScale() : 1;
+
     for (const fieldCard of gameState.field) {
       // Check if cards match (same month)
-      if (this.cardsMatch(this.draggedCardData, fieldCard)) {
-        // Get the Card3D for this field card
-        const fieldCard3D = this.card3DManager.cards.get(fieldCard.id);
-        if (!fieldCard3D) {
-          continue;
-        }
+      if (!this.cardsMatch(this.draggedCardData, fieldCard)) continue;
 
-        // Check if mouse is near this card
-        const dx = this.hoverX - fieldCard3D.x;
-        const dy = this.hoverY - fieldCard3D.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        const threshold = 80; // Distance threshold for "hovering over"
+      // Get the Card3D for this field card
+      const fieldCard3D = this.card3DManager.cards.get(fieldCard.id);
+      if (!fieldCard3D) continue;
 
-        if (distance < threshold) {
+      const fieldScale = fieldCard3D.getScale ? fieldCard3D.getScale() : 1;
+      const dx = Math.abs(this.hoverX - fieldCard3D.x);
+      const dy = Math.abs(this.hoverY - fieldCard3D.y);
+
+      // AABB overlap: centers within the summed half-extents of both cards.
+      const overlapX = (cardW * dragScale + cardW * fieldScale) / 2;
+      const overlapY = (cardH * dragScale + cardH * fieldScale) / 2;
+
+      if (dx < overlapX && dy < overlapY) {
+        const distSq = dx * dx + dy * dy;
+        if (distSq < bestDistSq) {
+          bestDistSq = distSq;
           newDropTarget = fieldCard3D;
-          break;
         }
       }
     }
