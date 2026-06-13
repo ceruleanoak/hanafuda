@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hanafuda Koi-Koi</title>
+
+  <!-- Cache Control: Prevent aggressive browser caching -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
+  <link rel="icon" type="image/svg+xml" href="/hanafuda/favicon.svg">
+  <script type="module" crossorigin src="/hanafuda/assets/index-DSeyk3L_.js"></script>
+  <link rel="stylesheet" crossorigin href="/hanafuda/assets/index-ChR66lnX.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div id="game-mode-selector">
+        <h1><img src="./assets/graphics/hanafuda_logo.png" alt="Hanafuda" class="header-logo"></h1>
+        <span id="build-id" class="build-id" title="Build version"></span>
+        <select id="game-mode-select">
+          <option value="koikoi">Koi Koi</option>
+          <option value="sakura">Sakura (Hawaiian)</option>
+          <option value="hachihachi">Hachi-Hachi (88)</option>
+          <option value="match">Match Game</option>
+          <option value="shop">Koi Koi Shop</option>
+        </select>
+      </div>
+      <div id="game-info">
+        <div id="score" data-player-count="2" data-teams-mode="false">
+          <div id="score-display"></div>
+        </div>
+        <button id="help-btn" title="Highlight matchable cards">Help</button>
+        <button id="variations-btn" title="Toggle game variations">💣</button>
+        <button id="card-back-btn" title="Select card back design">🃏</button>
+        <button id="options-btn" title="Game options and rules">Options</button>
+        <button id="animation-tester-btn" title="Animation Testing Environment">🎬 Animator</button>
+        <button id="new-game-btn">New Game</button>
+      </div>
+    </header>
+
+    <main>
+      <canvas id="game-canvas"></canvas>
+      <div id="game-status"></div>
+      <button id="trick-list-btn" class="trick-list-btn" title="View available tricks (yaku)">Trick List</button>
+
+      <!-- Round Selection Modal -->
+      <div id="round-modal" class="modal">
+        <div class="modal-content">
+          <!-- Sakura Player Count Selection -->
+          <div id="sakura-player-selection" style="display: none;">
+            <h2>Select Number of Players</h2>
+            <p class="section-description">Choose how many players will participate (currently limited to 4 players max)</p>
+            <div class="modal-buttons">
+              <button class="player-btn" data-players="2">2 Players</button>
+              <button class="player-btn" data-players="3">3 Players</button>
+              <button class="player-btn" data-players="4">4 Players (Teams)</button>
+            </div>
+            <div id="sakura-team-info" style="display: none; margin-top: 15px; padding: 10px; background: #f0f0f0; border-radius: 5px; font-size: 0.9em;">
+              <strong>Team Mode (4 Players):</strong><br>
+              Players are automatically assigned to teams: You + AI 1 (opposite seats) vs AI 2 + AI 3. Teammates share score.
+            </div>
+          </div>
+
+          <!-- Round Selection (Common) -->
+          <div id="round-selection">
+            <h2>Select Number of Rounds</h2>
+            <div class="modal-buttons">
+              <button class="round-btn" data-rounds="1">1 Round</button>
+              <button class="round-btn" data-rounds="3">3 Rounds</button>
+              <button class="round-btn" data-rounds="6">6 Rounds</button>
+              <button class="round-btn" data-rounds="12">12 Rounds</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Options Modal -->
+      <div id="options-modal" class="modal">
+        <div class="modal-content options-modal-content">
+          <h2>Game Options</h2>
+
+          <div class="options-grid">
+            <div class="options-section">
+              <h3>Koi-Koi Rules</h3>
+
+              <div class="option-row">
+                <label for="koikoi-enabled">
+                  <input type="checkbox" id="koikoi-enabled" checked>
+                  Enable Koi-Koi Decision
+                </label>
+                <span class="option-description">Choose to continue or end round after scoring</span>
+              </div>
+
+              <div class="option-row">
+                <label for="multiplier-mode">Multiplier Mode:</label>
+                <select id="multiplier-mode">
+                  <option value="2x" selected>2x (Single Double)</option>
+                  <option value="cumulative">2x→3x→4x (Cumulative)</option>
+                </select>
+                <span class="option-description">How points multiply after koi-koi</span>
+              </div>
+
+              <div class="option-row">
+                <label for="auto-double">
+                  <input type="checkbox" id="auto-double" checked>
+                  Auto-double 7+ Points
+                </label>
+                <span class="option-description">Scores of 7+ automatically double</span>
+              </div>
+            </div>
+
+            <div class="options-section">
+              <h3>Yaku &amp; Scoring</h3>
+
+              <div class="option-row">
+                <label for="both-players-score">
+                  <input type="checkbox" id="both-players-score">
+                  Both Players Score
+                </label>
+                <span class="option-description">When OFF (default): winner-take-all scoring (traditional koi-koi)</span>
+              </div>
+
+              <div class="option-row">
+                <label for="viewing-sake">Viewing Sake (Hanami):</label>
+                <select id="viewing-sake">
+                  <option value="always" selected>Always Enabled</option>
+                  <option value="never">Always Disabled</option>
+                  <option value="requireOther">Require Other Yaku</option>
+                </select>
+                <span class="option-description">Curtain + Sake Cup = 3 points</span>
+              </div>
+
+              <div class="option-row">
+                <label for="moon-viewing-sake">Moon Viewing Sake (Tsukimi):</label>
+                <select id="moon-viewing-sake">
+                  <option value="always" selected>Always Enabled</option>
+                  <option value="never">Always Disabled</option>
+                  <option value="requireOther">Require Other Yaku</option>
+                </select>
+                <span class="option-description">Moon + Sake Cup = 3 points</span>
+              </div>
+            </div>
+
+            <div class="options-section">
+              <h3>AI Difficulty</h3>
+
+              <div class="option-row">
+                <label for="ai-difficulty">AI Difficulty:</label>
+                <select id="ai-difficulty">
+                  <option value="normal" selected>Normal</option>
+                  <option value="advanced">Advanced (Prototype)</option>
+                </select>
+                <span class="option-description">Advanced AI blocks your tricks and prioritizes valuable yaku</span>
+              </div>
+            </div>
+
+            <div class="options-section">
+              <h3>Appearance</h3>
+
+              <div class="option-row">
+                <label>Animation Mode:</label>
+                <div class="animation-mode-group">
+                  <label for="animation-mode-3d">
+                    <input type="radio" id="animation-mode-3d" name="animation-mode" value="3d" checked>
+                    3D Animations
+                  </label>
+                  <label for="animation-mode-none">
+                    <input type="radio" id="animation-mode-none" name="animation-mode" value="none">
+                    No Animations
+                  </label>
+                </div>
+                <span class="option-description">Choose between smooth 3D animations or instant card positioning</span>
+              </div>
+
+              <div class="option-row">
+                <label for="audio-enabled">
+                  <input type="checkbox" id="audio-enabled" checked>
+                  Enable Audio
+                </label>
+                <span class="option-description">Play music during win/lose animations</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-buttons">
+            <button id="options-save">Save</button>
+            <button id="options-reset">Reset to Defaults</button>
+            <button id="options-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Variations Modal -->
+      <div id="variations-modal" class="modal">
+        <div class="modal-content variations-modal-content">
+          <h2>Game Variations</h2>
+          <p class="variations-description">Toggle special game variations. These are advanced house rules that change gameplay mechanics.</p>
+
+          <div class="variations-list">
+            <!-- Koi-Koi Variations -->
+            <div class="variation-item koikoi-variation">
+              <div class="variation-header">
+                <span class="variation-emoji">💣</span>
+                <h3>Bomb Variation</h3>
+                <span class="variation-badge variation-badge-working">✅ Working</span>
+              </div>
+              <p class="variation-description">
+                <strong>How it works:</strong> Play multiple matching cards simultaneously by selecting them in your hand. Receive "bomb cards" (pass cards) to maintain hand balance.
+              </p>
+              <p class="variation-how-to">
+                <strong>Instructions:</strong><br>
+                1. Select 2+ cards of the same month from your hand<br>
+                2. Click a matching field card to play all selected cards<br>
+                3. Receive (N-1) bomb cards back (e.g., play 2 cards → get 1 bomb)<br>
+                4. Bomb cards discard when played (free pass)
+              </p>
+              <p class="variation-status">
+                <strong>Note:</strong> Players start with 10 cards each (instead of 8) when this variation is enabled. Game resets when toggled.
+              </p>
+              <label class="variation-toggle">
+                <input type="checkbox" id="bomb-variation-enabled">
+                <span class="toggle-label">Enable</span>
+              </label>
+            </div>
+
+            <!-- Sakura Variations -->
+            <div class="variation-item sakura-variation" style="display: none;">
+              <div class="variation-header">
+                <span class="variation-emoji">🏴</span>
+                <h3>Chitsiobiki (Three-of-a-Kind Trade)</h3>
+                <span class="variation-badge">House Rule</span>
+              </div>
+              <p class="variation-description">
+                <strong>How it works:</strong> If 3 cards of the same month appear on the field, trade one from your hand with one from the field, then play normally.
+              </p>
+              <p class="variation-how-to">
+                <strong>Rules:</strong><br>
+                • Only applies when exactly 3 of the same month are on field<br>
+                • Optional - you may decline the trade<br>
+                • AI players auto-accept beneficial trades
+              </p>
+              <label class="variation-toggle">
+                <input type="checkbox" id="chitsiobiki-enabled">
+                <span class="toggle-label">Enable</span>
+              </label>
+            </div>
+
+            <div class="variation-item sakura-variation" style="display: none;">
+              <div class="variation-header">
+                <span class="variation-emoji">🏆</span>
+                <h3>Victory Scoring</h3>
+                <span class="variation-badge">Variant</span>
+              </div>
+              <p class="variation-description">
+                <strong>How it works:</strong> Instead of cumulative points, count round victories. Winner is player with most round wins after all rounds.
+              </p>
+              <p class="variation-how-to">
+                <strong>Standard Mode:</strong> Cumulative points across all rounds<br>
+                <strong>Victory Mode:</strong> Count round wins only (highest score wins the round)
+              </p>
+              <label class="variation-toggle">
+                <input type="checkbox" id="victory-scoring-enabled">
+                <span class="toggle-label">Enable</span>
+              </label>
+            </div>
+
+            <div class="variation-item sakura-variation" style="display: none;">
+              <div class="variation-header">
+                <span class="variation-emoji">📈</span>
+                <h3>Basa & Chu Multipliers</h3>
+                <span class="variation-badge">Variant</span>
+              </div>
+              <p class="variation-description">
+                <strong>How it works:</strong> Bonus points for winning by large score margins (requires Victory Scoring mode).
+              </p>
+              <p class="variation-how-to">
+                <strong>Multipliers:</strong><br>
+                • Chu: +50 point margin = 2 wins<br>
+                • Basa: +100 point margin = 2 wins (or 3× with Chu enabled)
+              </p>
+              <p class="variation-status">
+                <strong>Note:</strong> Only applies when Victory Scoring is enabled.
+              </p>
+              <label class="variation-toggle">
+                <input type="checkbox" id="basa-chu-enabled">
+                <span class="toggle-label">Enable</span>
+              </label>
+            </div>
+
+            <div class="variation-item sakura-variation" style="display: none;">
+              <div class="variation-header">
+                <span class="variation-emoji">💰</span>
+                <h3>Both Players Score</h3>
+                <span class="variation-badge">Variant</span>
+              </div>
+              <p class="variation-description">
+                <strong>How it works:</strong> Remove the yaku penalty system - both players score their card values and any yaku bonuses.
+              </p>
+              <p class="variation-how-to">
+                <strong>Standard:</strong> Yaku subtract 50 points from opponent per yaku<br>
+                <strong>Variant:</strong> Yaku award bonus points to player (no penalties)
+              </p>
+              <label class="variation-toggle">
+                <input type="checkbox" id="both-players-score-enabled">
+                <span class="toggle-label">Enable</span>
+              </label>
+            </div>
+
+            <div class="variation-item sakura-variation" style="display: none;">
+              <div class="variation-header">
+                <span class="variation-emoji">🎲</span>
+                <h3>Oi-bana (Auction)</h3>
+                <span class="variation-badge">Variant</span>
+              </div>
+              <p class="variation-description">
+                <strong>How it works:</strong> Special 2-player elimination format for 3-6 players via auction (currently limited to 4 players max).
+              </p>
+              <p class="variation-how-to">
+                <strong>Rules:</strong><br>
+                1. All players bid for the round<br>
+                2. Top 2 bidders play Sakura (others sit out)<br>
+                3. Winner collects bid amount from loser
+              </p>
+              <p class="variation-status">
+                <strong>Note:</strong> Experimental - requires multi-player mode enabled.
+              </p>
+              <label class="variation-toggle">
+                <input type="checkbox" id="oibana-enabled">
+                <span class="toggle-label">Enable</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="modal-buttons">
+            <button id="variations-close" class="primary-btn">Close</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Match Game Options Modal -->
+      <div id="match-options-modal" class="modal">
+        <div class="modal-content match-options-content">
+          <h2>Match Game Options</h2>
+
+          <div class="match-options-grid">
+            <div class="option-row">
+              <label for="bonus-multiplier-enabled">
+                <input type="checkbox" id="bonus-multiplier-enabled">
+                Enable Bonus Multiplier
+              </label>
+              <span class="option-description">Successive matches grant increasing points (1x, 2x, 3x...)</span>
+            </div>
+
+            <div class="option-row">
+              <label for="match-animations-enabled">
+                <input type="checkbox" id="match-animations-enabled" checked>
+                Enable 3D Animations
+              </label>
+              <span class="option-description">Show animated card movements with 3D physics-based system</span>
+            </div>
+          </div>
+
+          <div class="high-scores-section">
+            <h3>High Scores</h3>
+            <div class="high-scores-tabs">
+              <button id="show-normal-scores" class="score-tab active">Normal Mode</button>
+              <button id="show-bonus-scores" class="score-tab">Bonus Mode</button>
+            </div>
+            <div id="high-scores-list" class="high-scores-list">
+              <!-- Will be populated dynamically -->
+            </div>
+          </div>
+
+          <div class="modal-buttons">
+            <button id="match-options-start">Start Game</button>
+            <button id="match-options-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Koi-Koi Decision Modal -->
+      <div id="koikoi-modal" class="modal">
+        <div class="modal-content koikoi-modal-content">
+          <h2>You Formed a Yaku!</h2>
+
+          <div id="koikoi-yaku-display" class="koikoi-yaku-display">
+            <!-- Will be filled with yaku names and points -->
+          </div>
+
+          <div class="koikoi-explanation">
+            <p><strong>Choose your next move:</strong></p>
+            <p><strong>Shobu:</strong> End the round now and keep your points (safe)</p>
+            <p><strong>Koi-Koi:</strong> Continue playing to score more, but risk opponent doubling their points!</p>
+          </div>
+
+          <div class="modal-buttons">
+            <button id="koikoi-shobu" class="koikoi-decision-btn">Shobu (End Round)</button>
+            <button id="koikoi-continue" class="koikoi-decision-btn koikoi-risky">Koi-Koi! (Continue)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Round Summary Modal -->
+      <div id="round-summary-modal" class="modal">
+        <div class="modal-content round-summary-content">
+          <h2 id="round-summary-title">Round Complete!</h2>
+
+          <!-- Unified round-score display (works for 2P, 3P, 4P) -->
+          <div id="round-score-display" class="round-score-display" data-player-count="2">
+            <div class="round-score-section">
+              <h3>Round & Total Scores</h3>
+              <div class="round-score-grid" id="round-score-grid">
+                <!-- Will be filled dynamically with player score cards -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Yaku/Trick details in column layout -->
+          <div id="round-yaku-display" class="round-yaku-display" data-player-count="2">
+            <div class="yaku-section">
+              <h3>Yaku & Tricks</h3>
+              <div class="yaku-grid" id="yaku-grid">
+                <!-- Will be filled with yaku details for each player -->
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-buttons">
+            <button id="continue-next-round" class="primary-btn">Continue to Next Round</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card Back Selection Modal -->
+      <div id="card-back-modal" class="modal">
+        <div class="modal-content card-back-modal-content">
+          <h2>Select Card Back</h2>
+
+          <div id="card-back-grid" class="card-back-grid">
+            <!-- Card back previews will be dynamically generated here -->
+          </div>
+
+          <div class="modal-buttons">
+            <button id="card-back-close" class="primary-btn">Close</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Koi Koi Shop Modal -->
+      <div id="shop-modal" class="modal">
+        <div class="modal-content shop-modal-content">
+          <!-- Content will be dynamically generated by ShopUI -->
+        </div>
+      </div>
+
+      <!-- Trick List Modal -->
+      <div id="trick-list-modal" class="modal">
+        <div class="modal-content trick-list-modal-content">
+          <div class="trick-list-header">
+            <h2>Available Tricks (Yaku)</h2>
+            <button id="trick-list-close" class="close-btn">✕</button>
+          </div>
+          <div id="trick-list-content" class="trick-list-modal-body">
+            <!-- Will be populated dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Animation Tester Panel -->
+      <div id="animation-tester-panel" class="animation-tester-panel hidden">
+        <div class="animation-tester-controls">
+          <div class="tester-header">
+            <h3>Animation Tester</h3>
+            <button id="close-animation-tester" class="close-btn">✕</button>
+          </div>
+
+          <div class="tester-actions">
+            <button id="play-animation" class="primary-btn">▶ Play</button>
+            <button id="reset-animation" class="secondary-btn">↺ Reset</button>
+            <button id="copy-settings" class="secondary-btn">📋 Copy Settings</button>
+          </div>
+
+          <div class="tester-section">
+            <h4>Preset:</h4>
+            <select id="animation-preset">
+              <option value="">-- Select --</option>
+              <option value="Simple Slide">Simple Slide</option>
+              <option value="Flip While Moving">Flip While Moving</option>
+              <option value="Arc Jump">Arc Jump</option>
+              <option value="Spin and Grow">Spin and Grow</option>
+              <option value="Fade Out">Fade Out</option>
+              <option value="Bounce In (Back Easing)">Bounce In</option>
+              <option value="Victory Spin">Victory Spin</option>
+              <option value="Flip and Fade">Flip and Fade</option>
+              <option value="Toss Across">Toss Across</option>
+            </select>
+          </div>
+
+          <div class="tester-section">
+            <h4>Animation:</h4>
+            <div class="control-group">
+              <label>Duration: <span id="duration-value">500</span></label>
+              <input type="range" id="duration" min="100" max="3000" value="500" step="50">
+            </div>
+            <div class="control-group">
+              <label>Easing:</label>
+              <select id="easing">
+                <option value="linear">Linear</option>
+                <option value="easeInQuad">EaseInQuad</option>
+                <option value="easeOutQuad">EaseOutQuad</option>
+                <option value="easeInOutQuad" selected>EaseInOutQuad</option>
+                <option value="easeOutCubic">EaseOutCubic</option>
+                <option value="easeInOutCubic">EaseInOutCubic</option>
+                <option value="easeOutBack">EaseOutBack</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="tester-section">
+            <h4>End Position:</h4>
+            <div class="control-group">
+              <label>X: <span id="endX-value">600</span></label>
+              <input type="range" id="endX" min="0" max="2000" value="600" step="10">
+            </div>
+            <div class="control-group">
+              <label>Y: <span id="endY-value">300</span></label>
+              <input type="range" id="endY" min="0" max="1200" value="300" step="10">
+            </div>
+            <div class="control-group">
+              <label>Z: <span id="endZ-value">0</span></label>
+              <input type="range" id="endZ" min="0" max="200" value="0" step="5">
+            </div>
+          </div>
+
+          <div class="tester-section">
+            <h4>Curved Path:</h4>
+            <div class="control-group">
+              <label>
+                <input type="checkbox" id="curveEnabled">
+                Enable Curve
+              </label>
+            </div>
+            <div class="control-group">
+              <label>Control X: <span id="curveX-value">400</span></label>
+              <input type="range" id="curveX" min="0" max="2000" value="400" step="10">
+            </div>
+            <div class="control-group">
+              <label>Control Y: <span id="curveY-value">200</span></label>
+              <input type="range" id="curveY" min="0" max="1200" value="200" step="10">
+            </div>
+            <div class="control-group">
+              <label>Control Z: <span id="curveZ-value">50</span></label>
+              <input type="range" id="curveZ" min="0" max="200" value="50" step="5">
+            </div>
+          </div>
+
+          <div class="tester-section">
+            <h4>Rotation:</h4>
+            <div class="control-group">
+              <label>End (°): <span id="endRotation-value">0</span></label>
+              <input type="range" id="endRotation" min="-720" max="720" value="0" step="15">
+              <small style="display:block;color:#888;margin-top:2px;">Negative = counterclockwise</small>
+            </div>
+          </div>
+
+          <div class="tester-section">
+            <h4>Scale (Peak & Return):</h4>
+            <div class="control-group">
+              <label>Peak Amount: <span id="peakScale-value">0.2</span></label>
+              <input type="range" id="peakScale" min="0" max="1.0" value="0.2" step="0.05">
+              <small style="display:block;color:#888;margin-top:2px;">Added to base scale at midpoint</small>
+            </div>
+          </div>
+
+          <div class="tester-section">
+            <h4>Variance (Scattering):</h4>
+            <div class="control-group">
+              <label>
+                <input type="checkbox" id="varianceEnabled">
+                Enable Variance
+              </label>
+            </div>
+            <div class="control-group">
+              <label>Rotation (°): <span id="rotationVariance-value">0</span></label>
+              <input type="range" id="rotationVariance" min="0" max="180" value="0" step="5">
+            </div>
+            <div class="control-group">
+              <label>Position X: <span id="positionXVariance-value">0</span></label>
+              <input type="range" id="positionXVariance" min="0" max="200" value="0" step="5">
+            </div>
+            <div class="control-group">
+              <label>Position Y: <span id="positionYVariance-value">0</span></label>
+              <input type="range" id="positionYVariance" min="0" max="200" value="0" step="5">
+            </div>
+            <div class="control-group">
+              <label>Position Z: <span id="positionZVariance-value">0</span></label>
+              <input type="range" id="positionZVariance" min="0" max="100" value="0" step="5">
+            </div>
+          </div>
+
+          <div class="tester-section">
+            <h4>Appearance:</h4>
+            <div class="control-group">
+              <label>
+                <input type="checkbox" id="endFaceUp" checked>
+                End Face Up
+              </label>
+            </div>
+            <div class="control-group">
+              <label>Flip Timing: <span id="flipTiming-value">0.5</span></label>
+              <input type="range" id="flipTiming" min="0" max="1" value="0.5" step="0.05">
+              <small style="display:block;color:#888;margin-top:2px;">0 = early, 1 = late</small>
+            </div>
+            <div class="control-group">
+              <label>End Opacity: <span id="endOpacity-value">1.0</span></label>
+              <input type="range" id="endOpacity" min="0" max="1" value="1" step="0.1">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tutorial Bubble -->
+      <div id="tutorial-bubble" class="tutorial-bubble hidden">
+        <div class="tutorial-content">
+          <p><strong>New to Hanafuda?</strong></p>
+          <p>Click the Help button to highlight matching cards!</p>
+          <button id="tutorial-got-it">Got it!</button>
+        </div>
+        <div class="tutorial-arrow"></div>
+      </div>
+
+      <!-- Active Win Condition Display (Shop Mode) -->
+      <div id="active-win-condition" class="active-win-condition hidden">
+        <!-- Content will be dynamically filled -->
+      </div>
+    </main>
+
+    <footer>
+      <div id="controls">
+        <p id="instructions">Click cards to select them</p>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Loading Screen -->
+  <div id="loading-screen" class="loading-screen">
+    <div class="loading-content">
+      <img src="./assets/graphics/hanafuda_logo.png" alt="Hanafuda" class="loading-logo">
+      <div class="loading-spinner"></div>
+      <p id="loading-phase" class="loading-phase">Initializing...</p>
+      <div class="loading-progress-container">
+        <div id="loading-progress-bar" class="loading-progress-bar"></div>
+      </div>
+      <p id="loading-message" class="loading-message">Preparing game...</p>
+      <div id="loading-errors" class="loading-errors hidden"></div>
+    </div>
+  </div>
+
+</body>
+</html>
