@@ -207,9 +207,6 @@ export class Card3DManager {
     const easing = 'easeOutCubic';
     const flipTiming = 0.5;
     const peakScale = 0;
-    const rotationVariance = 10 * Math.PI / 180; // 10 degrees (reduced from 20)
-    const positionXVariance = 30; // Reduced from 60 to 30 (half)
-    const positionYVariance = 5;
 
     // Starting position: calculate deck position from field grid (gridSlot 0)
     const fieldConfig = LayoutManager.getZoneConfig('field', this.viewportWidth, this.viewportHeight, this.playerCount);
@@ -223,15 +220,14 @@ export class Card3DManager {
     const startZ = 0;
 
     fieldCards.forEach((card3D) => {
-      // Store the target position (already set by relayoutZone)
+      // Target the exact home position so cards land cleanly on the fixed grid.
+      // Cards still "toss across" the table (deck -> field) and flip, but they
+      // settle precisely on their grid slot rather than at a permanent random
+      // offset. This keeps isAtHome accurate and matches the fixed-grid layout
+      // used by the other game modes (no leftover scatter/tilt).
       const targetX = card3D.homePosition.x;
       const targetY = card3D.homePosition.y;
       const targetZ = card3D.homePosition.z;
-
-      // Apply variance to target position and rotation
-      const variantX = targetX + (Math.random() * 2 - 1) * positionXVariance;
-      const variantY = targetY + (Math.random() * 2 - 1) * positionYVariance;
-      const variantRotation = (Math.random() * 2 - 1) * rotationVariance;
 
       // Set card to starting position
       card3D.x = startX;
@@ -241,13 +237,13 @@ export class Card3DManager {
       card3D.faceUp = 0; // Start face down
       card3D.opacity = 1.0;
 
-      // Animate to target position with variance
+      // Animate to the exact home position
       card3D.tweenTo(
         {
-          x: variantX,
-          y: variantY,
+          x: targetX,
+          y: targetY,
           z: targetZ,
-          rotation: variantRotation,
+          rotation: 0,
           faceUp: endFaceUp ? 1 : 0, // Configurable end face state
           opacity: 1.0
         },
@@ -467,6 +463,10 @@ export class Card3DManager {
     const zoneSet = this.zoneCards[zone];
     if (!zoneSet || zoneSet.size === 0) return;
 
+    // Global UI scale so cards shrink to fit when the viewport is small/zoomed.
+    // (Match game manages its own per-card scale and returns early below.)
+    const uiScale = LayoutManager.getUiScale(this.viewportWidth, this.viewportHeight);
+
     // Special handling for deck zone - deck cards are rendered separately at field gridSlot 0 position
     if (zone === 'deck') {
       // Position all deck cards at the field gridSlot 0 position (calculated dynamically)
@@ -486,6 +486,9 @@ export class Card3DManager {
         card3D.x = slot0Position.x;
         card3D.y = slot0Position.y;
         card3D.z = 0;
+        card3D.baseScale = uiScale;
+        card3D.targetScale = uiScale;
+        card3D.scale = uiScale;
       });
       return;
     }
@@ -533,6 +536,17 @@ export class Card3DManager {
       const pos = positions[i];
       card3D.homePosition = { x: pos.x, y: pos.y, z: pos.z };
       card3D.homeIndex = pos.index;
+
+      // Apply the global UI scale (shrinks cards to fit small/zoomed viewports).
+      // Snap scale when not animating so resize/zoom updates immediately; otherwise
+      // let the scale tween converge toward the new baseScale.
+      card3D.baseScale = uiScale;
+      if (!animate) {
+        card3D.targetScale = uiScale;
+        card3D.scale = uiScale;
+      } else if (!card3D.isHovered) {
+        card3D.targetScale = uiScale;
+      }
 
       // Capture previousZone at the top of the iteration before any mutations
       const cardPreviousZone = card3D.previousZone;

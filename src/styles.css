@@ -289,7 +289,8 @@ footer {
   gap: 1rem;
 }
 
-.round-btn {
+.round-btn,
+.player-btn {
   padding: 1rem 2rem;
   font-size: 1.2rem;
   font-weight: bold;
@@ -302,13 +303,15 @@ footer {
   box-shadow: 0 4px 15px rgba(255, 211, 0, 0.3);
 }
 
-.round-btn:hover {
+.round-btn:hover,
+.player-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(255, 211, 0, 0.5);
   background: linear-gradient(135deg, hsl(55, 100%, 60%) 0%, hsl(55, 100%, 55%) 100%);
 }
 
-.round-btn:active {
+.round-btn:active,
+.player-btn:active {
   transform: translateY(0);
 }
 

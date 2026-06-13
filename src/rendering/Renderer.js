@@ -152,9 +152,14 @@ export class Renderer {
 
     this.clear();
 
-    // Clear overlay canvas for hover previews
+    // Clear overlay canvas for hover previews. The overlay canvas spans the whole
+    // window, which is taller than the game canvas (displayHeight), so clear its
+    // full backing area — clearing only displayWidth/Height leaves a strip at the
+    // bottom uncleared, where hover-preview residue (e.g. the deck "all cards"
+    // grid) would persist after the pointer leaves.
     if (this.overlayCtx) {
-      this.overlayCtx.clearRect(0, 0, this.displayWidth, this.displayHeight);
+      const oc = this.overlayCtx.canvas;
+      this.overlayCtx.clearRect(0, 0, oc.width, oc.height);
     }
 
     this.drawBackground();
@@ -228,11 +233,19 @@ export class Renderer {
       const positions = this._layoutManager.layoutGrid([dummyCard], fieldConfig);
       const slot0Position = positions[0];
 
-      // Draw a stacked deck representation at slot 0 position (from center)
+      // Draw a stacked deck representation at slot 0 position (from center).
+      // The deck is drawn directly (not as a Card3D), so apply the same global UI
+      // scale used for the cards by scaling about the deck's center.
       const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
       const stackDepth = 3; // Draw 3 cards stacked for deck visual
       const centerX = slot0Position.x - cardWidth / 2;
       const centerY = slot0Position.y - cardHeight / 2;
+      const uiScale = LayoutManager.getUiScale(this.displayWidth, this.displayHeight);
+
+      this.ctx.save();
+      this.ctx.translate(slot0Position.x, slot0Position.y);
+      this.ctx.scale(uiScale, uiScale);
+      this.ctx.translate(-slot0Position.x, -slot0Position.y);
 
       for (let i = 0; i < stackDepth; i++) {
         const offset = i * 2; // 2px offset per card for visual depth
@@ -248,6 +261,7 @@ export class Renderer {
 
       // Draw deck count on top (at center position)
       this.drawDeckCount(slot0Position.x, slot0Position.y, gameState.deckCount);
+      this.ctx.restore();
 
       // Store deck position for hover detection
       this.deckPosition = { x: slot0Position.x, y: slot0Position.y };
@@ -345,6 +359,13 @@ export class Renderer {
       const hoveredCard = card3DManager.getCardAtPosition(hoverX, hoverY);
       const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
 
+      // Choose where hover previews draw: the main game canvas during normal play
+      // (correctly sized and cleared), or the window-spanning overlay canvas only
+      // when a modal is up, so the preview can sit above the modal.
+      const previewCtx = (isModalVisible || isSageDecisionModalVisible || isKoikoiModalVisible) && this.overlayCtx
+        ? this.overlayCtx
+        : this.ctx;
+
       // Deck hover - use dynamic deck position calculated from field grid
       if (this.deckPosition && gameState.deckCount > 0) {
         const deckZoneRect = {
@@ -355,7 +376,7 @@ export class Renderer {
         };
         if (hoverX >= deckZoneRect.x && hoverX <= deckZoneRect.x + deckZoneRect.width &&
             hoverY >= deckZoneRect.y && hoverY <= deckZoneRect.y + deckZoneRect.height) {
-          this.drawAllCardsGrid(gameState);
+          this.drawAllCardsGrid(gameState, previewCtx);
         }
       }
 
@@ -406,7 +427,7 @@ export class Renderer {
           if (playerBounds) {
             if (hoverX >= playerBounds.x && hoverX <= playerBounds.x + playerBounds.width &&
                 hoverY >= playerBounds.y && hoverY <= playerBounds.y + playerBounds.height) {
-              this.drawTricksList(gameState.playerCaptured, 'You', pointValueOptions);
+              this.drawTricksList(gameState.playerCaptured, 'You', pointValueOptions, previewCtx);
             }
           }
         }
@@ -416,7 +437,7 @@ export class Renderer {
           if (opponentBounds &&
               hoverX >= opponentBounds.x && hoverX <= opponentBounds.x + opponentBounds.width &&
               hoverY >= opponentBounds.y && hoverY <= opponentBounds.y + opponentBounds.height) {
-            this.drawTricksList(gameState.opponentCaptured, 'Opponent', pointValueOptions);
+            this.drawTricksList(gameState.opponentCaptured, 'Opponent', pointValueOptions, previewCtx);
           }
         }
       } else if (gameState.players) {
@@ -431,7 +452,7 @@ export class Renderer {
                 hoverX >= bounds.x && hoverX <= bounds.x + bounds.width &&
                 hoverY >= bounds.y && hoverY <= bounds.y + bounds.height) {
               const playerLabel = getPlayerLabel(i);
-              this.drawTricksList(gameState.players[i].captured || [], playerLabel, pointValueOptions);
+              this.drawTricksList(gameState.players[i].captured || [], playerLabel, pointValueOptions, previewCtx);
             }
           }
         }
@@ -1073,9 +1094,7 @@ export class Renderer {
    * @param {String} title - Title for the overlay
    * @param {Object} pointValueOptions - Optional { enabled: boolean, getValue: (card) => number }
    */
-  drawTricksList(capturedCards, title, pointValueOptions = null) {
-    // Use overlay context if available (when modal is active), otherwise use main context
-    const ctx = this.overlayCtx || this.ctx;
+  drawTricksList(capturedCards, title, pointValueOptions = null, ctx = this.ctx) {
 
     const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
     const padding = 20;
@@ -1090,6 +1109,17 @@ export class Renderer {
     const y = (this.displayHeight - overlayHeight) / 2;
 
     ctx.save();
+
+    // Scale the whole preview down to fit the canvas when it would otherwise
+    // overflow (many captured cards, or small / zoomed viewports), keeping it centered.
+    const fitScale = Math.min(1, (this.displayWidth - 40) / overlayWidth, (this.displayHeight - 40) / overlayHeight);
+    if (fitScale < 1) {
+      const cx = this.displayWidth / 2;
+      const cy = this.displayHeight / 2;
+      ctx.translate(cx, cy);
+      ctx.scale(fitScale, fitScale);
+      ctx.translate(-cx, -cy);
+    }
 
     // Draw semi-transparent background
     ctx.fillStyle = 'rgba(0, 0, 0, 0.95)';
@@ -1187,9 +1217,7 @@ export class Renderer {
   /**
    * Draw all cards grid overlay when hovering over deck
    */
-  drawAllCardsGrid(gameState) {
-    // Use overlay context if available (when modal is active), otherwise use main context
-    const ctx = this.overlayCtx || this.ctx;
+  drawAllCardsGrid(gameState, ctx = this.ctx) {
 
     const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
     const padding = 20;
@@ -1204,6 +1232,17 @@ export class Renderer {
     const y = (this.displayHeight - overlayHeight) / 2;
 
     ctx.save();
+
+    // Scale the whole preview down to fit the canvas when it would otherwise
+    // overflow (small / zoomed viewports), keeping it centered.
+    const fitScale = Math.min(1, (this.displayWidth - 40) / overlayWidth, (this.displayHeight - 40) / overlayHeight);
+    if (fitScale < 1) {
+      const cx = this.displayWidth / 2;
+      const cy = this.displayHeight / 2;
+      ctx.translate(cx, cy);
+      ctx.scale(fitScale, fitScale);
+      ctx.translate(-cx, -cy);
+    }
 
     // Draw semi-transparent background
     ctx.fillStyle = 'rgba(0, 0, 0, 0.95)';
