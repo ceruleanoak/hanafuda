@@ -228,11 +228,19 @@ export class Renderer {
       const positions = this._layoutManager.layoutGrid([dummyCard], fieldConfig);
       const slot0Position = positions[0];
 
-      // Draw a stacked deck representation at slot 0 position (from center)
+      // Draw a stacked deck representation at slot 0 position (from center).
+      // The deck is drawn directly (not as a Card3D), so apply the same global UI
+      // scale used for the cards by scaling about the deck's center.
       const { width: cardWidth, height: cardHeight } = this.cardRenderer.getCardDimensions();
       const stackDepth = 3; // Draw 3 cards stacked for deck visual
       const centerX = slot0Position.x - cardWidth / 2;
       const centerY = slot0Position.y - cardHeight / 2;
+      const uiScale = LayoutManager.getUiScale(this.displayWidth, this.displayHeight);
+
+      this.ctx.save();
+      this.ctx.translate(slot0Position.x, slot0Position.y);
+      this.ctx.scale(uiScale, uiScale);
+      this.ctx.translate(-slot0Position.x, -slot0Position.y);
 
       for (let i = 0; i < stackDepth; i++) {
         const offset = i * 2; // 2px offset per card for visual depth
@@ -248,6 +256,7 @@ export class Renderer {
 
       // Draw deck count on top (at center position)
       this.drawDeckCount(slot0Position.x, slot0Position.y, gameState.deckCount);
+      this.ctx.restore();
 
       // Store deck position for hover detection
       this.deckPosition = { x: slot0Position.x, y: slot0Position.y };

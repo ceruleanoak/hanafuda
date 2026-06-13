@@ -33,6 +33,7 @@ export class MatchGame {
     // Viewport dimensions - will be set when game starts
     this.originalViewportWidth = null;
     this.originalViewportHeight = null;
+    this.cardScale = 1; // Per-card render scale so the 48-card grid fits the viewport
 
     this.reset();
   }
@@ -84,13 +85,26 @@ export class MatchGame {
     // Use provided dimensions or fall back to defaults
     const canvasWidth = viewportWidth || 2000;
     const canvasHeight = viewportHeight || 1000;
-    const margin = 100;
+    const margin = 50;
 
-    // Calculate grid dimensions (8 rows x 6 columns for 48 cards)
+    // Calculate grid dimensions (8 columns x 6 rows for 48 cards)
     const cols = 8;
     const rows = 6;
     const cellWidth = (canvasWidth - margin * 2) / cols;
     const cellHeight = (canvasHeight - margin * 2) / rows;
+
+    // Scale the cards so a full-size card (BASE_CARD_W x BASE_CARD_H) fits inside
+    // a grid cell with a small gap. Without this, 48 full-size cards cannot fit in
+    // the viewport and overlap heavily. The scale is exposed via getState() so the
+    // renderer can size the Card3D objects to match.
+    const BASE_CARD_W = 100;
+    const BASE_CARD_H = 140;
+    this.cardScale = Math.min(
+      cellWidth / BASE_CARD_W,
+      cellHeight / BASE_CARD_H
+    ) * 0.9;
+    // Keep positional jitter well within the gap so cards never overlap
+    const variance = Math.min(cellWidth, cellHeight) * 0.06;
 
     // Shuffle cards for random distribution
     const shuffledCards = [...cards].sort(() => Math.random() - 0.5);
@@ -103,8 +117,7 @@ export class MatchGame {
       const baseX = margin + col * cellWidth + cellWidth / 2;
       const baseY = margin + row * cellHeight + cellHeight / 2;
 
-      // Add randomness (variance) to position
-      const variance = 30;
+      // Add small randomness (variance) to position for a hand-dealt look
       const x = baseX + (Math.random() - 0.5) * variance;
       const y = baseY + (Math.random() - 0.5) * variance;
 
@@ -368,6 +381,7 @@ export class MatchGame {
       message: this.message,
       matchCount: this.matchedCards.length,
       totalCards: 48,
+      cardScale: this.cardScale,
 
       // Timer and scoring
       elapsedTime: this.elapsedTime,

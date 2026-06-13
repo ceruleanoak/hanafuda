@@ -799,6 +799,8 @@ class Game {
 
     // Override card positions to use match game's predetermined positions
     const gameState = this.game.getState();
+    // Match game packs all 48 cards on screen, so scale them down to fit the grid
+    const matchCardScale = gameState.cardScale || 1;
     gameState.allCards.forEach(cardData => {
       const card3D = this.card3DManager.cards.get(cardData.id);
       if (card3D && cardData.position) {
@@ -808,6 +810,10 @@ class Game {
           y: cardData.position.y,
           z: 0
         };
+        // Scale the card so the full 48-card grid fits without overlapping
+        card3D.baseScale = matchCardScale;
+        card3D.scale = matchCardScale;
+        card3D.targetScale = matchCardScale;
         // For match game, cards start face down
         card3D.faceUp = 0;
         card3D.setFaceUp(false);
@@ -1004,6 +1010,8 @@ class Game {
 
       // Override card positions to use match game's predetermined positions
       const gameState = this.game.getState();
+      // Match game packs all 48 cards on screen, so scale them down to fit the grid
+      const matchCardScale = gameState.cardScale || 1;
       gameState.allCards.forEach(cardData => {
         const card3D = this.card3DManager.cards.get(cardData.id);
         if (card3D && cardData.position) {
@@ -1013,6 +1021,10 @@ class Game {
             y: cardData.position.y,
             z: 0
           };
+          // Scale the card so the full 48-card grid fits without overlapping
+          card3D.baseScale = matchCardScale;
+          card3D.scale = matchCardScale;
+          card3D.targetScale = matchCardScale;
           // For match game, cards start face down
           card3D.faceUp = 0;
           card3D.setFaceUp(false);
@@ -3015,7 +3027,10 @@ class Game {
    * Dynamically update score display for 2P, 3P, and 4P modes
    */
   updateScoreDisplay(state) {
-    const roundText = state.totalRounds > 1 ? ` (Round ${state.currentRound}/${state.totalRounds})` : '';
+    // Before the first round starts currentRound is 0; show it as round 1 so the
+    // header never reads "Round 0/X" while the round-selection modal is up.
+    const displayRound = Math.max(1, state.currentRound || 0);
+    const roundText = state.totalRounds > 1 ? ` (Round ${displayRound}/${state.totalRounds})` : '';
 
     // Determine player count and teams mode from state or game instance
     const playerCount = state.playerCount || this.selectedPlayerCount || 2;

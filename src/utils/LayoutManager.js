@@ -6,6 +6,14 @@
 // Offset for header height (50px to account for the game header covering the game area)
 const HEADER_OFFSET = 50;
 
+// Reference viewport the fixed layout constants are designed for. When the actual
+// viewport is smaller (e.g. the browser is zoomed in, or the window is small), the
+// whole board is uniformly scaled down so cards never overlap or overflow. At or
+// above this size the layout is unchanged (scale clamped to 1).
+const REFERENCE_WIDTH = 1024;
+const REFERENCE_HEIGHT = 560;
+const MIN_UI_SCALE = 0.35;
+
 export class LayoutManager {
   constructor(cardWidth = 100, cardHeight = 140) {
     this.cardWidth = cardWidth;
@@ -208,6 +216,15 @@ export class LayoutManager {
       'opponentTrick': 'player1Trick'
     };
     zoneName = legacyMap[zoneName] || zoneName;
+
+    // Compute the global UI scale, then author the layout at a "design" viewport
+    // (actual / scale, which is >= the reference size) and multiply every position
+    // and spacing by the scale. This guarantees the rows never collapse together:
+    // when the real viewport is smaller than the reference, the whole board is
+    // computed at the roomy reference size and uniformly scaled down to fit.
+    const uiScale = LayoutManager.getUiScale(viewportWidth, viewportHeight);
+    viewportWidth = viewportWidth / uiScale;
+    viewportHeight = viewportHeight / uiScale;
 
     const centerX = viewportWidth / 2;
     const centerY = viewportHeight / 2;
@@ -497,20 +514,57 @@ export class LayoutManager {
     const handConfigs = getPlayerHandConfigs();
     const allConfigs = { ...baseConfigs, ...handConfigs };
 
-    // Return specific zone config
+    // Return specific zone config (mapped from design space back to actual pixels)
     if (!allConfigs[zoneName]) {
       console.error(`Zone config not found: ${zoneName}. Available: ${Object.keys(allConfigs).join(', ')}`);
       // Return a default row config as fallback
-      return {
+      return LayoutManager._scaleConfig({
         type: 'row',
         anchorPoint: { x: 50, y: centerY },
         centerX: centerX,
         spacing: 115,
         faceUp: 1,
         renderLayer: 5
-      };
+      }, uiScale);
     }
-    return allConfigs[zoneName];
+    return LayoutManager._scaleConfig(allConfigs[zoneName], uiScale);
+  }
+
+  /**
+   * Compute the global UI scale for a viewport. Returns 1 at or above the
+   * reference design size and shrinks (down to MIN_UI_SCALE) for smaller
+   * viewports so the entire board scales uniformly to fit.
+   */
+  static getUiScale(viewportWidth, viewportHeight) {
+    if (!viewportWidth || !viewportHeight) return 1;
+    const fit = Math.min(viewportWidth / REFERENCE_WIDTH, viewportHeight / REFERENCE_HEIGHT);
+    return Math.max(MIN_UI_SCALE, Math.min(1, fit));
+  }
+
+  /**
+   * Return a copy of a zone config mapped from design space back to actual pixels
+   * by multiplying every position, spacing and offset by `s`. A no-op when s === 1.
+   * (Positions are authored at design = actual / s, so position * s = actual.)
+   */
+  static _scaleConfig(config, s) {
+    if (!config || s === 1) return config;
+    const scalePoint = (p) => p ? {
+      x: p.x * s,
+      y: p.y * s,
+      ...(p.z !== undefined ? { z: p.z } : {})
+    } : p;
+    const scaled = { ...config };
+    if (config.position) scaled.position = scalePoint(config.position);
+    if (config.anchorPoint) scaled.anchorPoint = scalePoint(config.anchorPoint);
+    if (config.centerX !== undefined) scaled.centerX = config.centerX * s;
+    if (config.spacing !== undefined) scaled.spacing = config.spacing * s;
+    if (config.rowSpacing !== undefined) scaled.rowSpacing = config.rowSpacing * s;
+    if (config.arcRadius !== undefined) scaled.arcRadius = config.arcRadius * s;
+    if (config.arcSpan !== undefined) scaled.arcSpan = config.arcSpan * s;
+    if (config.hoverLift !== undefined) scaled.hoverLift = config.hoverLift * s;
+    if (config.fanOffset) scaled.fanOffset = { x: config.fanOffset.x * s, y: config.fanOffset.y * s, z: config.fanOffset.z };
+    if (config.offset) scaled.offset = { x: config.offset.x * s, y: config.offset.y * s, z: config.offset.z };
+    return scaled;
   }
 
   /**
